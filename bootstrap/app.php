@@ -18,5 +18,11 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Handle token expired redirect ke login
+        $exceptions->renderable(function (\App\Exceptions\ApiException $e) {
+            if ($e->getStatusCode() === 401) {
+                return redirect()->route('login')
+                    ->with('error', $e->getMessage());
+            }
+        });
     })->create();

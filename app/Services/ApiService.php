@@ -80,7 +80,19 @@ class ApiService
                 return $response->json() ?? [];
             }
 
-            // Handle error response dari API
+            // Handle token expired atau tidak valid
+            if ($response->status() === 401) {
+                session()->forget(['api_token', 'user', 'logged_in_at']);
+                session()->invalidate();
+                session()->regenerateToken();
+
+                throw new ApiException(
+                    'Sesi login telah berakhir. Silakan login kembali.',
+                    401
+                );
+            }
+
+            // Handle error response lain dari API
             throw ApiException::fromResponse(
                 $response->status(),
                 $response->json()
