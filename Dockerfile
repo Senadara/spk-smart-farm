@@ -1,3 +1,20 @@
+# Stage 1: Build frontend assets (Tailwind CSS + Vite)
+FROM node:22-alpine AS frontend-builder
+
+WORKDIR /app
+
+# Copy package files and install dependencies
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Copy source files needed for the build
+COPY vite.config.js ./
+COPY resources/ ./resources/
+
+# Build frontend assets
+RUN npm run build
+
+# Stage 2: PHP application
 FROM php:8.2-fpm
 
 RUN apt-get update && apt-get install -y \
@@ -18,6 +35,9 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www
 
 COPY . .
+
+# Copy built frontend assets from builder stage
+COPY --from=frontend-builder /app/public/build public/build
 
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 

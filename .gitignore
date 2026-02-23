@@ -17,4 +17,5 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
-/docs/*.md
+/docs
+# !/docs/README.md
