@@ -18,4 +18,5 @@ yarn-error.log
 /.idea
 /.vscode
 /docs
+.claude
 # !/docs/README.md
