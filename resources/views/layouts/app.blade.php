@@ -42,6 +42,11 @@
                                 Dashboard
                             </x-sidebar.menu-item>
                         </li>
+                        <li>
+                            <x-sidebar.menu-item :href="route('peternakan')" :active="request()->routeIs('peternakan')" icon="livestock">
+                                Peternakan
+                            </x-sidebar.menu-item>
+                        </li>
                     </ul>
                 </div>
 

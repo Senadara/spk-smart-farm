@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Dashboard\DashboardController;
+use App\Http\Controllers\Peternakan\PeternakanController;
 use App\Http\Controllers\Profile\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -35,6 +36,9 @@ Route::middleware('guest.api')->group(function () {
 Route::middleware('auth.api')->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // Peternakan
+    Route::get('/peternakan', [PeternakanController::class, 'index'])->name('peternakan');
 
     // Profil
     Route::get('/profil', [ProfileController::class, 'show'])->name('profile');
