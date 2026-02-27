@@ -16,5 +16,6 @@ export default defineConfig({
         hmr: {
             host: 'localhost',
         },
+        allowedHosts: ['vite-dev', 'localhost'],
     },
 });

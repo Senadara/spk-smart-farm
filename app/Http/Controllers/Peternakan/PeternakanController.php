@@ -102,7 +102,7 @@ $aktivitasHarian = [
             'title' => 'Suhu Tinggi',
             'message' => 'Suhu kandang 3 mencapai 35°C',
             'type' => 'warning',
-            'read_at' => null,
+            'read_at' => '2022-01-01 00:00:00',
             'created_at' => '5 menit lalu',
         ],
         [
@@ -110,7 +110,7 @@ $aktivitasHarian = [
             'title' => 'Produksi Telur Stabil',
             'message' => 'HDP meningkat 2% hari ini',
             'type' => 'success',
-            'read_at' => null,
+            'read_at' => "2022-01-01 00:00:01",
             'created_at' => '1 jam lalu',
         ],
     ]);
