@@ -1,1484 +1,443 @@
 @extends('layouts.app')
 
 @section('title', 'Peternakan')
-@section('breadcrumb', 'Peternakan')
 
 @section('content')
-    <main class="flex-1 max-w-full overflow-x-hidden">
+    <div x-data="{
+                activeBarn: 0,
+                barns: @js($barnEnvironment['barns']),
+                searchLog: '',
+                fuzzyFilter: 'all',
+                _spiderChart: null,
 
-        <!-- Hero Banner -->
-        <div class="relative overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500 p-4 sm:p-6 md:p-8 mb-6 shadow-lg">
-            <div class="relative z-10">
-                <h2 class="text-xl md:text-2xl font-bold text-white mb-2">
-                    Monitoring Peternakan Ayam
-                </h2>
-                <p class="text-emerald-100 text-sm md:text-base max-w-2xl">
-                    Pantau performa kandang, produksi telur, dan kesehatan ayam secara real-time.
-                </p>
-                <p class="text-emerald-200 text-sm mt-3 flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                    </svg>
-                    {{ now()->locale('id')->translatedFormat('l, d F Y') }}
+                get activeSummary() {
+                    return this.barns[this.activeBarn]?.summary ?? {};
+                },
+
+                get fuzzySensors() {
+                    if (this.fuzzyFilter === 'all') {
+                        // Average across all barns
+                        const allSensors = this.barns.map(b => b.sensors);
+                        if (!allSensors.length) return [];
+                        return allSensors[0].map((s, i) => {
+                            const avgPercent = Math.round(allSensors.reduce((sum, barn) => sum + barn[i].percent, 0) / allSensors.length);
+                            const worstStatus = allSensors.reduce((worst, barn) => {
+                                const rank = { normal: 0, warning: 1, danger: 2 };
+                                return rank[barn[i].status] > rank[worst] ? barn[i].status : worst;
+                            }, 'normal');
+                            return {
+                                label: s.label,
+                                percent: avgPercent,
+                                status: worstStatus,
+                                statusLabel: s.statusLabel.replace(/[\d.]+\)/, avgPercent/100 + ')'),
+                            };
+                        });
+                    }
+                    const barn = this.barns[parseInt(this.fuzzyFilter)];
+                    return barn?.sensors ?? [];
+                },
+
+                init() {
+                    this.$nextTick(() => this.renderSpider());
+                },
+
+                renderSpider() {
+                    const canvas = this.$refs.spiderCanvas;
+                    if (!canvas) return;
+                    if (this._spiderChart) this._spiderChart.destroy();
+
+                    this._spiderChart = new Chart(canvas, {
+                        type: 'radar',
+                        data: {
+                            labels: @js($produktivitas['spider']['labels']),
+                            datasets: [{
+                                label: 'Score',
+                                data: @js($produktivitas['spider']['values']),
+                                borderColor: '#10B981',
+                                backgroundColor: 'rgba(16,185,129,0.15)',
+                                borderWidth: 2,
+                                pointRadius: 3,
+                                pointBackgroundColor: '#10B981',
+                            }],
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                r: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    ticks: { stepSize: 25, font: { size: 9, family: 'Inter' }, backdropColor: 'transparent' },
+                                    pointLabels: { font: { size: 9, family: 'Inter' }, color: '#6B7280' },
+                                    grid: { color: 'rgba(0,0,0,0.06)' },
+                                    angleLines: { color: 'rgba(0,0,0,0.06)' },
+                                },
+                            },
+                        },
+                    });
+                },
+            }" class="max-w-full space-y-5">
+        {{-- ═══════════════════════════════════════════════════════════ --}}
+        {{-- HEADER BAR                                                 --}}
+        {{-- ═══════════════════════════════════════════════════════════ --}}
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h1 class="text-xl font-bold text-gray-900">Decision Support & Operations</h1>
+                <p class="text-xs text-gray-400 mt-0.5">
+                    <span class="inline-flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Live monitoring •
+                    </span>
+                    {{ count($barnEnvironment['barns']) }} kandang aktif •
+                    {{ count($productionLog) }} log produksi hari ini
                 </p>
             </div>
-            <div class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 hidden sm:block"></div>
-            <div class="absolute bottom-0 left-1/2 w-32 h-32 bg-white/5 rounded-full translate-y-1/2 hidden sm:block"></div>
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                    <span>Layer</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    <span>{{ now()->format('m/d/Y') }}</span>
+                </div>
+                <button class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition flex items-center gap-2 shadow-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    Export Report
+                </button>
+            </div>
         </div>
 
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- SECTION 1: CUACA & PERINGATAN -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
-            <!-- Cuaca Saat Ini (2/3) -->
-            <div class="lg:col-span-2 bg-white border rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm">
+        {{-- ═══════════════════════════════════════════════════════════ --}}
+        {{-- SECTION 1: KPI METRICS ROW                                 --}}
+        {{-- ═══════════════════════════════════════════════════════════ --}}
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            @foreach($kpiMetrics as $kpi)
+                <x-peternakan.kpi-card :label="$kpi['label']" :value="$kpi['value']" :trend="$kpi['trend']" />
+            @endforeach
+        </div>
+
+        {{-- ═══════════════════════════════════════════════════════════ --}}
+        {{-- SECTION 2: PRODUCTION CHART + BARN ENVIRONMENT             --}}
+        {{-- ═══════════════════════════════════════════════════════════ --}}
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            {{-- Production Efficiency (3/5) --}}
+            <div class="lg:col-span-3">
+                <x-peternakan.performance-chart chartId="effChart" :labels="$chartData['labels']"
+                    :hdpData="$chartData['hdp']" :fcrData="$chartData['fcr']" />
+            </div>
+
+            {{-- Barn Environment (2/5) — clickable grid for IoT summary only --}}
+            <div class="lg:col-span-2 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
                 <div class="flex items-center justify-between mb-4">
-                    <div>
-                        <h3 class="text-base sm:text-lg font-semibold text-gray-800">Prakiraan Cuaca</h3>
-                        <p class="text-xs text-gray-500">Data BMKG {{ $cuaca['location'] ?? 'Sarirogo' }} - Update {{ $cuaca['last_update'] ?? now()->format('H:i') }}</p>
-                    </div>
-                    <a href="https://www.bmkg.go.id" target="_blank" class="text-sm text-primary-4 hover:text-primary-5 font-medium flex items-center gap-1">
-                        <span>BMKG</span>
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                    </a>
+                    <h3 class="text-base font-semibold text-gray-800">Barn Environment</h3>
+                    <a href="#" class="text-xs font-medium text-emerald-600 hover:text-emerald-700">Full Report</a>
                 </div>
-                
-                <!-- Current Weather -->
-                <div class="flex flex-col sm:flex-row gap-4 mb-4 pb-4 border-b">
-                    <div class="flex items-center gap-4">
-                        @php 
-                            $weatherIcon = $cuaca['current']['icon'] ?? 'cerah';
-                            $iconMap = [
-                                'cerah' => '/assets/icons/matahari.svg',
-                                'cerah-berawan' => '/assets/icons/matahari.svg',
-                                'berawan' => '/assets/icons/matahari.svg',
+
+                {{-- Clickable Barn Grid --}}
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    @foreach($barnEnvironment['barns'] as $i => $barn)
+                        @php
+                            $barnColors = [
+                                'normal'  => 'bg-emerald-50 border-emerald-200 text-emerald-700',
+                                'warning' => 'bg-amber-50 border-amber-200 text-amber-700',
+                                'danger'  => 'bg-red-50 border-red-200 text-red-700',
                             ];
+                            $activeBorderColor = [
+                                'normal'  => 'ring-emerald-400',
+                                'warning' => 'ring-amber-400',
+                                'danger'  => 'ring-red-400',
+                            ];
+                            $baseColor  = $barnColors[$barn['status']] ?? $barnColors['normal'];
+                            $activeRing = $activeBorderColor[$barn['status']] ?? 'ring-emerald-400';
                         @endphp
-                        <img src="{{ $iconMap[$weatherIcon] ?? '/assets/icons/matahari.svg' }}" class="w-14 h-14 sm:w-16 sm:h-16" alt="cuaca">
+                        <button
+                            @click="activeBarn = {{ $i }}"
+                            :class="activeBarn === {{ $i }} ? 'ring-2 {{ $activeRing }} scale-105 shadow-md' : 'hover:shadow-sm'"
+                            class="rounded-lg border px-3 py-2.5 text-center cursor-pointer transition-all {{ $baseColor }}"
+                        >
+                            <p class="text-xs font-medium truncate">{{ $barn['name'] }}</p>
+                            <p class="text-base font-bold">{{ $barn['temp'] }}°</p>
+                        </button>
+                    @endforeach
+                </div>
+
+                {{-- Dynamic IoT Summary (changes per active barn) --}}
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9V3m0 0a2 2 0 10-4 0v9.764a4 4 0 106.764 1.528A3.99 3.99 0 0012 13V3z"/></svg>
                         <div>
-                            <p class="text-sm text-gray-500">Sekarang</p>
-                            <p class="text-2xl sm:text-3xl font-bold text-gray-900">{{ $cuaca['current']['temperature'] ?? 28 }}°C</p>
-                            <p class="text-sm text-gray-600">{{ $cuaca['current']['description'] ?? 'Cerah' }}</p>
+                            <p class="text-xs text-gray-400">Avg Temp</p>
+                            <p class="text-sm font-bold text-gray-900" x-text="activeSummary.avg_temp || '-'"></p>
                         </div>
                     </div>
-                    <div class="flex-1 grid grid-cols-3 gap-2 sm:gap-3">
-                        <div class="p-2 sm:p-3 bg-gray-50 rounded-lg text-center">
-                            <p class="text-xs text-gray-500">Kelembaban</p>
-                            <p class="text-base sm:text-lg font-bold text-gray-900">{{ $cuaca['current']['humidity'] ?? 65 }}%</p>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21a8 8 0 004-14.947L12 2l-4 4.053A8 8 0 0012 21z"/></svg>
+                        <div>
+                            <p class="text-xs text-gray-400">Humidity</p>
+                            <p class="text-sm font-bold text-gray-900" x-text="activeSummary.humidity || '-'"></p>
                         </div>
-                        <div class="p-2 sm:p-3 bg-gray-50 rounded-lg text-center">
-                            <p class="text-xs text-gray-500">Angin</p>
-                            <p class="text-base sm:text-lg font-bold text-gray-900">{{ $cuaca['current']['wind_speed'] ?? 10 }} km/h</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <div>
+                            <p class="text-xs text-gray-400">Ammonia</p>
+                            <p class="text-sm font-bold text-gray-900">
+                                <span x-text="activeSummary.ammonia || '-'"></span>
+                                <span x-show="activeSummary.ammonia_ok" class="text-xs font-normal text-emerald-500">✓</span>
+                                <span x-show="!activeSummary.ammonia_ok" class="text-xs font-normal text-amber-500">⚠</span>
+                            </p>
                         </div>
-                        <div class="p-2 sm:p-3 bg-gray-50 rounded-lg text-center">
-                            <p class="text-xs text-gray-500">Awan</p>
-                            <p class="text-base sm:text-lg font-bold text-gray-900">{{ $cuaca['current']['cloud_cover'] ?? 0 }}%</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                        <div>
+                            <p class="text-xs text-gray-400">Lux</p>
+                            <p class="text-sm font-bold text-gray-900" x-text="activeSummary.lux || '-'"></p>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Forecast Next Hours -->
-                <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Prakiraan Berikutnya</p>
-                <div class="grid grid-cols-6 gap-2">
-                    @forelse(array_slice($cuaca['forecast'] ?? [], 0, 6) as $forecast)
-                        @php
-                            $isRain = str_contains(strtolower($forecast['description'] ?? ''), 'hujan');
-                        @endphp
-                        <div class="p-2 {{ $isRain ? 'bg-blue-100 border border-blue-200' : 'bg-gray-50' }} rounded-xl text-center">
-                            <p class="text-xs font-medium {{ $isRain ? 'text-blue-700' : 'text-gray-600' }} mb-1">{{ $forecast['time'] ?? '--:--' }}</p>
-                            @if($isRain)
-                                <svg class="w-7 h-7 mx-auto mb-1 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M17.92 7.02C17.45 4.18 14.97 2 12 2 9.82 2 7.83 3.18 6.78 5.06 4.09 5.41 2 7.74 2 10.5 2 13.53 4.47 16 7.5 16h10c2.48 0 4.5-2.02 4.5-4.5 0-2.34-1.79-4.27-4.08-4.48z"/><circle cx="8" cy="19" r="1.5"/><circle cx="12" cy="21" r="1.5"/><circle cx="16" cy="19" r="1.5"/></svg>
-                            @else
-                                <img src="/assets/icons/matahari.svg" class="w-7 h-7 mx-auto mb-1" alt="cerah">
-                            @endif
-                            <p class="text-sm font-bold {{ $isRain ? 'text-blue-700' : 'text-gray-900' }}">{{ $forecast['temperature'] ?? '--' }}°C</p>
-                        </div>
-                    @empty
-                        @for($i = 1; $i <= 6; $i++)
-                            <div class="p-2 bg-gray-50 rounded-xl text-center">
-                                <p class="text-xs font-medium text-gray-600 mb-1">{{ now()->addHours($i)->format('H:i') }}</p>
-                                <img src="/assets/icons/matahari.svg" class="w-7 h-7 mx-auto mb-1" alt="cerah">
-                                <p class="text-sm font-bold text-gray-900">--°C</p>
-                            </div>
-                        @endfor
-                    @endforelse
+            </div>
+        </div>
+
+        {{-- ═══════════════════════════════════════════════════════════ --}}
+        {{-- SECTION 3: FUZZY ENGINE + SPK RESULTS (UNIFIED CARD)       --}}
+        {{-- ═══════════════════════════════════════════════════════════ --}}
+        <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+            {{-- Header --}}
+            <div class="flex items-center justify-between mb-5">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-semibold text-gray-800">Fuzzy Productivity Decision Engine</h3>
+                        <p class="text-xs text-gray-400">Mamdani Inference System for Farm Performance Decision Support</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <select x-model="fuzzyFilter" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-300 focus:border-emerald-400">
+                        <option value="all">All Barn</option>
+                        @foreach($barnEnvironment['barns'] as $barn)
+                            <option value="{{ $barn['id'] }}">{{ $barn['name'] }}</option>
+                        @endforeach
+                    </select>
+                    <span class="px-2.5 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 rounded-full flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Auto Evaluated
+                    </span>
                 </div>
             </div>
 
-            <!-- Recent Alerts (1/3) -->
-            <div class="bg-white border rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm">
-                <h3 class="text-base sm:text-lg font-semibold text-gray-800 mb-4">Peringatan Terkini</h3>
-                <div class="space-y-3">
-                    @forelse($alerts as $alert)
-                        @php
-                            $colors = [
-                                'danger' => ['bg' => 'bg-red-50', 'icon_bg' => 'bg-red-500', 'border' => 'border-red-100'],
-                                'warning' => ['bg' => 'bg-amber-50', 'icon_bg' => 'bg-amber-500', 'border' => 'border-amber-100'],
-                                'info' => ['bg' => 'bg-blue-50', 'icon_bg' => 'bg-blue-500', 'border' => 'border-blue-100'],
-                            ];
-                            $color = $colors[$alert['type']] ?? $colors['info'];
-                        @endphp
-                        <div class="flex gap-3 items-start p-3 {{ $color['bg'] }} rounded-xl border {{ $color['border'] }}">
-                            <div class="w-8 h-8 rounded-lg {{ $color['icon_bg'] }} flex items-center justify-center shrink-0">
-                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                                </svg>
-                            </div>
+            {{-- 3 columns side-by-side --}}
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:divide-x lg:divide-gray-100">
+
+                {{-- COL 1: Environment Logic (driven by fuzzyFilter dropdown) --}}
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
+                            <span class="text-sm font-semibold text-gray-700">Environment Logic</span>
+                        </div>
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-700 rounded">IoT Real-time</span>
+                    </div>
+
+                    {{-- Sensor bars: driven by fuzzyFilter (dropdown), NOT activeBarn --}}
+                    <div class="space-y-3">
+                        <template x-for="(sensor, idx) in fuzzySensors" :key="idx">
                             <div>
-                                <p class="text-sm font-semibold text-gray-900">{{ $alert['title'] }}</p>
-                                <p class="text-xs text-gray-600">{{ $alert['message'] }}</p>
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs text-gray-600" x-text="sensor.label"></span>
+                                    <span
+                                        class="text-xs font-medium px-2 py-0.5 rounded"
+                                        :class="{
+                                            'text-emerald-600 bg-emerald-50': sensor.status === 'normal',
+                                            'text-amber-600 bg-amber-50': sensor.status === 'warning',
+                                            'text-red-600 bg-red-50': sensor.status === 'danger',
+                                        }"
+                                        x-text="sensor.statusLabel"
+                                    ></span>
+                                </div>
+                                <div class="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                                    <div
+                                        class="h-full rounded-full transition-all duration-500"
+                                        :class="{
+                                            'bg-emerald-500': sensor.status === 'normal',
+                                            'bg-amber-500': sensor.status === 'warning',
+                                            'bg-red-500': sensor.status === 'danger',
+                                        }"
+                                        :style="'width: ' + sensor.percent + '%'"
+                                    ></div>
+                                </div>
                             </div>
+                        </template>
+                    </div>
+                </div>
+
+                {{-- COL 2: Productivity Logic (Spider Chart) --}}
+                <div class="lg:pl-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                            <span class="text-sm font-semibold text-gray-700">Productivity Logic</span>
                         </div>
-                    @empty
-                        <div class="text-center py-4 text-gray-500 text-sm">
-                            Tidak ada peringatan saat ini
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-700 rounded">Data Driven</span>
+                    </div>
+
+                    <div class="flex items-start gap-4">
+                        {{-- Spider Chart --}}
+                        <div class="w-36 h-36 shrink-0">
+                            <canvas x-ref="spiderCanvas"></canvas>
                         </div>
-                    @endforelse
+                        {{-- Indicators --}}
+                        <div class="flex-1 space-y-2.5 pt-2">
+                            @foreach($produktivitas['indicators'] as $item)
+                                @php
+                                    $dotColors = [
+                                        'emerald' => 'bg-emerald-500',
+                                        'amber'   => 'bg-amber-500',
+                                        'red'     => 'bg-red-500',
+                                    ];
+                                    $dotColor = $dotColors[$item['color']] ?? 'bg-gray-400';
+                                @endphp
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-600">{{ $item['label'] }}</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-6 h-1.5 rounded-full {{ $dotColor }}"></span>
+                                        <span class="text-xs font-semibold text-gray-800 w-8">{{ $item['value'] }}</span>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+
+                {{-- COL 3: AI Console --}}
+                <div class="lg:pl-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                            <span class="text-sm font-semibold text-gray-700">AI Console</span>
+                        </div>
+                        <span class="text-xs text-gray-400">Manual Trigger</span>
+                    </div>
+
+                    <div class="flex flex-col items-center text-center pt-2">
+                        <div class="w-14 h-14 rounded-full bg-purple-50 flex items-center justify-center mb-3">
+                            <svg class="w-7 h-7 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                        </div>
+                        <h4 class="text-sm font-semibold text-gray-800 mb-1">Full Farm Diagnostic</h4>
+                        <p class="text-xs text-gray-400 max-w-[200px] mb-4">Run a comprehensive analysis combining environmental and productivity data points.</p>
+                        <button class="px-5 py-2.5 bg-gradient-to-r from-red-500 to-rose-500 text-white text-sm font-medium rounded-full hover:shadow-lg transition flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
+                            Run Full Evaluation
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {{-- ─── SPK Analysis Results (inside same card) ─────────── --}}
+            <div class="border-t border-gray-100 mt-5 pt-5">
+                <div class="flex items-center justify-between mb-4">
+                    <h4 class="text-sm font-semibold text-gray-700">SPK Analysis Result</h4>
+                    <span class="text-xs text-gray-400">just now</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    @foreach($spkResults as $result)
+                        @php
+                            $statusBadge = [
+                                'amber'   => 'bg-amber-100 text-amber-700 border-amber-200',
+                                'blue'    => 'bg-blue-100 text-blue-700 border-blue-200',
+                                'emerald' => 'bg-emerald-100 text-emerald-700 border-emerald-200',
+                            ];
+                            $badge = $statusBadge[$result['statusColor']] ?? 'bg-gray-100 text-gray-700 border-gray-200';
+                            $isMain = isset($result['isMain']);
+                            $cardBg = $isMain ? 'bg-emerald-50/40 border-emerald-200' : 'bg-gray-50/50 border-gray-100';
+                        @endphp
+                        <div class="border rounded-lg p-4 {{ $cardBg }}">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full {{ $badge }}">{{ $result['status'] }}</span>
+                            </div>
+                            <p class="text-sm text-gray-700 leading-relaxed">
+                                <span class="font-semibold text-gray-900">{{ $result['title'] }}</span>
+                                {{ $result['description'] }}
+                            </p>
+                            @if($isMain)
+                                <a href="{{ $result['link'] }}" class="inline-block mt-3 px-4 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition">View Full Diagnostic Report</a>
+                            @else
+                                <a href="{{ $result['link'] }}" class="inline-block mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700">See Detail →</a>
+                            @endif
+                        </div>
+                    @endforeach
                 </div>
             </div>
         </div>
 
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- SECTION 2: MENU NAVIGASI (PRIORITAS TINGGI) -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <div class="bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/30 border border-blue-100 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg mb-6">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-base sm:text-lg font-bold text-gray-800">Menu Manajemen</h2>
-                <span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">Akses Cepat</span>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <x-button.MenuButton
-                    href=""
-                    icon="/assets/icons/boxx.svg"
-                    title="Data Kandang"
-                    description="Kelola informasi setiap kandang ayam"
-                    iconVariant="green"
-                    variant="primary_1" />
-                <x-button.MenuButton
-                    href=""
-                    icon="/assets/icons/note.svg"
-                    title="Laporan Harian"
-                    description="Catat aktivitas harian dan kondisi ternak"
-                    iconVariant="yellow"
-                    variant="yellow_1" />
-                <x-button.MenuButton
-                    href=""
-                    icon="/assets/icons/pakan.svg"
-                    title="Manajemen Pakan"
-                    description="Kelola stok dan jadwal pemberian pakan"
-                    iconVariant="blue"
-                    variant="accent_1" />
-            </div>
-        </div>
-
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- SECTION 3: INDEKS PERFORMA (PUSAT PERHATIAN) -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <div class="bg-gradient-to-br from-white via-emerald-50/30 to-green-50/50 border border-emerald-100 rounded-xl sm:rounded-2xl p-5 sm:p-8 shadow-lg mb-6">
-            <div class="flex flex-col lg:flex-row items-center gap-6 lg:gap-10">
-                <!-- Left: Large Gauge -->
-                <div class="flex flex-col items-center lg:items-start">
-                    @php
-                        // Calculate gauge offset: 264 is full circle, lower offset = more filled
-                        $skor = $performa['skor'] ?? 0;
-                        $gaugeOffset = 264 - (264 * ($skor / 100));
-                        
-                        // Determine color based on score
-                        $gaugeColors = match(true) {
-                            $skor >= 75 => ['#10B981', '#34D399', '#6EE7B7'], // Green
-                            $skor >= 50 => ['#F59E0B', '#FBBF24', '#FCD34D'], // Amber
-                            default => ['#EF4444', '#F87171', '#FCA5A5'],      // Red
-                        };
-                    @endphp
-                    <div class="relative w-40 h-40 sm:w-48 sm:h-48 lg:w-56 lg:h-56 shrink-0">
-                        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                            <!-- Background circle -->
-                            <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" stroke-width="6"/>
-                            <!-- Progress circle - dynamic based on score -->
-                            <circle cx="50" cy="50" r="42" fill="none" stroke="url(#perfGradient)" stroke-width="6" 
-                                stroke-linecap="round" stroke-dasharray="264" stroke-dashoffset="{{ $gaugeOffset }}"/>
-                            <defs>
-                                <linearGradient id="perfGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                    <stop offset="0%" stop-color="{{ $gaugeColors[0] }}"/>
-                                    <stop offset="50%" stop-color="{{ $gaugeColors[1] }}"/>
-                                    <stop offset="100%" stop-color="{{ $gaugeColors[2] }}"/>
-                                </linearGradient>
-                            </defs>
-                        </svg>
-                        <div class="absolute inset-0 flex flex-col items-center justify-center">
-                            <span class="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900">{{ $performa['skor'] ?? 0 }}</span>
-                            <span class="text-lg sm:text-xl font-medium text-emerald-600">Poin</span>
-                        </div>
+        {{-- ═══════════════════════════════════════════════════════════ --}}
+        {{-- SECTION 4: DAILY PRODUCTION LOG                            --}}
+        {{-- ═══════════════════════════════════════════════════════════ --}}
+        <div class="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+            <div class="flex items-center justify-between p-5 border-b border-gray-50">
+                <h3 class="text-base font-semibold text-gray-800">Daily Production Log</h3>
+                <div class="flex items-center gap-3">
+                    <div class="relative">
+                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <input x-model="searchLog" type="text" placeholder="Search logs..." class="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200 w-48">
                     </div>
-                    <div class="mt-3 text-center lg:text-left">
-                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Indeks Performa</h2>
-                        <div class="flex items-center justify-center lg:justify-start gap-2 mt-1">
+                    <button class="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                        Filter
+                    </button>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
+                    <thead class="bg-gray-50/80">
+                        <tr>
+                            <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Date</th>
+                            <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Barn</th>
+                            <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Flock Age</th>
+                            <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Birds</th>
+                            <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Eggs Collected</th>
+                            <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Rejects</th>
+                            <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Status</th>
+                            <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        @foreach($productionLog as $log)
                             @php
-                                $statusColor = match($performa['status'] ?? 'Cukup') {
-                                    'Sangat Baik' => 'bg-emerald-100 text-emerald-700',
-                                    'Baik' => 'bg-green-100 text-green-700',
-                                    'Cukup' => 'bg-amber-100 text-amber-700',
-                                    default => 'bg-red-100 text-red-700',
-                                };
+                                $logStatus = ['Optimal' => 'text-emerald-600 bg-emerald-50', 'Attention' => 'text-amber-600 bg-amber-50', 'Critical' => 'text-red-600 bg-red-50'];
+                                $statusClass = $logStatus[$log['status']] ?? 'text-gray-600 bg-gray-50';
                             @endphp
-                            <span class="px-3 py-1 text-sm font-medium {{ $statusColor }} rounded-full">
-                                {{ $performa['status'] ?? 'Menunggu Data' }}
-                            </span>
-                            <span class="text-xs text-gray-500">Update: {{ now()->format('H:i') }}</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Right: Key Metrics Grid -->
-                <div class="flex-1 w-full">
-                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Indikator Utama</p>
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                        <!-- FCR -->
-                        <div class="p-3 sm:p-4 bg-white rounded-xl border shadow-sm cursor-pointer hover:shadow-md transition" @click="document.getElementById('chartFCR').scrollIntoView({behavior:'smooth'})">
-                            <div class="flex items-center gap-2 mb-2">
-                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-                                    </svg>
-                                </div>
-                                <span class="text-xs font-medium text-gray-600">FCR</span>
-                            </div>
-                            <p class="text-2xl sm:text-3xl font-bold text-gray-900">{{ number_format($performa['fcr'] ?? 0, 2) }}</p>
-                            @php $fcrTrend = $performa['fcr_trend'] ?? ['value' => 0, 'direction' => 'stable']; @endphp
-                            <p class="text-xs {{ ($performa['fcr'] ?? 0) < 2.2 ? 'text-emerald-600' : 'text-red-600' }} flex items-center gap-1 mt-1">
-                                @if($fcrTrend['direction'] == 'down')
-                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
-                                @endif
-                                {{ ($performa['fcr'] ?? 0) < 2.2 ? 'Baik (Efisien)' : 'Buruk (Boros)' }}
-                            </p>
-                        </div>
-                        <!-- HDP -->
-                        <div class="p-3 sm:p-4 bg-white rounded-xl border shadow-sm cursor-pointer hover:shadow-md transition" @click="document.getElementById('chartHDP').scrollIntoView({behavior:'smooth'})">
-                            <div class="flex items-center gap-2 mb-2">
-                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                                    </svg>
-                                </div>
-                                <span class="text-xs font-medium text-gray-600">HDP</span>
-                            </div>
-                            <p class="text-2xl sm:text-3xl font-bold text-gray-900">{{ number_format($performa['hdp'] ?? 0, 1) }}%</p>
-                            @php $hdpTrend = $performa['hdp_trend'] ?? ['value' => 0, 'direction' => 'stable']; @endphp
-                            <p class="text-xs {{ $hdpTrend['value'] >= 0 ? 'text-blue-600' : 'text-red-600' }} flex items-center gap-1 mt-1">
-                                @if($hdpTrend['direction'] == 'up')
-                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
-                                @endif
-                                {{ $hdpTrend['value'] >= 0 ? '+' : '' }}{{ $hdpTrend['value'] }}% vs minggu lalu
-                            </p>
-                        </div>
-                        <!-- HHEP -->
-                        <div class="p-3 sm:p-4 bg-white rounded-xl border shadow-sm cursor-pointer hover:shadow-md transition" @click="document.getElementById('chartHHEP').scrollIntoView({behavior:'smooth'})">
-                            <div class="flex items-center gap-2 mb-2">
-                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path>
-                                    </svg>
-                                </div>
-                                <span class="text-xs font-medium text-gray-600">HHEP</span>
-                            </div>
-                            <p class="text-2xl sm:text-3xl font-bold text-gray-900">{{ number_format($performa['hhep'] ?? 0, 1) }}%</p>
-                            @php $hhepTrend = $performa['hhep_trend'] ?? ['value' => 0, 'direction' => 'stable']; @endphp
-                            <p class="text-xs {{ $hhepTrend['value'] >= 0 ? 'text-purple-600' : 'text-red-600' }} flex items-center gap-1 mt-1">
-                                @if($hhepTrend['direction'] == 'up')
-                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
-                                @endif
-                                {{ $hhepTrend['value'] >= 0 ? '+' : '' }}{{ $hhepTrend['value'] }}% vs minggu lalu
-                            </p>
-                        </div>
-                        <!-- Mortalitas -->
-                        <div class="p-3 sm:p-4 bg-white rounded-xl border shadow-sm">
-                            <div class="flex items-center gap-2 mb-2">
-                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-red-400 to-rose-500 flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
-                                    </svg>
-                                </div>
-                                <span class="text-xs font-medium text-gray-600">Mortalitas</span>
-                            </div>
-                            <p class="text-2xl sm:text-3xl font-bold text-gray-900">{{ $performa['mortalitas'] ?? 0 }}</p>
-                            <p class="text-xs text-gray-500 mt-1">{{ $performa['mortalitas_persen'] ?? 0 }}% bulan ini</p>
-                        </div>
-                    </div>
-                </div>
+                            <tr class="hover:bg-gray-50/50 transition-colors">
+                                <td class="px-5 py-3.5 text-gray-600">{{ $log['date'] }}</td>
+                                <td class="px-5 py-3.5 font-medium text-blue-600">{{ $log['barn'] }}</td>
+                                <td class="px-5 py-3.5 text-gray-600">{{ $log['flock_age'] }}</td>
+                                <td class="px-5 py-3.5 text-gray-800 font-medium">{{ $log['birds'] }}</td>
+                                <td class="px-5 py-3.5 text-gray-800 font-medium">{{ $log['eggs'] }}</td>
+                                <td class="px-5 py-3.5 text-gray-600">{{ $log['rejects'] }}</td>
+                                <td class="px-5 py-3.5"><span class="px-2.5 py-1 text-xs font-semibold rounded-full {{ $statusClass }}">{{ $log['status'] }}</span></td>
+                                <td class="px-5 py-3.5">
+                                    <button class="text-gray-400 hover:text-gray-600"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg></button>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
             </div>
-        </div>
-
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- SECTION 4: RINGKASAN POPULASI (COMPACT) -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <div class="bg-white border rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm mb-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-base sm:text-lg font-semibold text-gray-800">Ringkasan Populasi</h3>
-                <span class="text-xs text-gray-500">Data real-time</span>
-            </div>
-            <div class="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-10 gap-2 sm:gap-3">
-                <!-- Total -->
-                <div class="p-2 sm:p-3 bg-emerald-50 rounded-lg text-center">
-                    <p class="text-xs text-gray-500 mb-1">Total</p>
-                    <p class="text-lg sm:text-xl font-bold text-gray-900">{{ number_format($populasi['total'] ?? 0) }}</p>
+            <div class="flex items-center justify-between px-5 py-3 border-t border-gray-50">
+                <p class="text-xs text-gray-400">Showing 4 of 128 rows</p>
+                <div class="flex items-center gap-2">
+                    <button class="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700">Prev</button>
+                    <button class="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700">Next</button>
                 </div>
-                <!-- Produktif -->
-                <div class="p-2 sm:p-3 bg-blue-50 rounded-lg text-center">
-                    <p class="text-xs text-gray-500 mb-1">Produktif</p>
-                    <p class="text-lg sm:text-xl font-bold text-gray-900">{{ number_format($populasi['produktif'] ?? 0) }}</p>
-                </div>
-                <!-- Afkir -->
-                <div class="p-2 sm:p-3 bg-amber-50 rounded-lg text-center">
-                    <p class="text-xs text-gray-500 mb-1">Afkir</p>
-                    <p class="text-lg sm:text-xl font-bold text-gray-900">{{ number_format($populasi['afkir'] ?? 0) }}</p>
-                </div>
-                <!-- Sakit -->
-                <div class="p-2 sm:p-3 bg-red-50 rounded-lg text-center">
-                    <p class="text-xs text-gray-500 mb-1">Sakit</p>
-                    <p class="text-lg sm:text-xl font-bold text-gray-900">{{ number_format($populasi['sakit'] ?? 0) }}</p>
-                </div>
-                <!-- Umur -->
-                <div class="p-2 sm:p-3 bg-purple-50 rounded-lg text-center">
-                    <p class="text-xs text-gray-500 mb-1">Umur</p>
-                    <p class="text-lg sm:text-xl font-bold text-gray-900">{{ $populasi['umur'] ?? 0 }}<span class="text-xs">mgg</span></p>
-                </div>
-                <!-- Berat -->
-                <div class="p-2 sm:p-3 bg-cyan-50 rounded-lg text-center">
-                    <p class="text-xs text-gray-500 mb-1">Berat</p>
-                    <p class="text-lg sm:text-xl font-bold text-gray-900">{{ $populasi['berat'] ?? 0 }}<span class="text-xs">kg</span></p>
-                </div>
-                <!-- Produksi -->
-                <div class="p-2 sm:p-3 bg-indigo-50 rounded-lg text-center">
-                    <p class="text-xs text-gray-500 mb-1">Telur/Hr</p>
-                    <p class="text-lg sm:text-xl font-bold text-gray-900">{{ number_format($populasi['telur_hari'] ?? 0) }}</p>
-                </div>
-                <!-- Berat Telur -->
-                <div class="p-2 sm:p-3 bg-green-50 rounded-lg text-center">
-                    <p class="text-xs text-gray-500 mb-1">Brt Telur</p>
-                    <p class="text-lg sm:text-xl font-bold text-gray-900">{{ $populasi['berat_telur'] ?? 0 }}<span class="text-xs">g</span></p>
-                </div>
-                <!-- Pakan -->
-                <div class="p-2 sm:p-3 bg-orange-50 rounded-lg text-center">
-                    <p class="text-xs text-gray-500 mb-1">Pakan/Hr</p>
-                    <p class="text-lg sm:text-xl font-bold text-gray-900">{{ $populasi['pakan_hari'] ?? 0 }}<span class="text-xs">kg</span></p>
-                </div>
-                <!-- Mortalitas -->
-                <div class="p-2 sm:p-3 bg-rose-50 rounded-lg text-center">
-                    <p class="text-xs text-gray-500 mb-1">Mati/Bln</p>
-                    <p class="text-lg sm:text-xl font-bold text-gray-900">{{ $populasi['mortalitas_bulan'] ?? 0 }}</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- SECTION 4: AKTIVITAS HARIAN -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <div class="bg-white border rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm mb-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-base sm:text-lg font-semibold text-gray-800">Aktivitas Harian</h3>
-                <span class="text-xs text-gray-500">{{ now()->locale('id')->translatedFormat('d M Y') }}</span>
-            </div>
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <div class="p-3 sm:p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-100">
-                    <div class="flex items-center gap-2 mb-2">
-                        <div class="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center">
-                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                            </svg>
-                        </div>
-                        <span class="text-xs font-medium text-gray-600">Pemberian Pakan</span>
-                    </div>
-                    <p class="text-xl sm:text-2xl font-bold text-gray-900">{{ number_format($aktivitasHarian['pakan']['value'] ?? 0, 0, ',', '.') }} {{ $aktivitasHarian['pakan']['unit'] ?? 'kg' }}</p>
-                    <p class="text-xs {{ ($aktivitasHarian['pakan']['status'] ?? 'pending') == 'completed' ? 'text-emerald-600' : 'text-amber-600' }} mt-1 flex items-center gap-1">
-                        @if(($aktivitasHarian['pakan']['status'] ?? 'pending') == 'completed')
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                            Selesai hari ini
-                        @else
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            Belum selesai
-                        @endif
-                    </p>
-                </div>
-                <div class="p-3 sm:p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
-                    <div class="flex items-center gap-2 mb-2">
-                        <div class="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
-                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
-                            </svg>
-                        </div>
-                        <span class="text-xs font-medium text-gray-600">Notif Pakan</span>
-                    </div>
-                    <p class="text-xl sm:text-2xl font-bold text-gray-900">3x</p>
-                    <p class="text-xs text-gray-500 mt-1">06:00, 12:00, 18:00</p>
-                </div>
-                <div class="p-3 sm:p-4 bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl border border-emerald-100">
-                    <div class="flex items-center gap-2 mb-2">
-                        <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
-                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
-                            </svg>
-                        </div>
-                        <span class="text-xs font-medium text-gray-600">Pembersihan</span>
-                    </div>
-                    <p class="text-xl sm:text-2xl font-bold text-gray-900">
-                        {{ $aktivitasHarian['laporan']['value'] }}/{{ $aktivitasHarian['laporan']['total'] }}
-                    </p>
-                    <p class="text-xs {{ $aktivitasHarian['laporan']['value'] == $aktivitasHarian['laporan']['total'] ? 'text-emerald-600' : 'text-amber-600' }} mt-1">
-                        {{ $aktivitasHarian['laporan']['pending_text'] }}
-                    </p>
-                </div>
-                <div class="p-3 sm:p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border border-purple-100">
-                    <div class="flex items-center gap-2 mb-2">
-                        <div class="w-8 h-8 rounded-lg bg-purple-500 flex items-center justify-center">
-                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-                            </svg>
-                        </div>
-                        <span class="text-xs font-medium text-gray-600">Panen Hari Ini</span>
-                    </div>
-                    <p class="text-xl sm:text-2xl font-bold text-gray-900">{{ number_format($aktivitasHarian['telur']['value'] ?? 0, 0, ',', '.') }}</p>
-                    <p class="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                        <!-- Trend data not available yet -->
-                        Total hari ini
-                    </p>
-                </div>
-            </div>
-        </div>
-
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- SECTION 5: GRAFIK PERFORMA -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        
-        <!-- Charts Row 1: FCR & Mortalitas -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
-            <!-- FCR Chart -->
-            <div class="bg-white border rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm">
-                <div class="flex items-center justify-between gap-2 mb-4">
-                    <div>
-                        <h3 class="text-base sm:text-lg font-semibold text-gray-800">FCR Ayam</h3>
-                        <p class="text-xs text-gray-500">Feed Conversion Ratio</p>
-                    </div>
-                    <button 
-                        @click="showFCRModal = true"
-                        class="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-primary-4 bg-primary-1 rounded-lg hover:bg-primary-2 transition shrink-0"
-                    >
-                        <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                        </svg>
-                        <span class="hidden sm:inline">Edit</span>
-                    </button>
-                </div>
-                <div class="h-48 sm:h-56">
-                    <canvas id="chartFCR"></canvas>
-                </div>
-                <div class="flex flex-wrap items-center justify-center gap-4 mt-3 text-xs">
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-3 h-3 rounded bg-emerald-500"></span>
-                        <span class="text-gray-600">FCR Aktual</span>
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-6 h-0.5 bg-red-500"></span>
-                        <span class="text-gray-600">Threshold (1.8)</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Mortalitas Chart -->
-            <div class="bg-white border rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm">
-                <div class="flex items-center justify-between gap-2 mb-4">
-                    <div>
-                        <h3 class="text-base sm:text-lg font-semibold text-gray-800">Histori Mortalitas</h3>
-                        <p class="text-xs text-gray-500">Kematian ayam per minggu</p>
-                    </div>
-                    <button 
-                        @click="showMortalitasModal = true"
-                        class="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-primary-4 bg-primary-1 rounded-lg hover:bg-primary-2 transition shrink-0"
-                    >
-                        <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                        </svg>
-                        <span class="hidden sm:inline">Edit</span>
-                    </button>
-                </div>
-                <div class="h-48 sm:h-56">
-                    <canvas id="chartMortalitas"></canvas>
-                </div>
-                <div class="flex flex-wrap items-center justify-center gap-4 mt-3 text-xs">
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-3 h-3 rounded bg-red-500"></span>
-                        <span class="text-gray-600">Mortalitas</span>
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-3 h-3 rounded bg-gray-300"></span>
-                        <span class="text-gray-600">Target Max</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Charts Row 2: HDP & HHEP -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
-            <!-- HDP Chart -->
-            <div class="bg-white border rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm">
-                <div class="flex items-center justify-between gap-2 mb-4">
-                    <div class="min-w-0">
-                        <h3 class="text-base sm:text-lg font-semibold text-gray-800">HDP (Hen Day Production)</h3>
-                        <p class="text-xs text-gray-500 truncate">Produksi telur harian per kandang</p>
-                    </div>
-                    <button 
-                        @click="showHDPModal = true"
-                        class="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-primary-4 bg-primary-1 rounded-lg hover:bg-primary-2 transition shrink-0"
-                    >
-                        <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                        </svg>
-                        <span class="hidden sm:inline">Edit</span>
-                        <span class="sm:hidden">Edit</span>
-                    </button>
-                </div>
-                <div class="h-48 sm:h-56">
-                    <canvas id="chartHDP"></canvas>
-                </div>
-                <div class="flex flex-wrap items-center justify-center gap-3 mt-3 text-xs">
-                    <template x-for="kandang in kandangList" :key="kandang.id">
-                        <div x-show="kandang.hdpVisible" class="flex items-center gap-1.5">
-                            <span class="w-3 h-3 rounded" :style="'background-color:' + kandang.color"></span>
-                            <span class="text-gray-600" x-text="kandang.name"></span>
-                        </div>
-                    </template>
-                </div>
-            </div>
-
-            <!-- HHEP Chart -->
-            <div class="bg-white border rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm">
-                <div class="flex items-center justify-between gap-2 mb-4">
-                    <div class="min-w-0">
-                        <h3 class="text-base sm:text-lg font-semibold text-gray-800">HHEP (Hen House Egg Production)</h3>
-                        <p class="text-xs text-gray-500 truncate">Produksi telur per rumah kandang</p>
-                    </div>
-                    <button 
-                        @click="showHHEPModal = true"
-                        class="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-primary-4 bg-primary-1 rounded-lg hover:bg-primary-2 transition shrink-0"
-                    >
-                        <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                        </svg>
-                        <span class="hidden sm:inline">Edit</span>
-                        <span class="sm:hidden">Edit</span>
-                    </button>
-                </div>
-                <div class="h-48 sm:h-56">
-                    <canvas id="chartHHEP"></canvas>
-                </div>
-                <div class="flex flex-wrap items-center justify-center gap-3 mt-3 text-xs">
-                    <template x-for="kandang in kandangList" :key="kandang.id">
-                        <div x-show="kandang.hhepVisible" class="flex items-center gap-1.5">
-                            <span class="w-3 h-3 rounded" :style="'background-color:' + kandang.color"></span>
-                            <span class="text-gray-600" x-text="kandang.name"></span>
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </div>
-
-
-    </main>
-
-    <!-- HDP Modal - Inventory Style -->
-    <div 
-        x-show="showHDPModal" 
-        x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0"
-        x-transition:enter-end="opacity-100"
-        x-transition:leave="transition ease-in duration-200"
-        x-transition:leave-start="opacity-100"
-        x-transition:leave-end="opacity-0"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-        @click.self="showHDPModal = false"
-        style="display: none;"
-    >
-        <div 
-            x-show="showHDPModal"
-            x-transition:enter="transition ease-out duration-300"
-            x-transition:enter-start="opacity-0 scale-95"
-            x-transition:enter-end="opacity-100 scale-100"
-            x-transition:leave="transition ease-in duration-200"
-            x-transition:leave-start="opacity-100 scale-100"
-            x-transition:leave-end="opacity-0 scale-95"
-            class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden"
-        >
-            <!-- Header -->
-            <div class="flex items-center justify-between p-5 border-b bg-gradient-to-r from-emerald-500 to-green-500">
-                <div>
-                    <h3 class="text-lg font-semibold text-white">Pengaturan Grafik HDP</h3>
-                    <p class="text-emerald-100 text-sm">Atur tampilan dan variabel diagram</p>
-                </div>
-                <button @click="showHDPModal = false" class="p-1 rounded-full hover:bg-white/20 transition">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-            
-            <!-- Body -->
-            <div class="p-5 max-h-[60vh] overflow-y-auto space-y-6">
-                <!-- Tipe Chart -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Tipe Diagram</label>
-                    <div class="grid grid-cols-3 gap-3">
-                        <template x-for="type in chartTypes" :key="type.id">
-                            <button 
-                                @click="hdpConfig.chartType = type.id"
-                                class="p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2"
-                                :class="hdpConfig.chartType === type.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:border-gray-300'"
-                            >
-                                <div x-html="type.icon" class="w-8 h-8 text-gray-600"></div>
-                                <span class="text-xs font-medium text-gray-700" x-text="type.label"></span>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Kandang Selection -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Data Kandang</label>
-                    <div class="space-y-2 max-h-40 overflow-y-auto pr-1 border rounded-xl p-2 bg-white">
-                        <template x-for="kandang in kandangList" :key="kandang.id">
-                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                                <div class="flex items-center gap-3">
-                                    <input type="checkbox" x-model="kandang.hdpVisible" class="w-4 h-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-500">
-                                    <span class="text-sm font-medium text-gray-700" x-text="kandang.name"></span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <label class="text-xs text-gray-500">Warna:</label>
-                                    <input type="color" x-model="kandang.color" class="w-8 h-8 rounded cursor-pointer border-0">
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Pengaturan Tampilan -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Pengaturan Tampilan</label>
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Tampilkan Grid</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="hdpConfig.showGrid" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-emerald-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Tampilkan Titik Data</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="hdpConfig.showPoints" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-emerald-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Isi Area di Bawah Garis</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="hdpConfig.fillArea" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-emerald-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Garis Halus (Curved)</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="hdpConfig.smoothLine" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-emerald-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Rentang Waktu -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Rentang Waktu</label>
-                    <select x-model="hdpConfig.timeRange" class="w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-                        <template x-for="range in timeRanges" :key="range.id">
-                            <option :value="range.id" x-text="range.label"></option>
-                        </template>
-                    </select>
-                </div>
-            </div>
-            
-            <!-- Footer -->
-            <div class="flex items-center justify-end gap-3 p-5 border-t bg-gray-50">
-                <button @click="showHDPModal = false" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border rounded-lg hover:bg-gray-50 transition">
-                    Batal
-                </button>
-                <button @click="updateCharts(); showHDPModal = false" class="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-emerald-500 to-green-500 rounded-lg hover:from-emerald-600 hover:to-green-600 transition shadow-lg">
-                    Terapkan Perubahan
-                </button>
             </div>
         </div>
     </div>
-
-    <!-- HHEP Modal - Inventory Style -->
-    <div 
-        x-show="showHHEPModal" 
-        x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0"
-        x-transition:enter-end="opacity-100"
-        x-transition:leave="transition ease-in duration-200"
-        x-transition:leave-start="opacity-100"
-        x-transition:leave-end="opacity-0"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-        @click.self="showHHEPModal = false"
-        style="display: none;"
-    >
-        <div 
-            x-show="showHHEPModal"
-            x-transition:enter="transition ease-out duration-300"
-            x-transition:enter-start="opacity-0 scale-95"
-            x-transition:enter-end="opacity-100 scale-100"
-            x-transition:leave="transition ease-in duration-200"
-            x-transition:leave-start="opacity-100 scale-100"
-            x-transition:leave-end="opacity-0 scale-95"
-            class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden"
-        >
-            <div class="flex items-center justify-between p-5 border-b bg-gradient-to-r from-blue-500 to-indigo-500">
-                <div>
-                    <h3 class="text-lg font-semibold text-white">Pengaturan Grafik HHEP</h3>
-                    <p class="text-blue-100 text-sm">Atur tampilan dan variabel diagram</p>
-                </div>
-                <button @click="showHHEPModal = false" class="p-1 rounded-full hover:bg-white/20 transition">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-            <div class="p-5 max-h-[60vh] overflow-y-auto space-y-6">
-                <!-- Tipe Chart -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Tipe Diagram</label>
-                    <div class="grid grid-cols-3 gap-3">
-                        <template x-for="type in chartTypes" :key="type.id">
-                            <button 
-                                @click="hhepConfig.chartType = type.id"
-                                class="p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2"
-                                :class="hhepConfig.chartType === type.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'"
-                            >
-                                <div x-html="type.icon" class="w-8 h-8 text-gray-600"></div>
-                                <span class="text-xs font-medium text-gray-700" x-text="type.label"></span>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Kandang Selection -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Data Kandang</label>
-                    <div class="space-y-2 max-h-40 overflow-y-auto pr-1 border rounded-xl p-2 bg-white">
-                        <template x-for="kandang in kandangList" :key="kandang.id">
-                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                                <div class="flex items-center gap-3">
-                                    <input type="checkbox" x-model="kandang.hhepVisible" class="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500">
-                                    <span class="text-sm font-medium text-gray-700" x-text="kandang.name"></span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <label class="text-xs text-gray-500">Warna:</label>
-                                    <input type="color" x-model="kandang.color" class="w-8 h-8 rounded cursor-pointer border-0">
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Pengaturan Tampilan -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Pengaturan Tampilan</label>
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Tampilkan Grid</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="hhepConfig.showGrid" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Tampilkan Titik Data</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="hhepConfig.showPoints" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Isi Area di Bawah Garis</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="hhepConfig.fillArea" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Garis Halus (Curved)</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="hhepConfig.smoothLine" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Rentang Waktu -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Rentang Waktu</label>
-                    <select x-model="hhepConfig.timeRange" class="w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <template x-for="range in timeRanges" :key="range.id">
-                            <option :value="range.id" x-text="range.label"></option>
-                        </template>
-                    </select>
-                </div>
-            </div>
-            <div class="flex items-center justify-end gap-3 p-5 border-t bg-gray-50">
-                <button @click="showHHEPModal = false" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border rounded-lg hover:bg-gray-50 transition">
-                    Batal
-                </button>
-                <button @click="updateCharts(); showHHEPModal = false" class="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg hover:from-blue-600 hover:to-indigo-600 transition shadow-lg">
-                    Terapkan Perubahan
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Mortalitas Modal - Inventory Style -->
-    <div 
-        x-show="showMortalitasModal" 
-        x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0"
-        x-transition:enter-end="opacity-100"
-        x-transition:leave="transition ease-in duration-200"
-        x-transition:leave-start="opacity-100"
-        x-transition:leave-end="opacity-0"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-        @click.self="showMortalitasModal = false"
-        style="display: none;"
-    >
-        <div 
-            x-show="showMortalitasModal"
-            x-transition:enter="transition ease-out duration-300"
-            x-transition:enter-start="opacity-0 scale-95"
-            x-transition:enter-end="opacity-100 scale-100"
-            x-transition:leave="transition ease-in duration-200"
-            x-transition:leave-start="opacity-100 scale-100"
-            x-transition:leave-end="opacity-0 scale-95"
-            class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden"
-        >
-            <div class="flex items-center justify-between p-5 border-b bg-gradient-to-r from-red-500 to-rose-500">
-                <div>
-                    <h3 class="text-lg font-semibold text-white">Pengaturan Grafik Mortalitas</h3>
-                    <p class="text-red-100 text-sm">Atur tampilan dan variabel diagram</p>
-                </div>
-                <button @click="showMortalitasModal = false" class="p-1 rounded-full hover:bg-white/20 transition">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-            <div class="p-5 max-h-[60vh] overflow-y-auto space-y-6">
-                <!-- Tipe Chart -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Tipe Diagram</label>
-                    <div class="grid grid-cols-3 gap-3">
-                        <template x-for="type in chartTypes" :key="type.id">
-                            <button 
-                                @click="mortalitasConfig.chartType = type.id; mortalitasType = type.id"
-                                class="p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2"
-                                :class="mortalitasConfig.chartType === type.id ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300'"
-                            >
-                                <div x-html="type.icon" class="w-8 h-8 text-gray-600"></div>
-                                <span class="text-xs font-medium text-gray-700" x-text="type.label"></span>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Mode Tampilan -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Mode Tampilan</label>
-                    <div class="grid grid-cols-2 gap-3">
-                        <template x-for="mode in viewModes" :key="mode.id">
-                            <button 
-                                @click="mortalitasConfig.viewMode = mode.id"
-                                class="p-3 rounded-xl border-2 transition-all text-center"
-                                :class="mortalitasConfig.viewMode === mode.id ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300'"
-                            >
-                                <span class="text-sm font-medium text-gray-700" x-text="mode.label"></span>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Pengaturan Tampilan -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Pengaturan Tampilan</label>
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Tampilkan Grid</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="mortalitasConfig.showGrid" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-red-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Tampilkan Titik Data</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="mortalitasConfig.showPoints" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-red-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Rentang Waktu -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Rentang Waktu</label>
-                    <select x-model="mortalitasConfig.timeRange" class="w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500">
-                        <template x-for="range in timeRanges" :key="range.id">
-                            <option :value="range.id" x-text="range.label"></option>
-                        </template>
-                    </select>
-                </div>
-            </div>
-            <div class="flex items-center justify-end gap-3 p-5 border-t bg-gray-50">
-                <button @click="showMortalitasModal = false" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border rounded-lg hover:bg-gray-50 transition">
-                    Batal
-                </button>
-                <button @click="updateCharts(); showMortalitasModal = false" class="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-red-500 to-rose-500 rounded-lg hover:from-red-600 hover:to-rose-600 transition shadow-lg">
-                    Terapkan Perubahan
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- FCR Modal - Inventory Style -->
-    <div 
-        x-show="showFCRModal" 
-        x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0"
-        x-transition:enter-end="opacity-100"
-        x-transition:leave="transition ease-in duration-200"
-        x-transition:leave-start="opacity-100"
-        x-transition:leave-end="opacity-0"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-        @click.self="showFCRModal = false"
-        style="display: none;"
-    >
-        <div 
-            x-show="showFCRModal"
-            x-transition:enter="transition ease-out duration-300"
-            x-transition:enter-start="opacity-0 scale-95"
-            x-transition:enter-end="opacity-100 scale-100"
-            x-transition:leave="transition ease-in duration-200"
-            x-transition:leave-start="opacity-100 scale-100"
-            x-transition:leave-end="opacity-0 scale-95"
-            class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden"
-        >
-            <div class="flex items-center justify-between p-5 border-b bg-gradient-to-r from-amber-500 to-orange-500">
-                <div>
-                    <h3 class="text-lg font-semibold text-white">Pengaturan Grafik FCR</h3>
-                    <p class="text-amber-100 text-sm">Atur tampilan dan variabel diagram</p>
-                </div>
-                <button @click="showFCRModal = false" class="p-1 rounded-full hover:bg-white/20 transition">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-            <div class="p-5 max-h-[60vh] overflow-y-auto space-y-6">
-                <!-- Tipe Chart -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Tipe Diagram</label>
-                    <div class="grid grid-cols-3 gap-3">
-                        <template x-for="type in chartTypes" :key="type.id">
-                            <button 
-                                @click="fcrConfig.chartType = type.id"
-                                class="p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2"
-                                :class="fcrConfig.chartType === type.id ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-gray-300'"
-                            >
-                                <div x-html="type.icon" class="w-8 h-8 text-gray-600"></div>
-                                <span class="text-xs font-medium text-gray-700" x-text="type.label"></span>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Mode Tampilan -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Mode Tampilan</label>
-                    <div class="grid grid-cols-2 gap-3">
-                        <template x-for="mode in viewModes" :key="mode.id">
-                            <button 
-                                @click="fcrConfig.viewMode = mode.id"
-                                class="p-3 rounded-xl border-2 transition-all text-center"
-                                :class="fcrConfig.viewMode === mode.id ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-gray-300'"
-                            >
-                                <span class="text-sm font-medium text-gray-700" x-text="mode.label"></span>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Threshold FCR -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Threshold FCR Optimal</label>
-                    <div class="p-3 bg-amber-50 rounded-xl border border-amber-100 mb-3">
-                        <p class="text-sm text-amber-700">
-                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            FCR di bawah threshold = baik (zona hijau)
-                        </p>
-                    </div>
-                    <input type="number" x-model="fcrConfig.threshold" step="0.1" min="1" max="3" class="w-full border rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
-                </div>
-
-                <!-- Pengaturan Tampilan -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Pengaturan Tampilan</label>
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Tampilkan Grid</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="fcrConfig.showGrid" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-amber-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Tampilkan Titik Data</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="fcrConfig.showPoints" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-amber-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Isi Area di Bawah Garis</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="fcrConfig.fillArea" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-amber-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <span class="text-sm text-gray-700">Tampilkan Garis Threshold</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" x-model="fcrConfig.showThreshold" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-amber-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Rentang Waktu -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Rentang Waktu</label>
-                    <select x-model="fcrConfig.timeRange" class="w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
-                        <template x-for="range in timeRanges" :key="range.id">
-                            <option :value="range.id" x-text="range.label"></option>
-                        </template>
-                    </select>
-                </div>
-            </div>
-            <div class="flex items-center justify-end gap-3 p-5 border-t bg-gray-50">
-                <button @click="showFCRModal = false" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border rounded-lg hover:bg-gray-50 transition">
-                    Batal
-                </button>
-                <button @click="fcrThreshold = fcrConfig.threshold; showFCRThreshold = fcrConfig.showThreshold; updateCharts(); showFCRModal = false" class="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg hover:from-amber-600 hover:to-orange-600 transition shadow-lg">
-                    Terapkan Perubahan
-                </button>
-            </div>
-        </div>
-    </div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.0.0/dist/chartjs-plugin-annotation.min.js"></script>
-<script>
-function ayamDashboard() {
-    return {
-        open: false,
-        
-        // Modal states
-        showHDPModal: false,
-        showHHEPModal: false,
-        showMortalitasModal: false,
-        showFCRModal: false,
-        
-        // Chart configs - inventory style
-        chartTypes: [
-            { id: 'line', label: 'Line', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l6-6 4 8 8-10"/></svg>' },
-            { id: 'bar', label: 'Bar', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="10" width="4" height="10"/><rect x="10" y="6" width="4" height="14"/><rect x="17" y="2" width="4" height="18"/></svg>' },
-            { id: 'area', label: 'Area', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20V12l6-6 4 8 8-10v16H3z" fill="currentColor" opacity="0.2"/><path d="M3 12l6-6 4 8 8-10"/></svg>' }
-        ],
-        
-        timeRanges: [
-            { id: 'daily', label: 'Harian' },
-            { id: '7days', label: '7 Hari Terakhir' },
-            { id: '30days', label: '30 Hari Terakhir' },
-            { id: '3months', label: '3 Bulan Terakhir' },
-            { id: '6months', label: '6 Bulan Terakhir' },
-            { id: 'ytd', label: 'Year to Date' }
-        ],
-        
-        viewModes: [
-            { id: 'average', label: 'Rata-rata' },
-            { id: 'perCage', label: 'Per Kandang' }
-        ],
-        
-        // HDP Config
-        hdpConfig: {
-            chartType: 'line',
-            timeRange: '7days',
-            viewMode: 'perCage',
-            showGrid: true,
-            showPoints: true,
-            fillArea: false,
-            smoothLine: true
-        },
-        
-        // HHEP Config
-        hhepConfig: {
-            chartType: 'line',
-            timeRange: '7days',
-            viewMode: 'perCage',
-            showGrid: true,
-            showPoints: true,
-            fillArea: false,
-            smoothLine: true
-        },
-        
-        // FCR Config
-        fcrConfig: {
-            chartType: 'line',
-            timeRange: '7days',
-            viewMode: 'average',
-            showGrid: true,
-            showPoints: true,
-            fillArea: true,
-            smoothLine: true,
-            threshold: 1.8,
-            showThreshold: true
-        },
-        
-        // Mortalitas Config
-        mortalitasConfig: {
-            chartType: 'bar',
-            timeRange: '30days',
-            viewMode: 'average',
-            showGrid: true,
-            showPoints: false,
-            fillArea: false,
-            smoothLine: false
-        },
-        
-        // Legacy compatibility
-        fcrThreshold: 1.8,
-        showFCRThreshold: true,
-        mortalitasRange: 'weekly',
-        mortalitasType: 'bar',
-        
-        // Kandang list with separate visibility for each chart
-        kandangList: @json($kandangList ?? []),
-        
-        // Chart instances
-        charts: {},
-        
-        // Chart data from controller
-        @php
-            $chartDataForJs = [
-                'labels' => $chartData['labels'] ?? [],
-                'fcr' => $chartData['fcr'] ?? ['average' => [], 'perCage' => []],
-                'mortalitas' => $chartData['mortalitas'] ?? ['average' => [], 'perCage' => []],
-                'hdp' => $chartData['hdp'] ?? ['average' => [], 'perCage' => []],
-                'hhep' => $chartData['hhep'] ?? ['average' => [], 'perCage' => []],
-            ];
-        @endphp
-        chartData: @json($chartDataForJs),
-        
-        init() {
-            // Use setTimeout to ensure Chart.js is fully loaded
-            const self = this;
-            setTimeout(() => {
-                console.log('Initializing all charts...');
-                self.initAllCharts();
-            }, 300);
-        },
-        
-        initAllCharts() {
-            // Initialize charts sequentially with small delays to avoid conflicts
-            const self = this;
-            console.log('initAllCharts called', self.chartData);
-            
-            self.initFCRChart();
-            
-            setTimeout(() => {
-                console.log('Initializing HDP...');
-                self.initHDPChart();
-            }, 100);
-            
-            setTimeout(() => {
-                console.log('Initializing HHEP...');
-                self.initHHEPChart();
-            }, 200);
-            
-            setTimeout(() => {
-                console.log('Initializing Mortalitas...');
-                self.initMortalitasChart();
-            }, 300);
-        },
-        
-        initFCRChart() {
-            const canvas = document.getElementById('chartFCR');
-            if (!canvas) return;
-            
-            const existingChart = Chart.getChart(canvas);
-            if (existingChart) existingChart.destroy();
-            
-            const chartType = this.fcrConfig.chartType === 'area' ? 'line' : this.fcrConfig.chartType;
-            const fillArea = this.fcrConfig.chartType === 'area' || this.fcrConfig.fillArea;
-            const labels = this.chartData.labels || [];
-            const colors = ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444'];
-            
-            let datasets = [];
-            if (this.fcrConfig.viewMode === 'perCage') {
-                const perCageData = this.chartData.fcr?.perCage || {};
-                this.kandangList.forEach((kandang, idx) => {
-                    datasets.push({
-                        label: kandang.name,
-                        data: perCageData[kandang.id] || [],
-                        borderColor: colors[idx % colors.length],
-                        backgroundColor: fillArea ? `${colors[idx % colors.length]}40` : 'transparent',
-                        fill: fillArea,
-                        tension: this.fcrConfig.smoothLine ? 0.4 : 0,
-                        pointRadius: this.fcrConfig.showPoints ? 4 : 0,
-                        borderRadius: chartType === 'bar' ? 4 : 0
-                    });
-                });
-            } else {
-                datasets.push({
-                    label: 'FCR Rata-rata',
-                    data: this.chartData.fcr?.average || [],
-                    borderColor: '#10B981',
-                    backgroundColor: fillArea ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.1)',
-                    fill: fillArea,
-                    tension: this.fcrConfig.smoothLine ? 0.4 : 0,
-                    pointRadius: this.fcrConfig.showPoints ? 4 : 0,
-                    borderRadius: chartType === 'bar' ? 4 : 0
-                });
-            }
-            
-            this.charts.fcr = new Chart(canvas, {
-                type: chartType,
-                data: { labels, datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: this.fcrConfig.viewMode === 'perCage' },
-                        annotation: this.fcrConfig.showThreshold ? {
-                            annotations: {
-                                threshold: {
-                                    type: 'line',
-                                    yMin: this.fcrConfig.threshold,
-                                    yMax: this.fcrConfig.threshold,
-                                    borderColor: '#EF4444',
-                                    borderWidth: 2,
-                                    borderDash: [5, 5],
-                                    label: { display: true, content: 'Target ' + this.fcrConfig.threshold, position: 'end', backgroundColor: '#EF4444', color: '#fff', font: { size: 10 } }
-                                }
-                            }
-                        } : {}
-                    },
-                    scales: {
-                        y: { beginAtZero: false, grid: { display: this.fcrConfig.showGrid, color: 'rgba(0,0,0,0.05)' } },
-                        x: { grid: { display: false } }
-                    }
-                }
-            });
-        },
-        
-        initHDPChart() {
-            const canvas = document.getElementById('chartHDP');
-            if (!canvas) return;
-            
-            const existingChart = Chart.getChart(canvas);
-            if (existingChart) existingChart.destroy();
-            
-            const chartType = this.hdpConfig.chartType === 'area' ? 'line' : this.hdpConfig.chartType;
-            const fillArea = this.hdpConfig.chartType === 'area' || this.hdpConfig.fillArea;
-            const labels = this.chartData.labels || [];
-            const colors = ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444'];
-            
-            let datasets = [];
-            if (this.hdpConfig.viewMode === 'average') {
-                // Average view - single line
-                datasets.push({
-                    label: 'HDP Rata-rata',
-                    data: this.chartData.hdp?.average || [],
-                    borderColor: '#3B82F6',
-                    backgroundColor: fillArea ? 'rgba(59,130,246,0.3)' : 'rgba(59,130,246,0.1)',
-                    fill: fillArea,
-                    tension: this.hdpConfig.smoothLine ? 0.4 : 0,
-                    pointRadius: this.hdpConfig.showPoints ? 3 : 0,
-                    borderRadius: chartType === 'bar' ? 4 : 0
-                });
-            } else {
-                // Per-cage view - multiple lines
-                const perCageData = this.chartData.hdp?.perCage || {};
-                this.kandangList.filter(k => k.hdpVisible).forEach((kandang, idx) => {
-                    datasets.push({
-                        label: kandang.name,
-                        data: perCageData[kandang.id] || [],
-                        borderColor: colors[idx % colors.length],
-                        backgroundColor: fillArea ? `${colors[idx % colors.length]}40` : 'transparent',
-                        fill: fillArea,
-                        tension: this.hdpConfig.smoothLine ? 0.4 : 0,
-                        pointRadius: this.hdpConfig.showPoints ? 3 : 0,
-                        borderRadius: chartType === 'bar' ? 4 : 0
-                    });
-                });
-            }
-            
-            this.charts.hdp = new Chart(canvas, {
-                type: chartType,
-                data: { labels, datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: this.hdpConfig.viewMode === 'perCage' } },
-                    scales: {
-                        y: { 
-                            beginAtZero: true, min: 0, max: 100,
-                            ticks: { callback: v => v + '%' },
-                            grid: { display: this.hdpConfig.showGrid, color: 'rgba(0,0,0,0.05)' }
-                        },
-                        x: { grid: { display: false } }
-                    }
-                }
-            });
-        },
-        
-        initHHEPChart() {
-            const canvas = document.getElementById('chartHHEP');
-            if (!canvas) return;
-            
-            const existingChart = Chart.getChart(canvas);
-            if (existingChart) existingChart.destroy();
-            
-            const chartType = this.hhepConfig.chartType === 'area' ? 'line' : this.hhepConfig.chartType;
-            const fillArea = this.hhepConfig.chartType === 'area' || this.hhepConfig.fillArea;
-            const labels = this.chartData.labels || [];
-            const colors = ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444'];
-            
-            let datasets = [];
-            if (this.hhepConfig.viewMode === 'average') {
-                datasets.push({
-                    label: 'HHEP Rata-rata',
-                    data: this.chartData.hhep?.average || [],
-                    borderColor: '#8B5CF6',
-                    backgroundColor: fillArea ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.1)',
-                    fill: fillArea,
-                    tension: this.hhepConfig.smoothLine ? 0.4 : 0,
-                    pointRadius: this.hhepConfig.showPoints ? 3 : 0,
-                    borderRadius: chartType === 'bar' ? 4 : 0
-                });
-            } else {
-                const perCageData = this.chartData.hhep?.perCage || {};
-                this.kandangList.filter(k => k.hhepVisible).forEach((kandang, idx) => {
-                    datasets.push({
-                        label: kandang.name,
-                        data: perCageData[kandang.id] || [],
-                        borderColor: colors[idx % colors.length],
-                        backgroundColor: fillArea ? `${colors[idx % colors.length]}40` : 'transparent',
-                        fill: fillArea,
-                        tension: this.hhepConfig.smoothLine ? 0.4 : 0,
-                        pointRadius: this.hhepConfig.showPoints ? 3 : 0,
-                        borderRadius: chartType === 'bar' ? 4 : 0
-                    });
-                });
-            }
-            
-            this.charts.hhep = new Chart(canvas, {
-                type: chartType,
-                data: { labels, datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: this.hhepConfig.viewMode === 'perCage' } },
-                    scales: {
-                        y: { 
-                            beginAtZero: true, min: 0, max: 100,
-                            ticks: { callback: v => v + '%' },
-                            grid: { display: this.hhepConfig.showGrid, color: 'rgba(0,0,0,0.05)' }
-                        },
-                        x: { grid: { display: false } }
-                    }
-                }
-            });
-        },
-        
-        initMortalitasChart() {
-            const canvas = document.getElementById('chartMortalitas');
-            if (!canvas) return;
-            
-            const existingChart = Chart.getChart(canvas);
-            if (existingChart) existingChart.destroy();
-            
-            const chartType = this.mortalitasConfig.chartType === 'area' ? 'line' : this.mortalitasConfig.chartType;
-            const fillArea = this.mortalitasConfig.chartType === 'area' || this.mortalitasConfig.fillArea;
-            const labels = this.chartData.labels || [];
-            const colors = ['#EF4444', '#F97316', '#F59E0B', '#EAB308', '#84CC16'];
-            
-            let datasets = [];
-            if (this.mortalitasConfig.viewMode === 'perCage') {
-                const perCageData = this.chartData.mortalitas?.perCage || {};
-                this.kandangList.forEach((kandang, idx) => {
-                    datasets.push({
-                        label: kandang.name,
-                        data: perCageData[kandang.id] || [],
-                        backgroundColor: chartType === 'bar' ? colors[idx % colors.length] : (fillArea ? `${colors[idx % colors.length]}40` : 'transparent'),
-                        borderColor: colors[idx % colors.length],
-                        borderRadius: chartType === 'bar' ? 4 : 0,
-                        fill: fillArea,
-                        tension: this.mortalitasConfig.smoothLine ? 0.4 : 0,
-                        pointRadius: this.mortalitasConfig.showPoints ? 3 : 0
-                    });
-                });
-            } else {
-                datasets.push({
-                    label: 'Total Mortalitas',
-                    data: this.chartData.mortalitas?.average || [],
-                    backgroundColor: chartType === 'bar' ? '#EF4444' : (fillArea ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.1)'),
-                    borderColor: '#EF4444',
-                    borderRadius: chartType === 'bar' ? 4 : 0,
-                    fill: fillArea,
-                    tension: this.mortalitasConfig.smoothLine ? 0.4 : 0,
-                    pointRadius: this.mortalitasConfig.showPoints ? 3 : 0
-                });
-            }
-            
-            this.charts.mortalitas = new Chart(canvas, {
-                type: chartType,
-                data: { labels, datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: this.mortalitasConfig.viewMode === 'perCage' } },
-                    scales: {
-                        y: { beginAtZero: true, grid: { display: this.mortalitasConfig.showGrid, color: 'rgba(0,0,0,0.05)' } },
-                        x: { grid: { display: false } }
-                    }
-                }
-            });
-        },
-        
-        updateCharts() {
-            this.initFCRChart();
-            this.initHDPChart();
-            this.initHHEPChart();
-            this.initMortalitasChart();
-        }
-    }
-}
-</script>
 @endsection
+
+@push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+@endpush
