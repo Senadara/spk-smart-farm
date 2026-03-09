@@ -38,6 +38,44 @@
             </ul>
         </div>
 
+        {{-- IoT Management — Collapsible --}}
+        <div class="mb-4" x-data="{ open: {{ request()->routeIs('iot.*') ? 'true' : 'false' }} }">
+            <button @click="open = !open"
+                class="flex items-center justify-between w-full text-[11px] font-semibold uppercase tracking-wider text-[var(--color-gray-400)] px-3 mb-2 bg-transparent border-none cursor-pointer hover:text-[var(--color-gray-600)] transition-colors duration-200">
+                <span>IoT Management</span>
+                <svg class="w-3.5 h-3.5 transition-transform duration-200" :class="open && 'rotate-180'" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+            <ul x-show="open" x-collapse class="space-y-1 list-none p-0 m-0">
+                <li>
+                    <x-sidebar.menu-item :href="route('iot.dashboard')" :active="request()->routeIs('iot.dashboard')"
+                        icon="iot">
+                        Dashboard IoT
+                    </x-sidebar.menu-item>
+                </li>
+                <li>
+                    <x-sidebar.menu-item :href="route('iot.devices')" :active="request()->routeIs('iot.devices')"
+                        icon="cpu">
+                        Devices
+                    </x-sidebar.menu-item>
+                </li>
+                <li>
+                    <x-sidebar.menu-item :href="route('iot.config')" :active="request()->routeIs('iot.config')"
+                        icon="settings">
+                        Konfigurasi
+                    </x-sidebar.menu-item>
+                </li>
+                <li>
+                    <x-sidebar.menu-item :href="route('iot.monitoring')" :active="request()->routeIs('iot.monitoring')"
+                        icon="chart">
+                        Monitoring
+                    </x-sidebar.menu-item>
+                </li>
+            </ul>
+        </div>
+
         <div class="mb-4">
             <div class="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-gray-400)] px-3 mb-2">
                 Akun</div>

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Dashboard\DashboardController;
+use App\Http\Controllers\Iot\IotController;
 use App\Http\Controllers\Peternakan\PeternakanController;
 use App\Http\Controllers\Profile\ProfileController;
 use Illuminate\Support\Facades\Route;
@@ -39,6 +40,14 @@ Route::middleware('auth.api')->group(function () {
 
     // Peternakan
     Route::get('/peternakan', [PeternakanController::class, 'index'])->name('peternakan');
+
+    // IoT Management
+    Route::prefix('iot')->group(function () {
+        Route::get('/', [IotController::class, 'dashboard'])->name('iot.dashboard');
+        Route::get('/devices', [IotController::class, 'devices'])->name('iot.devices');
+        Route::get('/config', [IotController::class, 'config'])->name('iot.config');
+        Route::get('/monitoring', [IotController::class, 'monitoring'])->name('iot.monitoring');
+    });
 
     // Profil
     Route::get('/profil', [ProfileController::class, 'show'])->name('profile');
