@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Peternakan\PeternakanController;
+use App\Http\Controllers\Perkebunan\PerkebunanController;
 use App\Http\Controllers\Profile\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -39,6 +40,9 @@ Route::middleware('auth.api')->group(function () {
 
     // Peternakan
     Route::get('/peternakan', [PeternakanController::class, 'index'])->name('peternakan');
+
+    // Perkebunan
+    Route::get('/perkebunan', [PerkebunanController::class, 'index'])->name('perkebunan');
 
     // Profil
     Route::get('/profil', [ProfileController::class, 'show'])->name('profile');

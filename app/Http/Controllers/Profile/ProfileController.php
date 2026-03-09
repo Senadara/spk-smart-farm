@@ -13,7 +13,7 @@ class ProfileController extends Controller
         $user = session('user', []);
 
         $loginHistories = LoginHistory::where('email', $user['email'] ?? '')
-            ->orderByDesc('login_at')
+            ->orderByDesc('createdAt')
             ->take(10)
             ->get();
 

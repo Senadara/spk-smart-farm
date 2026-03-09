@@ -35,6 +35,12 @@
                         Peternakan
                     </x-sidebar.menu-item>
                 </li>
+                <li>
+                    <x-sidebar.menu-item :href="route('perkebunan')" :active="request()->routeIs('perkebunan*')"
+                        icon="leaf">
+                        Perkebunan
+                    </x-sidebar.menu-item>
+                </li>
             </ul>
         </div>
 

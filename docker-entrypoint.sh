@@ -1,6 +1,16 @@
 #!/bin/bash
 set -e
 
+# Pastikan direktori storage dan cache ada
+mkdir -p /var/www/storage/framework/{sessions,views,cache}
+mkdir -p /var/www/storage/logs
+mkdir -p /var/www/bootstrap/cache
+
+# Set permission — gunakan 777 agar kompatibel dengan volume mount dari Windows
+# (chown tidak efektif pada bind mount Windows → Linux)
+chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache 2>/dev/null || true
+chmod -R 777 /var/www/storage /var/www/bootstrap/cache
+
 # Generate APP_KEY if not set
 if [ -z "$APP_KEY" ]; then
     php artisan key:generate --force 2>/dev/null || true

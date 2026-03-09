@@ -47,6 +47,10 @@
     BASE / GLOBAL RESETS
 */
 @layer base {
+    [x-cloak] {
+        display: none !important;
+    }
+
     .font-primary {
         font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
     }

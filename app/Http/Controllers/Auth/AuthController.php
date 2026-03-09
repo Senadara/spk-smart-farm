@@ -46,14 +46,14 @@ class AuthController extends Controller
             LoginHistory::updateOrCreate(
                 [
                     'email'      => $user['email'] ?? $request->input('email'),
-                    'ip_address' => $request->ip(),
-                    'user_agent' => $request->userAgent(),
+                    'ipAddress' => $request->ip(),
+                    'userAgent' => $request->userAgent(),
                 ],
                 [
-                    'user_id'  => $user['id'] ?? null,
+                    'userId'  => $user['id'] ?? null,
                     'name'     => $user['name'] ?? '-',
                     'role'     => $user['role'] ?? '-',
-                    'login_at' => now(),
+                    'createdAt' => now(),
                 ]
             );
 
@@ -74,8 +74,8 @@ class AuthController extends Controller
         // Hapus riwayat login untuk perangkat saat ini (IP + User Agent)
         $user = session('user', []);
         LoginHistory::where('email', $user['email'] ?? '')
-            ->where('ip_address', $request->ip())
-            ->where('user_agent', $request->userAgent())
+            ->where('ipAddress', $request->ip())
+            ->where('userAgent', $request->userAgent())
             ->delete();
 
         $this->authService->clearSession();
