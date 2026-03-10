@@ -13,6 +13,7 @@
         'users' => '<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>',
         'leaf' => '<path stroke-linecap="round" stroke-linejoin="round" d="M11 20A7 7 0 0 1 9.8 6.9C15.5 4.9 20 .5 20 .5s-4.4 4.5-2.4 10.2A7 7 0 0 1 11 20z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>',
         'livestock' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 10c0-2 2-4 4-4h4c2 0 4 2 4 4v3a3 3 0 01-3 3h-1v2m-4-2H7a3 3 0 01-3-3v-3zM8 6l-1-2m6 2l1-2M9 12h.01M15 12h.01"/>',
+        'database' => '<ellipse cx="12" cy="5" rx="9" ry="3" stroke-linecap="round" stroke-linejoin="round"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
     ];
     $iconPath = $icons[$icon] ?? $icons['home'];
 @endphp

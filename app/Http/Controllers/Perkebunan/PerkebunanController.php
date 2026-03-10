@@ -28,6 +28,8 @@ class PerkebunanController extends Controller
         ]);
     }
 
+    // ─── DASH-01: Dummy Data Methods ───────────────────────────
+
     // ─── Sub-task 1: Ringkasan Blok Kebun ────────────────────────
     // TODO: [DASH-01] Replace with actual Eloquent query
     // Real query: UnitBudidaya::whereHas('jenisBudidaya', fn($q) => $q->where('tipe', 'tumbuhan'))->where('status', 1)->where('isDeleted', 0)->count()
