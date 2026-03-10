@@ -2,23 +2,44 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
 class LoginHistory extends Model
 {
+    use HasUuids;
+
+    /**
+     * Tabel menggunakan UUID sebagai primary key.
+     */
+    public $incrementing = false;
+    protected $keyType = 'string';
+
+    /**
+     * Nonaktifkan timestamps otomatis Laravel.
+     * Kolom createdAt/updatedAt di-handle oleh DEFAULT CURRENT_TIMESTAMP di DB.
+     */
     public $timestamps = false;
 
     protected $fillable = [
-        'user_id',
+        'userId',
         'email',
         'name',
         'role',
-        'ip_address',
-        'user_agent',
-        'login_at',
+        'ipAddress',
+        'userAgent',
+        'createdAt',
     ];
 
     protected $casts = [
-        'login_at' => 'datetime',
+        'createdAt' => 'datetime',
     ];
+
+    /**
+     * Relasi ke tabel user.
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }

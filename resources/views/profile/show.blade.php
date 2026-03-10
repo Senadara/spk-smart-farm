@@ -68,14 +68,14 @@
                 <tbody>
                     @foreach ($loginHistories as $history)
                     <tr>
-                        <td class="whitespace-nowrap">{{ $history->login_at->format('d M Y, H:i') }}</td>
+                        <td class="whitespace-nowrap">{{ $history->createdAt->format('d M Y, H:i') }}</td>
                         <td>
                             <code class="bg-[var(--color-gray-100)] px-2 py-0.5 rounded text-[13px] font-mono">
-                                {{ $history->ip_address ?? '-' }}
+                                {{ $history->ipAddress ?? '-' }}
                             </code>
                         </td>
                         <td class="max-w-[300px] truncate">
-                            {{ Str::limit($history->user_agent, 80) }}
+                            {{ Str::limit($history->userAgent, 80) }}
                         </td>
                     </tr>
                     @endforeach

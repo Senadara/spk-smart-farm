@@ -1,14 +1,15 @@
 {{-- Sidebar Overlay (Mobile) --}}
-<div id="sidebarOverlay"
-    class="fixed inset-0 bg-black/40 z-40 hidden opacity-0 transition-opacity duration-300 lg:hidden"
+<div id="sidebarOverlay" class="fixed inset-0 bg-black/40 z-40 hidden opacity-0 transition-opacity duration-300 lg:hidden"
     onclick="toggleSidebar()">
 </div>
 
 {{-- Sidebar --}}
-<aside id="sidebar" class="fixed top-0 left-0 z-50 h-full w-[var(--sidebar-width)]
+<aside id="sidebar"
+    class="fixed top-0 left-0 z-50 h-full w-[var(--sidebar-width)]
               bg-white flex flex-col border-r border-[var(--color-gray-200)]
               -translate-x-full transition-transform duration-300 ease-in-out
-              lg:translate-x-0 lg:static lg:z-auto" style="box-shadow: var(--shadow-sm);">
+              lg:translate-x-0 lg:static lg:z-auto"
+    style="box-shadow: var(--shadow-sm);">
     {{-- Logo --}}
     <div class="flex items-center gap-3 px-6 py-5 border-b border-[var(--color-gray-100)]">
         <div class="w-10 h-10 bg-[var(--color-primary)] rounded-xl flex items-center justify-center text-xl">🌾
@@ -24,15 +25,31 @@
                 Menu Utama</div>
             <ul class="space-y-1 list-none p-0 m-0">
                 <li>
-                    <x-sidebar.menu-item :href="route('dashboard')" :active="request()->routeIs('dashboard')"
-                        icon="home">
+                    <x-sidebar.menu-item :href="route('dashboard')" :active="request()->routeIs('dashboard')" icon="home">
                         Dashboard
                     </x-sidebar.menu-item>
                 </li>
                 <li>
-                    <x-sidebar.menu-item :href="route('peternakan')" :active="request()->routeIs('peternakan')"
-                        icon="livestock">
+                    <x-sidebar.menu-item :href="route('peternakan')" :active="request()->routeIs('peternakan')" icon="livestock">
                         Peternakan
+                    </x-sidebar.menu-item>
+                </li>
+                <li>
+                    <x-sidebar.menu-item :href="route('perkebunan.index')" :active="request()->routeIs('perkebunan.index')" icon="leaf">
+                        Perkebunan
+                    </x-sidebar.menu-item>
+                </li>
+            </ul>
+        </div>
+
+        {{-- Section: Informasi --}}
+        <div class="mb-4">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-gray-400)] px-3 mb-2">
+                Informasi</div>
+            <ul class="space-y-1 list-none p-0 m-0">
+                <li>
+                    <x-sidebar.menu-item :href="route('data-master.index')" :active="request()->routeIs('data-master.*')" icon="database">
+                        Data Master
                     </x-sidebar.menu-item>
                 </li>
             </ul>
@@ -93,7 +110,8 @@
     <div class="px-4 py-4 border-t border-[var(--color-gray-100)]">
         <form method="POST" action="{{ route('logout') }}">
             @csrf
-            <button type="submit" class="flex items-center gap-3 w-full py-3 px-4 rounded-xl
+            <button type="submit"
+                class="flex items-center gap-3 w-full py-3 px-4 rounded-xl
                            text-[var(--color-danger)] text-sm font-medium
                            bg-transparent border-none cursor-pointer
                            hover:bg-[var(--color-danger-light)] transition-all duration-200">

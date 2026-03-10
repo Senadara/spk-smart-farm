@@ -4,6 +4,8 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Iot\IotController;
 use App\Http\Controllers\Peternakan\PeternakanController;
+use App\Http\Controllers\Perkebunan\PerkebunanController;
+use App\Http\Controllers\DataMasterController;
 use App\Http\Controllers\Profile\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -48,6 +50,11 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/config', [IotController::class, 'config'])->name('iot.config');
         Route::get('/monitoring', [IotController::class, 'monitoring'])->name('iot.monitoring');
     });
+    // Perkebunan
+    Route::get('/perkebunan', [PerkebunanController::class, 'index'])->name('perkebunan.index');
+
+    // Data Master (DASH-02)
+    Route::get('/data-master', [DataMasterController::class, 'index'])->name('data-master.index');
 
     // Profil
     Route::get('/profil', [ProfileController::class, 'show'])->name('profile');
@@ -55,3 +62,4 @@ Route::middleware('auth.api')->group(function () {
     // Logout
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });
+    
