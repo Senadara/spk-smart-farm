@@ -42,6 +42,7 @@ Route::middleware('auth.api')->group(function () {
 
     // Peternakan
     Route::get('/peternakan', [PeternakanController::class, 'index'])->name('peternakan');
+    Route::get('/peternakan/{id}', [PeternakanController::class, 'show'])->name('peternakan.show');
 
     // IoT Management
     Route::prefix('iot')->group(function () {
@@ -62,4 +63,3 @@ Route::middleware('auth.api')->group(function () {
     // Logout
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });
-    

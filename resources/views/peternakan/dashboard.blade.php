@@ -198,6 +198,14 @@
                         </div>
                     </div>
                 </div>
+
+                {{-- Link to detail page --}}
+                <a :href="'{{ url('/peternakan') }}/' + activeBarn"
+                    class="mt-4 flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+                    style="text-decoration: none;">
+                    Lihat Detail Kandang
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                </a>
             </div>
         </div>
 

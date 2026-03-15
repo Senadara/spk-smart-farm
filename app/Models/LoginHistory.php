@@ -10,6 +10,12 @@ class LoginHistory extends Model
     use HasUuids;
 
     /**
+     * Kolom DB menggunakan camelCase (dari Sequelize/node-api),
+     * jadi matikan konversi otomatis Laravel ke snake_case.
+     */
+    public static $snakeAttributes = false;
+
+    /**
      * Tabel menggunakan UUID sebagai primary key.
      */
     public $incrementing = false;
