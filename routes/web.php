@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Dashboard\DashboardController;
+use App\Http\Controllers\Inventory\InventoryController;
 use App\Http\Controllers\Iot\IotController;
 use App\Http\Controllers\Peternakan\PeternakanController;
 use App\Http\Controllers\Perkebunan\PerkebunanController;
@@ -51,8 +52,10 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/config', [IotController::class, 'config'])->name('iot.config');
         Route::get('/monitoring', [IotController::class, 'monitoring'])->name('iot.monitoring');
     });
-    // Perkebunan
     Route::get('/perkebunan', [PerkebunanController::class, 'index'])->name('perkebunan.index');
+
+    // Inventaris
+    Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory');
 
     // Data Master (DASH-02)
     Route::get('/data-master', [DataMasterController::class, 'index'])->name('data-master.index');
