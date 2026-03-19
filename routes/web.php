@@ -5,7 +5,8 @@ use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Iot\IotController;
 use App\Http\Controllers\Peternakan\PeternakanController;
 use App\Http\Controllers\Perkebunan\PerkebunanController;
-use App\Http\Controllers\DataMasterController;
+use App\Http\Controllers\Master\DataMasterController;
+use App\Http\Controllers\Monitoring\PlantMonitoringController;
 use App\Http\Controllers\Profile\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -55,6 +56,9 @@ Route::middleware('auth.api')->group(function () {
 
     // Data Master (DASH-02)
     Route::get('/data-master', [DataMasterController::class, 'index'])->name('data-master.index');
+
+    // Plant Monitoring (DASH-03)
+    Route::get('/plant-monitoring', [PlantMonitoringController::class, 'index'])->name('plant-monitoring.index');
 
     // Profil
     Route::get('/profil', [ProfileController::class, 'show'])->name('profile');

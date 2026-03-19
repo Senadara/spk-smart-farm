@@ -1,75 +1,60 @@
-{{--
-Stat Card — Kartu statistik ringkas untuk satu metrik.
-
-Props:
-- $label     : string  — Judul metrik
-- $value     : string  — Nilai utama
-- $subtitle  : string  — Teks pendukung opsional
-- $icon      : string  — SVG path(s) untuk ikon
-- $iconBg    : string  — Background class ikon
-- $iconColor : string  — Text color class ikon
-- $trend     : ?array  — { direction, value, status }
---}}
-
 @props([
     'label' => '',
     'value' => '',
     'subtitle' => '',
-    'icon' => '',
-    'iconBg' => 'bg-[var(--color-primary-lighter)]',
-    'iconColor' => 'text-[var(--color-primary)]',
-    'valueColor' => 'text-[var(--color-gray-900)]',
+    'icon' => 'activity',
+    'iconBg' => 'bg-emerald-50',
+    'iconColor' => 'text-emerald-600',
+    'valueColor' => 'text-gray-900',
     'trend' => null,
 ])
 
 @php
     $trendColors = [
-        'positive' => 'text-emerald-600 bg-emerald-50',
-        'warning' => 'text-amber-600 bg-amber-50',
-        'negative' => 'text-red-600 bg-red-50',
-        'neutral' => 'text-gray-500 bg-gray-50',
+        'positive' => 'text-emerald-700 bg-emerald-100',
+        'warning' => 'text-amber-700 bg-amber-100',
+        'negative' => 'text-red-700 bg-red-100',
+        'neutral' => 'text-gray-600 bg-gray-100',
     ];
 
     $arrows = [
-        'up' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>',
-        'down' =>
-            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>',
-        'stable' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>',
+        'up' => 'arrow-up',
+        'down' => 'arrow-down',
+        'stable' => 'minus',
     ];
 @endphp
 
-<div {{ $attributes->merge(['class' => 'card']) }}>
-    {{-- No inner padding — .card already provides p-5 --}}
-    <div class="flex items-start gap-3">
+<div {{ $attributes->merge(['class' => 'h-full bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex flex-col justify-center transition-all hover:shadow-md hover:-translate-y-0.5']) }}>
+    <div class="flex items-center gap-4">
         {{-- Icon --}}
-        <div class="flex items-center justify-center w-10 h-10 rounded-xl shrink-0 {{ $iconBg }}">
-            <svg class="w-5 h-5 {{ $iconColor }}" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                stroke-width="1.5">
-                {!! $icon !!}
-            </svg>
+        <div class="flex items-center justify-center w-12 h-12 rounded-xl shrink-0 {{ $iconBg }} shadow-sm">
+            <i data-lucide="{{ $icon }}" class="w-6 h-6 {{ $iconColor }}"></i>
         </div>
 
         {{-- Content --}}
         <div class="flex-1 min-w-0">
-            <p class="text-[11px] font-medium uppercase tracking-wider text-[var(--color-gray-400)] mb-0.5">
-                {{ $label }}</p>
-            <p class="text-xl font-bold leading-tight {{ $valueColor }}">{{ $value }}</p>
+            <p class="text-xs font-semibold tracking-wide text-gray-500 mb-1">
+                {{ $label }}
+            </p>
+            <div class="flex items-center gap-2">
+                <p class="text-2xl font-bold leading-none {{ $valueColor }}">{{ $value }}</p>
+
+                @if ($trend)
+                    @php
+                        $badgeClass = $trendColors[$trend['status'] ?? 'neutral'] ?? $trendColors['neutral'];
+                        $arrowIcon = $arrows[$trend['direction'] ?? 'stable'] ?? $arrows['stable'];
+                    @endphp
+                    <span class="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold rounded-md uppercase tracking-wider {{ $badgeClass }}">
+                        <i data-lucide="{{ $arrowIcon }}" class="w-3 h-3 {{ !empty($trend['value']) ? 'mr-1' : '' }}"></i>
+                        @if (!empty($trend['value']))
+                            <span>{{ $trend['value'] }}</span>
+                        @endif
+                    </span>
+                @endif
+            </div>
 
             @if ($subtitle)
-                <p class="text-xs text-[var(--color-gray-400)] mt-0.5 leading-snug">{{ $subtitle }}</p>
-            @endif
-
-            @if ($trend)
-                @php
-                    $badgeClass = $trendColors[$trend['status'] ?? 'neutral'] ?? $trendColors['neutral'];
-                    $arrowPath = $arrows[$trend['direction'] ?? 'stable'] ?? $arrows['stable'];
-                @endphp
-                <span
-                    class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-semibold rounded-full mt-1.5 {{ $badgeClass }}">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">{!! $arrowPath !!}</svg>
-                    {{ $trend['value'] }}
-                </span>
+                <p class="text-xs text-gray-400 mt-1.5 font-medium truncate">{{ $subtitle }}</p>
             @endif
         </div>
     </div>

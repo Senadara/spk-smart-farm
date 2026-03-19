@@ -52,6 +52,11 @@
                         Data Master
                     </x-sidebar.menu-item>
                 </li>
+                <li>
+                    <x-sidebar.menu-item :href="route('plant-monitoring.index')" :active="request()->routeIs('plant-monitoring.*')" icon="activity">
+                        Plant Monitoring
+                    </x-sidebar.menu-item>
+                </li>
             </ul>
         </div>
 

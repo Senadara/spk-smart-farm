@@ -1,6 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Master;
+
+use App\Http\Controllers\Controller;
 
 class DataMasterController extends Controller
 {
@@ -127,6 +129,9 @@ class DataMasterController extends Controller
                 'deskripsi' => 'Greenhouse utama untuk budidaya melon premium',
                 'jenisBudidaya' => 'Melon',
                 'namaLatin' => 'Cucumis melo L.',
+                // TODO: [DASH-02] Replace with actual query JOIN spk_melon_ranking
+                'peringkat_terakhir' => 1,
+                'skor_terakhir' => 0.8542,
             ],
             [
                 'id' => 'ub-002',
@@ -138,6 +143,8 @@ class DataMasterController extends Controller
                 'deskripsi' => 'Greenhouse pendukung untuk varietas melon golden',
                 'jenisBudidaya' => 'Melon',
                 'namaLatin' => 'Cucumis melo L.',
+                'peringkat_terakhir' => 3,
+                'skor_terakhir' => 0.6925,
             ],
             [
                 'id' => 'ub-003',
@@ -149,6 +156,8 @@ class DataMasterController extends Controller
                 'deskripsi' => 'Greenhouse eksperimen untuk uji coba varietas baru',
                 'jenisBudidaya' => 'Melon',
                 'namaLatin' => 'Cucumis melo L.',
+                'peringkat_terakhir' => 5,
+                'skor_terakhir' => 0.4120,
             ],
             [
                 'id' => 'ub-004',
@@ -160,6 +169,8 @@ class DataMasterController extends Controller
                 'deskripsi' => 'Greenhouse sedang dalam masa renovasi',
                 'jenisBudidaya' => 'Melon',
                 'namaLatin' => 'Cucumis melo L.',
+                'peringkat_terakhir' => 2,
+                'skor_terakhir' => 0.7831,
             ],
             [
                 'id' => 'ub-005',
@@ -171,6 +182,8 @@ class DataMasterController extends Controller
                 'deskripsi' => 'Plot sayuran hidroponik pendamping',
                 'jenisBudidaya' => 'Pakcoy',
                 'namaLatin' => 'Brassica rapa subsp. chinensis',
+                'peringkat_terakhir' => null,
+                'skor_terakhir' => null,
             ],
         ];
     }

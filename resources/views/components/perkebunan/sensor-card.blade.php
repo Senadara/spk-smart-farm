@@ -98,7 +98,7 @@ Props:
         {{-- Row 1: Lingkungan (pH, EC, Suhu, Kelembapan) --}}
         @if (!empty($lingkungan))
             <div>
-                <p class="text-[10px] font-medium uppercase tracking-wider text-[var(--color-gray-400)] mb-1.5">
+                <p class="text-xs font-medium uppercase tracking-wider text-[var(--color-gray-400)] mb-1.5">
                     Lingkungan</p>
                 <div class="grid grid-cols-2 @md:grid-cols-4 gap-2">
                     @foreach ($lingkungan as $sensor)
@@ -127,13 +127,13 @@ Props:
                             "
                             @mouseleave="show = false"
                             class="relative px-2.5 py-2 rounded-lg bg-[var(--color-gray-50)] cursor-default transition-colors duration-150 hover:bg-[var(--color-gray-100)] hover:shadow-sm">
-                            <p class="text-[11px] text-[var(--color-gray-400)] mb-1">{{ $sensor['label'] }}</p>
+                            <p class="text-xs text-[var(--color-gray-400)] mb-1">{{ $sensor['label'] }}</p>
                             <div class="flex items-center gap-1.5">
                                 <span class="w-1.5 h-1.5 rounded-full shrink-0 {{ $dColor }}"></span>
                                 <span
                                     class="text-sm font-bold leading-none {{ $vColor }}">{{ $sensor['value'] }}</span>
                                 @if ($sensor['unit'])
-                                    <span class="text-[11px] text-[var(--color-gray-400)]">{{ $sensor['unit'] }}</span>
+                                    <span class="text-xs text-[var(--color-gray-400)]">{{ $sensor['unit'] }}</span>
                                 @endif
                             </div>
 
@@ -169,20 +169,20 @@ Props:
                                             class="text-xs font-semibold text-[var(--color-gray-900)]">{{ $sensor['label'] }}</span>
                                         <x-badge :color="$statusColors[$sensorStatus]">{{ $statusLabels[$sensorStatus] }}</x-badge>
                                     </div>
-                                    <p class="text-[11px] text-[var(--color-gray-500)] leading-relaxed">
+                                    <p class="text-xs text-[var(--color-gray-500)] leading-relaxed">
                                         {{ $meta['desc'] }}</p>
                                     <div class="pt-2 border-t border-[var(--color-gray-100)] space-y-1.5">
-                                        <div class="flex justify-between text-[11px]">
+                                        <div class="flex justify-between text-xs">
                                             <span class="text-[var(--color-gray-400)]">Satuan</span>
                                             <span
                                                 class="text-[var(--color-gray-700)] font-medium">{{ $meta['unitLabel'] }}</span>
                                         </div>
-                                        <div class="flex justify-between text-[11px]">
+                                        <div class="flex justify-between text-xs">
                                             <span class="text-[var(--color-gray-400)]">Rentang Ideal</span>
                                             <span
                                                 class="text-[var(--color-gray-700)] font-medium">{{ $meta['idealRange'] }}</span>
                                         </div>
-                                        <div class="flex justify-between text-[11px]">
+                                        <div class="flex justify-between text-xs">
                                             <span class="text-[var(--color-gray-400)]">Nilai Saat Ini</span>
                                             <span class="font-bold {{ $vColor }}">{{ $sensor['value'] }}
                                                 {{ $sensor['unit'] }}</span>
@@ -199,7 +199,7 @@ Props:
         {{-- Row 2: Nutrisi (Nitrogen, Fosfor, Kalium) --}}
         @if (!empty($nutrisi))
             <div>
-                <p class="text-[10px] font-medium uppercase tracking-wider text-[var(--color-gray-400)] mb-1.5">Nutrisi
+                <p class="text-xs font-medium uppercase tracking-wider text-[var(--color-gray-400)] mb-1.5">Nutrisi
                 </p>
                 <div class="grid grid-cols-3 gap-2">
                     @foreach ($nutrisi as $sensor)
@@ -228,13 +228,13 @@ Props:
                             "
                             @mouseleave="show = false"
                             class="relative px-2.5 py-2 rounded-lg bg-[var(--color-gray-50)] cursor-default transition-colors duration-150 hover:bg-[var(--color-gray-100)] hover:shadow-sm">
-                            <p class="text-[11px] text-[var(--color-gray-400)] mb-1">{{ $sensor['label'] }}</p>
+                            <p class="text-xs text-[var(--color-gray-400)] mb-1">{{ $sensor['label'] }}</p>
                             <div class="flex items-center gap-1.5">
                                 <span class="w-1.5 h-1.5 rounded-full shrink-0 {{ $dColor }}"></span>
                                 <span
                                     class="text-sm font-bold leading-none {{ $vColor }}">{{ $sensor['value'] }}</span>
                                 @if ($sensor['unit'])
-                                    <span class="text-[11px] text-[var(--color-gray-400)]">{{ $sensor['unit'] }}</span>
+                                    <span class="text-xs text-[var(--color-gray-400)]">{{ $sensor['unit'] }}</span>
                                 @endif
                             </div>
 
@@ -270,20 +270,20 @@ Props:
                                             class="text-xs font-semibold text-[var(--color-gray-900)]">{{ $sensor['label'] }}</span>
                                         <x-badge :color="$statusColors[$sensorStatus]">{{ $statusLabels[$sensorStatus] }}</x-badge>
                                     </div>
-                                    <p class="text-[11px] text-[var(--color-gray-500)] leading-relaxed">
+                                    <p class="text-xs text-[var(--color-gray-500)] leading-relaxed">
                                         {{ $meta['desc'] }}</p>
                                     <div class="pt-2 border-t border-[var(--color-gray-100)] space-y-1.5">
-                                        <div class="flex justify-between text-[11px]">
+                                        <div class="flex justify-between text-xs">
                                             <span class="text-[var(--color-gray-400)]">Satuan</span>
                                             <span
                                                 class="text-[var(--color-gray-700)] font-medium">{{ $meta['unitLabel'] }}</span>
                                         </div>
-                                        <div class="flex justify-between text-[11px]">
+                                        <div class="flex justify-between text-xs">
                                             <span class="text-[var(--color-gray-400)]">Rentang Ideal</span>
                                             <span
                                                 class="text-[var(--color-gray-700)] font-medium">{{ $meta['idealRange'] }}</span>
                                         </div>
-                                        <div class="flex justify-between text-[11px]">
+                                        <div class="flex justify-between text-xs">
                                             <span class="text-[var(--color-gray-400)]">Nilai Saat Ini</span>
                                             <span class="font-bold {{ $vColor }}">{{ $sensor['value'] }}
                                                 {{ $sensor['unit'] }}</span>
