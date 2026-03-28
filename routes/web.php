@@ -45,6 +45,9 @@ Route::middleware('auth.api')->group(function () {
     Route::get('/peternakan', [PeternakanController::class, 'index'])->name('peternakan');
     Route::get('/peternakan/{id}', [PeternakanController::class, 'show'])->name('peternakan.show');
 
+    // Analisa SPK
+    Route::get('/spk-analysis', [\App\Http\Controllers\Spk\SpkDashboardController::class, 'index'])->name('spk.dashboard');
+
     // IoT Management
     Route::prefix('iot')->group(function () {
         Route::get('/', [IotController::class, 'dashboard'])->name('iot.dashboard');
@@ -59,6 +62,9 @@ Route::middleware('auth.api')->group(function () {
 
     // Data Master (DASH-02)
     Route::get('/data-master', [DataMasterController::class, 'index'])->name('data-master.index');
+
+    // Pengaturan (Settings Hub)
+    Route::get('/settings', [\App\Http\Controllers\Settings\SettingsController::class, 'index'])->name('settings.index');
 
     // Profil
     Route::get('/profil', [ProfileController::class, 'show'])->name('profile');

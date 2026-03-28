@@ -15,26 +15,20 @@
                 },
 
                 get fuzzySensors() {
+                    const allLingkungan = @js($fuzzySensors['lingkungan']);
                     if (this.fuzzyFilter === 'all') {
-                        // Average across all barns
-                        const allSensors = this.barns.map(b => b.sensors);
-                        if (!allSensors.length) return [];
-                        return allSensors[0].map((s, i) => {
-                            const avgPercent = Math.round(allSensors.reduce((sum, barn) => sum + barn[i].percent, 0) / allSensors.length);
-                            const worstStatus = allSensors.reduce((worst, barn) => {
-                                const rank = { normal: 0, warning: 1, danger: 2 };
-                                return rank[barn[i].status] > rank[worst] ? barn[i].status : worst;
-                            }, 'normal');
-                            return {
-                                label: s.label,
-                                percent: avgPercent,
-                                status: worstStatus,
-                                statusLabel: s.statusLabel.replace(/[\d.]+\)/, avgPercent/100 + ')'),
-                            };
-                        });
+                        // In Peternakan mode, we just pass down what we got from the controller directly since it mock handles the aggregation for this component view.
+                        return {
+                            lingkungan: allLingkungan,
+                            produktivitas: @js($fuzzySensors['produktivitas'])
+                        };
                     }
-                    const barn = this.barns[parseInt(this.fuzzyFilter)];
-                    return barn?.sensors ?? [];
+                    
+                    // In real data, this would fetch specific barn sensors, but for display we stick to what controller returned
+                    return {
+                        lingkungan: allLingkungan,
+                        produktivitas: @js($fuzzySensors['produktivitas'])
+                    };
                 },
 
                 init() {
@@ -212,175 +206,11 @@
         {{-- ═══════════════════════════════════════════════════════════ --}}
         {{-- SECTION 3: FUZZY ENGINE + SPK RESULTS (UNIFIED CARD)       --}}
         {{-- ═══════════════════════════════════════════════════════════ --}}
-        <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-            {{-- Header --}}
-            <div class="flex items-center justify-between mb-5">
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
-                        <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
-                    </div>
-                    <div>
-                        <h3 class="text-base font-semibold text-gray-800">Fuzzy Productivity Decision Engine</h3>
-                        <p class="text-xs text-gray-400">Mamdani Inference System for Farm Performance Decision Support</p>
-                    </div>
-                </div>
-                <div class="flex items-center gap-3">
-                    <select x-model="fuzzyFilter" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-300 focus:border-emerald-400">
-                        <option value="all">All Barn</option>
-                        @foreach($barnEnvironment['barns'] as $barn)
-                            <option value="{{ $barn['id'] }}">{{ $barn['name'] }}</option>
-                        @endforeach
-                    </select>
-                    <span class="px-2.5 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 rounded-full flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Auto Evaluated
-                    </span>
-                </div>
-            </div>
-
-            {{-- 3 columns side-by-side --}}
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:divide-x lg:divide-gray-100">
-
-                {{-- COL 1: Environment Logic (driven by fuzzyFilter dropdown) --}}
-                <div>
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
-                            <span class="text-sm font-semibold text-gray-700">Environment Logic</span>
-                        </div>
-                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-700 rounded">IoT Real-time</span>
-                    </div>
-
-                    {{-- Sensor bars: driven by fuzzyFilter (dropdown), NOT activeBarn --}}
-                    <div class="space-y-3">
-                        <template x-for="(sensor, idx) in fuzzySensors" :key="idx">
-                            <div>
-                                <div class="flex items-center justify-between mb-1">
-                                    <span class="text-xs text-gray-600" x-text="sensor.label"></span>
-                                    <span
-                                        class="text-xs font-medium px-2 py-0.5 rounded"
-                                        :class="{
-                                            'text-emerald-600 bg-emerald-50': sensor.status === 'normal',
-                                            'text-amber-600 bg-amber-50': sensor.status === 'warning',
-                                            'text-red-600 bg-red-50': sensor.status === 'danger',
-                                        }"
-                                        x-text="sensor.statusLabel"
-                                    ></span>
-                                </div>
-                                <div class="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                                    <div
-                                        class="h-full rounded-full transition-all duration-500"
-                                        :class="{
-                                            'bg-emerald-500': sensor.status === 'normal',
-                                            'bg-amber-500': sensor.status === 'warning',
-                                            'bg-red-500': sensor.status === 'danger',
-                                        }"
-                                        :style="'width: ' + sensor.percent + '%'"
-                                    ></div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                {{-- COL 2: Productivity Logic (Spider Chart) --}}
-                <div class="lg:pl-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                            <span class="text-sm font-semibold text-gray-700">Productivity Logic</span>
-                        </div>
-                        <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-700 rounded">Data Driven</span>
-                    </div>
-
-                    <div class="flex items-start gap-4">
-                        {{-- Spider Chart --}}
-                        <div class="w-36 h-36 shrink-0">
-                            <canvas x-ref="spiderCanvas"></canvas>
-                        </div>
-                        {{-- Indicators --}}
-                        <div class="flex-1 space-y-2.5 pt-2">
-                            @foreach($produktivitas['indicators'] as $item)
-                                @php
-                                    $dotColors = [
-                                        'emerald' => 'bg-emerald-500',
-                                        'amber'   => 'bg-amber-500',
-                                        'red'     => 'bg-red-500',
-                                    ];
-                                    $dotColor = $dotColors[$item['color']] ?? 'bg-gray-400';
-                                @endphp
-                                <div class="flex items-center justify-between">
-                                    <span class="text-xs text-gray-600">{{ $item['label'] }}</span>
-                                    <div class="flex items-center gap-2">
-                                        <span class="w-6 h-1.5 rounded-full {{ $dotColor }}"></span>
-                                        <span class="text-xs font-semibold text-gray-800 w-8">{{ $item['value'] }}</span>
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    </div>
-                </div>
-
-                {{-- COL 3: AI Console --}}
-                <div class="lg:pl-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
-                            <span class="text-sm font-semibold text-gray-700">AI Console</span>
-                        </div>
-                        <span class="text-xs text-gray-400">Manual Trigger</span>
-                    </div>
-
-                    <div class="flex flex-col items-center text-center pt-2">
-                        <div class="w-14 h-14 rounded-full bg-purple-50 flex items-center justify-center mb-3">
-                            <svg class="w-7 h-7 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
-                        </div>
-                        <h4 class="text-sm font-semibold text-gray-800 mb-1">Full Farm Diagnostic</h4>
-                        <p class="text-xs text-gray-400 max-w-[200px] mb-4">Run a comprehensive analysis combining environmental and productivity data points.</p>
-                        <button class="px-5 py-2.5 bg-gradient-to-r from-red-500 to-rose-500 text-white text-sm font-medium rounded-full hover:shadow-lg transition flex items-center gap-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
-                            Run Full Evaluation
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {{-- ─── SPK Analysis Results (inside same card) ─────────── --}}
-            <div class="border-t border-gray-100 mt-5 pt-5">
-                <div class="flex items-center justify-between mb-4">
-                    <h4 class="text-sm font-semibold text-gray-700">SPK Analysis Result</h4>
-                    <span class="text-xs text-gray-400">just now</span>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    @foreach($spkResults as $result)
-                        @php
-                            $statusBadge = [
-                                'amber'   => 'bg-amber-100 text-amber-700 border-amber-200',
-                                'blue'    => 'bg-blue-100 text-blue-700 border-blue-200',
-                                'emerald' => 'bg-emerald-100 text-emerald-700 border-emerald-200',
-                            ];
-                            $badge = $statusBadge[$result['statusColor']] ?? 'bg-gray-100 text-gray-700 border-gray-200';
-                            $isMain = isset($result['isMain']);
-                            $cardBg = $isMain ? 'bg-emerald-50/40 border-emerald-200' : 'bg-gray-50/50 border-gray-100';
-                        @endphp
-                        <div class="border rounded-lg p-4 {{ $cardBg }}">
-                            <div class="flex items-center gap-2 mb-2">
-                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full {{ $badge }}">{{ $result['status'] }}</span>
-                            </div>
-                            <p class="text-sm text-gray-700 leading-relaxed">
-                                <span class="font-semibold text-gray-900">{{ $result['title'] }}</span>
-                                {{ $result['description'] }}
-                            </p>
-                            @if($isMain)
-                                <a href="{{ $result['link'] }}" class="inline-block mt-3 px-4 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition">View Full Diagnostic Report</a>
-                            @else
-                                <a href="{{ $result['link'] }}" class="inline-block mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700">See Detail →</a>
-                            @endif
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        </div>
+        <x-fuzzy-decision-engine 
+            :barns="$barnEnvironment['barns']" 
+            :indicators="$produktivitas['indicators']" 
+            :spkResults="$spkResults" 
+        />
 
         {{-- ═══════════════════════════════════════════════════════════ --}}
         {{-- SECTION 4: DAILY PRODUCTION LOG                            --}}

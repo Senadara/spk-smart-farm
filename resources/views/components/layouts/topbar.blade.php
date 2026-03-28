@@ -66,7 +66,7 @@ $icons = [
     </div>
     <div class="flex items-center gap-3">
         {{-- User Info --}}
-        <div class="flex items-center gap-3">
+        <div x-data="{ showProfileMenu: false }" class="relative flex items-center gap-3">
             <div class="text-right hidden sm:block">
                 <div class="text-sm font-semibold text-[var(--color-gray-900)]">
                     {{ $authUser['name'] ?? 'User' }}
@@ -74,15 +74,35 @@ $icons = [
                 <div class="text-xs text-[var(--color-gray-400)]">{{ ucfirst($authUser['role'] ?? '-') }}
                 </div>
             </div>
-            @if (!empty($authUser['avatar']))
-                <img src="{{ $authUser['avatar'] }}" alt="Avatar"
-                    class="w-9 h-9 rounded-full object-cover ring-2 ring-[var(--color-primary-light)]">
-            @else
-                <div class="w-9 h-9 rounded-full bg-[var(--color-primary-light)] flex items-center justify-center
-                                                        font-bold text-sm text-[var(--color-primary-dark)]">
-                    {{ strtoupper(substr($authUser['name'] ?? 'U', 0, 1)) }}
+            
+            <button @click="showProfileMenu = !showProfileMenu" class="focus:outline-none rounded-full transition-transform hover:scale-105 active:scale-95">
+                @if (!empty($authUser['avatar']))
+                    <img src="{{ $authUser['avatar'] }}" alt="Avatar"
+                        class="w-9 h-9 rounded-full object-cover ring-2 ring-[var(--color-primary-light)]">
+                @else
+                    <div class="w-9 h-9 rounded-full bg-[var(--color-primary-light)] flex items-center justify-center
+                                                            font-bold text-sm text-[var(--color-primary-dark)]">
+                        {{ strtoupper(substr($authUser['name'] ?? 'U', 0, 1)) }}
+                    </div>
+                @endif
+            </button>
+
+            <!-- Profile Dropdown -->
+            <div x-show="showProfileMenu" @click.away="showProfileMenu = false"
+                x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1"
+                x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150"
+                x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 translate-y-1"
+                class="absolute right-0 top-12 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden"
+                style="display: none;">
+                <div class="p-2">
+                    <a href="{{ route('profile') }}" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg transition-colors">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        Profil Saya
+                    </a>
                 </div>
-            @endif
+            </div>
         </div>
 
         {{-- Notification --}}

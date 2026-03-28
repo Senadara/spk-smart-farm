@@ -16,12 +16,31 @@ class PeternakanController extends Controller
         $barnEnvironment = $this->getBarnEnvironment();
         $produktivitas = $this->getProduktivitasData();
         $spkResults = $this->getSpkResults();
+
+        // Gabungkan sensor menjadi format terpisah (Lingkungan & Produktivitas)
+        $fuzzySensors = [
+            'lingkungan' => [],
+            'produktivitas' => []
+        ];
+
+        if (isset($barnEnvironment['barns'][0]['sensors'])) {
+             $fuzzySensors['lingkungan'] = $barnEnvironment['barns'][0]['sensors']; // Assuming taking Barn A for default view
+        }
+
+        // Mocking productivity sensors similar to SpkDashboardController
+        $fuzzySensors['produktivitas'] = [
+            ['label' => 'HDP (Hen-Day)', 'percent' => 94, 'status' => 'normal', 'statusLabel' => 'Optimal (94.5%)'],
+            ['label' => 'FCR', 'percent' => 45, 'status' => 'normal', 'statusLabel' => 'Efisien (1.45)'],
+            ['label' => 'Mortalitas', 'percent' => 95, 'status' => 'normal', 'statusLabel' => 'Aman (0.02%)'],
+        ];
+
         $productionLog = $this->getProductionLog();
 
         return view('peternakan.dashboard', compact(
             'kpiMetrics',
             'chartData',
             'barnEnvironment',
+            'fuzzySensors',
             'produktivitas',
             'spkResults',
             'productionLog',
@@ -351,9 +370,28 @@ class PeternakanController extends Controller
     private function getSpkResults(): array
     {
         return [
-            ['status' => 'Monitor', 'statusColor' => 'amber', 'title' => 'Decision: Check Ventilation.', 'description' => 'Environment score is 76.4/100. Humidity is ideal, but elevated temperature and ammonia levels suggest reduced airflow efficiency.', 'link' => '#'],
-            ['status' => 'Maintain', 'statusColor' => 'blue', 'title' => 'Decision: Keep Current Rations.', 'description' => 'Health score is 92.5/100. Birds are performing optimally. Feed quality dip is negligible given high HDP output.', 'link' => '#'],
-            ['status' => 'Excellent', 'statusColor' => 'emerald', 'title' => 'Decision: Expand Phase 2.', 'description' => 'Combined weighted score indicates peak performance. Current environmental stress is minor compared to productivity gains.', 'link' => '#', 'isMain' => true],
+            'lingkungan' => [
+                'status' => 'Monitor',
+                'statusColor' => 'amber',
+                'title' => 'Decision: Check Ventilation.',
+                'description' => 'Environment score is 76.4/100. Humidity is ideal, but elevated temperature and ammonia levels suggest reduced airflow efficiency.',
+                'link' => '#'
+            ],
+            'produktivitas' => [
+                'status' => 'Maintain',
+                'statusColor' => 'blue',
+                'title' => 'Decision: Keep Current Rations.',
+                'description' => 'Health score is 92.5/100. Birds are performing optimally. Feed quality dip is negligible given high HDP output.',
+                'link' => '#'
+            ],
+            'gabungan' => [
+                'status' => 'Excellent',
+                'statusColor' => 'emerald',
+                'title' => 'Decision: Expand Phase 2.',
+                'description' => 'Combined weighted score indicates peak performance. Current environmental stress is minor compared to productivity gains.',
+                'link' => '#',
+                'isMain' => true
+            ]
         ];
     }
 
