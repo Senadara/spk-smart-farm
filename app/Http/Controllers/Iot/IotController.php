@@ -67,6 +67,23 @@ class IotController extends Controller
         return back()->with('success', 'Device berhasil didaftarkan.');
     }
 
+    public function updateDevice(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'deviceCode' => 'required|string|max:100|unique:iot_device,deviceCode,' . $id,
+            'deviceName' => 'nullable|string|max:150',
+            'unitBudidayaId' => 'required|string',
+            'connectionConfigId' => 'required|string',
+            'pollingInterval' => 'nullable|integer|min:10',
+            'status' => 'required|in:active,inactive,maintenance',
+            'installedAt' => 'nullable|date',
+        ]);
+
+        $device = IotDevice::findOrFail($id);
+        $device->update($validated);
+        return back()->with('success', 'Device berhasil diperbarui.');
+    }
+
     public function destroyDevice($id)
     {
         IotDevice::findOrFail($id)->delete();

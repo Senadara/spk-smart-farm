@@ -62,6 +62,7 @@ Route::middleware('auth.api')->group(function () {
 
         // CRUD Endpoints
         Route::post('/devices', [IotController::class, 'storeDevice'])->name('iot.devices.store');
+        Route::put('/devices/{id}', [IotController::class, 'updateDevice'])->name('iot.devices.update');
         Route::delete('/devices/{id}', [IotController::class, 'destroyDevice'])->name('iot.devices.destroy');
         Route::post('/mappings', [IotController::class, 'storeMapping'])->name('iot.mappings.store');
         Route::delete('/mappings/{id}', [IotController::class, 'destroyMapping'])->name('iot.mappings.destroy');

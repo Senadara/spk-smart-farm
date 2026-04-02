@@ -3,7 +3,7 @@
 @section('title', 'Device Management')
 
 @section('content')
-    <div x-data="{ modal: null, activeTab: 'devices' }" class="space-y-6">
+    <div x-data="{ modal: {{ session('errors') ? (old('deviceCode') && old('_method') == 'PUT' ? '\'editDevice\'' : '\'addDevice\'') : 'null' }}, activeTab: 'devices', editData: {} }" class="space-y-6">
         {{-- Page Header --}}
         <div class="flex items-center justify-between flex-wrap gap-4">
             <div>
@@ -78,6 +78,7 @@
                                 <td class="py-3.5 px-3 text-right">
                                     <div class="flex items-center justify-end gap-1">
                                         <button
+                                            @click="editData = {{ json_encode($device) }}; modal = 'editDevice'"
                                             class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                                             title="Edit">
                                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -85,14 +86,17 @@
                                                     d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                             </svg>
                                         </button>
-                                        <button
-                                            class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                            title="Hapus">
-                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
-                                        </button>
+                                        <form action="{{ route('iot.devices.destroy', $device->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Apakah Anda yakin ingin menghapus device ini?');">
+                                            @csrf @method('DELETE')
+                                            <button type="submit"
+                                                class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                title="Hapus">
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        </form>
                                     </div>
                                 </td>
                             </tr>
@@ -129,14 +133,17 @@
                                     <code class="text-xs bg-gray-100 px-2 py-1 rounded text-[var(--color-gray-800)]">{{ $mapping->payloadKey }}</code>
                                 </td>
                                 <td class="py-3.5 px-3 text-right">
-                                    <button
-                                        class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                        title="Hapus">
-                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                    </button>
+                                    <form action="{{ route('iot.mappings.destroy', $mapping->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Apakah Anda yakin ingin menghapus mapping parameter ini?');">
+                                        @csrf @method('DELETE')
+                                        <button type="submit"
+                                            class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                            title="Hapus">
+                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                         @endforeach
@@ -211,6 +218,72 @@
                     </button>
                 </div>
             </form>
+        </x-iot.modal-form>
+
+        {{-- ═══ MODAL: Ada Edit Device ═══ --}}
+        <x-iot.modal-form id="editDevice" title="Edit Device" size="lg">
+            <template x-if="editData.id">
+                <form :action="`{{ url('/iot/devices') }}/${editData.id}`" method="POST">
+                    @csrf
+                    @method('PUT')
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Kode Device *</label>
+                            <input type="text" name="deviceCode" x-model="editData.deviceCode" required
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Nama Device</label>
+                            <input type="text" name="deviceName" x-model="editData.deviceName"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Kandang *</label>
+                            <select name="unitBudidayaId" x-model="editData.unitBudidayaId" required
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
+                                <option value="">Pilih Kandang</option>
+                                @foreach ($unitBudidaya as $ub)
+                                    <option value="{{ $ub->id }}">{{ $ub->nama }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Konfigurasi Koneksi *</label>
+                            <select name="connectionConfigId" x-model="editData.connectionConfigId" required
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
+                                <option value="">Pilih Koneksi</option>
+                                @foreach ($connectionConfigs as $cc)
+                                    <option value="{{ $cc->id }}">{{ $cc->protocol->protocolName }} — {{ $cc->mqttBrokerUrl ?? $cc->baseUrl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Polling Interval (detik)</label>
+                            <input type="number" name="pollingInterval" x-model="editData.pollingInterval" min="10"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
+                            <select name="status" x-model="editData.status"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="maintenance">Maintenance</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
+                        <button type="button" @click="modal = null"
+                                class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">
+                            Batal
+                        </button>
+                        <button type="submit"
+                                class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">
+                            Simpan Perubahan
+                        </button>
+                    </div>
+                </form>
+            </template>
         </x-iot.modal-form>
 
         {{-- ═══ MODAL: Add Mapping ═══ --}}
