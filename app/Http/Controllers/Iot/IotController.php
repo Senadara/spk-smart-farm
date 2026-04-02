@@ -131,13 +131,24 @@ class IotController extends Controller
     }
 
     // ─── Monitoring ────────────────────────────────────────────────
-    public function monitoring()
+    public function monitoring(Request $request)
     {
+        $sensorQuery = IotSensorData::with(['device', 'parameter'])->latest('sensorTimestamp');
+        if ($request->filled('sensor_device_id')) $sensorQuery->where('deviceId', $request->sensor_device_id);
+        if ($request->filled('sensor_parameter_id')) $sensorQuery->where('parameterId', $request->sensor_parameter_id);
+        if ($request->filled('sensor_date_from')) $sensorQuery->whereDate('sensorTimestamp', '>=', $request->sensor_date_from);
+        if ($request->filled('sensor_date_to')) $sensorQuery->whereDate('sensorTimestamp', '<=', $request->sensor_date_to);
+
+        $logQuery = IotDeviceLog::with('device')->latest('createdAt');
+        if ($request->filled('log_device_id')) $logQuery->where('deviceId', $request->log_device_id);
+        if ($request->filled('log_type')) $logQuery->where('logType', $request->log_type);
+        if ($request->filled('log_date')) $logQuery->whereDate('createdAt', $request->log_date);
+
         return view('iot.monitoring', [
             'devices' => IotDevice::all(),
             'parameters' => IotParameter::all(),
-            'sensorData' => IotSensorData::with(['device', 'parameter'])->latest('sensorTimestamp')->take(100)->get(),
-            'deviceLogs' => IotDeviceLog::with('device')->latest('createdAt')->take(50)->get(),
+            'sensorData' => $sensorQuery->take(25)->get(),
+            'deviceLogs' => $logQuery->take(25)->get(),
         ]);
     }
 
