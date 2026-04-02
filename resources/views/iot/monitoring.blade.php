@@ -41,7 +41,7 @@
                         <select class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
                             <option value="">Semua Device</option>
                             @foreach ($devices as $d)
-                                <option value="{{ $d['id'] }}">{{ $d['deviceCode'] }}</option>
+                                <option value="{{ $d->id }}">{{ $d->deviceCode }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -50,7 +50,7 @@
                         <select class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
                             <option value="">Semua Parameter</option>
                             @foreach ($parameters as $p)
-                                <option value="{{ $p['id'] }}">{{ $p['parameterName'] }} ({{ $p['unit'] }})</option>
+                                <option value="{{ $p->id }}">{{ $p->parameterName }} ({{ $p->unit }})</option>
                             @endforeach
                         </select>
                     </div>
@@ -78,20 +78,20 @@
                                 <th class="text-left py-3 px-3 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider">Timestamp</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="sensor-data-tbody">
                             @foreach ($sensorData as $data)
                                 <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                                     <td class="py-3 px-3">
-                                        <span class="font-mono text-xs font-medium bg-gray-100 px-2 py-1 rounded-lg text-[var(--color-gray-800)]">
-                                            {{ $data['deviceName'] }}
-                                        </span>
+                                        <div class="font-medium text-[var(--color-gray-900)]">
+                                            {{ $data->device->deviceName ?? $data->device->deviceCode ?? '-' }}
+                                        </div>
                                     </td>
-                                    <td class="py-3 px-3 text-[var(--color-gray-700)]">{{ $data['parameterName'] }}</td>
-                                    <td class="py-3 px-3">
-                                        <span class="font-semibold text-[var(--color-gray-900)]">{{ $data['value'] }}</span>
-                                        <span class="text-xs text-[var(--color-gray-500)]">{{ $data['unit'] }}</span>
+                                    <td class="py-3 px-3 text-[var(--color-gray-700)]">{{ $data->parameter->parameterName ?? '-' }}</td>
+                                    <td class="py-3 px-3 text-right">
+                                        <span class="font-semibold text-[var(--color-gray-900)]">{{ $data->value }}</span>
+                                        <span class="text-xs text-[var(--color-gray-500)]">{{ $data->parameter->unit ?? '' }}</span>
                                     </td>
-                                    <td class="py-3 px-3 text-[var(--color-gray-500)] text-xs">{{ $data['sensorTimestamp'] }}</td>
+                                    <td class="py-3 px-3 text-[var(--color-gray-500)] text-xs">{{ $data->sensorTimestamp ? $data->sensorTimestamp->format('d M Y H:i:s') : '-' }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -111,7 +111,7 @@
                         <select class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
                             <option value="">Semua Device</option>
                             @foreach ($devices as $d)
-                                <option value="{{ $d['id'] }}">{{ $d['deviceCode'] }}</option>
+                                <option value="{{ $d->id }}">{{ $d->deviceCode }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -152,22 +152,22 @@
                                         'WARNING' => ['bg' => '#FFFBEB', 'text' => '#92400E'],
                                         'ERROR'   => ['bg' => '#FEF2F2', 'text' => '#991B1B'],
                                     ];
-                                    $tc = $typeColors[$log['logType']] ?? $typeColors['INFO'];
+                                    $tc = $typeColors[$log->logType] ?? $typeColors['INFO'];
                                 @endphp
                                 <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                                    <td class="py-3 px-3 text-xs text-[var(--color-gray-500)] whitespace-nowrap">{{ $log['createdAt'] }}</td>
+                                    <td class="py-3 px-3 text-xs text-[var(--color-gray-500)] whitespace-nowrap">{{ $log->createdAt->format('Y-m-d H:i') }}</td>
                                     <td class="py-3 px-3">
-                                        <span class="font-mono text-xs font-medium bg-gray-100 px-2 py-1 rounded-lg text-[var(--color-gray-800)]">
-                                            {{ $log['deviceName'] }}
-                                        </span>
+                                        <div class="font-medium text-[var(--color-gray-900)]">
+                                            {{ $log->device->deviceName ?? $log->device->deviceCode ?? '-' }}
+                                        </div>
                                     </td>
                                     <td class="py-3 px-3">
-                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wide"
                                             style="background: {{ $tc['bg'] }}; color: {{ $tc['text'] }};">
-                                            {{ $log['logType'] }}
+                                            {{ $log->logType }}
                                         </span>
                                     </td>
-                                    <td class="py-3 px-3 text-[var(--color-gray-700)] text-xs">{{ $log['message'] }}</td>
+                                    <td class="py-3 px-3 text-[var(--color-gray-700)] text-xs">{{ $log->message }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -177,3 +177,42 @@
         </div>
     </div>
 @endsection
+
+@push('scripts')
+<script type="module">
+    document.addEventListener('DOMContentLoaded', () => {
+        if (window.Echo) {
+            window.Echo.channel('iot-sensors')
+                .listen('.IotSensorDataReceived', (e) => {
+                    const tbody = document.getElementById('sensor-data-tbody');
+                    if (tbody) {
+                        const tr = document.createElement('tr');
+                        tr.className = 'border-b border-gray-50 bg-green-50/50 transition-all duration-1000';
+                        tr.innerHTML = `
+                            <td class="py-3 px-3">
+                                <div class="font-medium text-[var(--color-gray-900)]">${e.device.deviceName || e.device.deviceCode || '-'}</div>
+                            </td>
+                            <td class="py-3 px-3 text-[var(--color-gray-700)]">${e.parameter.parameterName || '-'}</td>
+                            <td class="py-3 px-3 text-right">
+                                <span class="font-semibold text-green-600">${e.value}</span>
+                                <span class="text-xs text-[var(--color-gray-500)]">${e.parameter.unit || ''}</span>
+                            </td>
+                            <td class="py-3 px-3 text-[var(--color-gray-500)] text-xs">${e.timestamp || '-'}</td>
+                        `;
+                        tbody.prepend(tr);
+                        
+                        setTimeout(() => {
+                            tr.classList.remove('bg-green-50/50');
+                            tr.classList.add('hover:bg-gray-50/50');
+                        }, 2000);
+
+                        // Mencegah tabel meledak (hapus paling bawah jika melebihi limit)
+                        if (tbody.children.length > 100) {
+                            tbody.lastElementChild.remove();
+                        }
+                    }
+                });
+        }
+    });
+</script>
+@endpush

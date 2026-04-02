@@ -36,6 +36,11 @@ Route::middleware('guest.api')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
 });
 
+// Webhook IoT — HARUS di luar auth.api agar device IoT bisa kirim data tanpa login
+Route::post('/iot/webhook/{deviceCode}', [IotController::class, 'handleWebhook'])
+    ->name('iot.webhook')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
 // Auth routes — hanya bisa diakses jika berhasil login
 Route::middleware('auth.api')->group(function () {
     // Dashboard
@@ -54,7 +59,17 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/devices', [IotController::class, 'devices'])->name('iot.devices');
         Route::get('/config', [IotController::class, 'config'])->name('iot.config');
         Route::get('/monitoring', [IotController::class, 'monitoring'])->name('iot.monitoring');
+
+        // CRUD Endpoints
+        Route::post('/devices', [IotController::class, 'storeDevice'])->name('iot.devices.store');
+        Route::delete('/devices/{id}', [IotController::class, 'destroyDevice'])->name('iot.devices.destroy');
+        Route::post('/mappings', [IotController::class, 'storeMapping'])->name('iot.mappings.store');
+        Route::delete('/mappings/{id}', [IotController::class, 'destroyMapping'])->name('iot.mappings.destroy');
+        Route::post('/protocols', [IotController::class, 'storeProtocol'])->name('iot.protocols.store');
+        Route::post('/connections', [IotController::class, 'storeConnection'])->name('iot.connections.store');
+        Route::post('/parameters', [IotController::class, 'storeParameter'])->name('iot.parameters.store');
     });
+
     Route::get('/perkebunan', [PerkebunanController::class, 'index'])->name('perkebunan.index');
 
     // Inventaris

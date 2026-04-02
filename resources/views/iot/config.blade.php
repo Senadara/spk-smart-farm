@@ -56,9 +56,9 @@
                         <tbody>
                             @foreach ($protocols as $p)
                                 <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                                    <td class="py-3.5 px-3 font-medium text-[var(--color-gray-900)]">{{ $p['protocolName'] }}
+                                    <td class="py-3.5 px-3 font-medium text-[var(--color-gray-900)]">{{ $p->protocolName }}
                                     </td>
-                                    <td class="py-3.5 px-3 text-[var(--color-gray-600)] text-xs">{{ $p['description'] }}</td>
+                                    <td class="py-3.5 px-3 text-[var(--color-gray-600)] text-xs">{{ $p->description }}</td>
                                     <td class="py-3.5 px-3 text-right">
                                         <div class="flex items-center justify-end gap-1">
                                             <button
@@ -124,19 +124,19 @@
                                         <td class="py-3.5 px-3">
                                             <span
                                                 class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700">
-                                                {{ $cc['protocolName'] }}
+                                                {{ $cc->protocol->protocolName ?? '-' }}
                                             </span>
                                         </td>
                                         <td class="py-3.5 px-3">
                                             <code class="text-xs bg-gray-100 px-2 py-1 rounded text-[var(--color-gray-700)]">
-                                                        {{ $cc['mqttBrokerUrl'] ?? $cc['baseUrl'] }}{{ $cc['endpointPath'] ?? '' }}
+                                                        {{ $cc->mqttBrokerUrl ?? $cc->baseUrl }}{{ $cc->endpointPath ?? '' }}
                                                     </code>
-                                            @if ($cc['mqttTopic'])
+                                            @if ($cc->mqttTopic)
                                                 <div class="text-[10px] text-[var(--color-gray-400)] mt-1">Topic:
-                                                    {{ $cc['mqttTopic'] }}</div>
+                                                    {{ $cc->mqttTopic }}</div>
                                             @endif
                                         </td>
-                                        <td class="py-3.5 px-3 text-xs text-[var(--color-gray-600)]">{{ $cc['authType'] }}</td>
+                                        <td class="py-3.5 px-3 text-xs text-[var(--color-gray-600)]">{{ $cc->authType }}</td>
                                         <td class="py-3.5 px-3 text-right">
                                             <div class="flex items-center justify-end gap-1">
                                                 <button
@@ -203,12 +203,12 @@
                             @foreach ($parameters as $param)
                                 <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                                     <td class="py-3.5 px-3"><span
-                                            class="font-mono text-xs font-medium bg-blue-50 px-2 py-1 rounded-lg text-blue-700">{{ $param['parameterCode'] }}</span>
+                                            class="font-mono text-xs font-medium bg-blue-50 px-2 py-1 rounded-lg text-blue-700">{{ $param->parameterCode }}</span>
                                     </td>
                                     <td class="py-3.5 px-3 font-medium text-[var(--color-gray-900)]">
-                                        {{ $param['parameterName'] }}</td>
-                                    <td class="py-3.5 px-3 text-[var(--color-gray-600)]">{{ $param['unit'] }}</td>
-                                    <td class="py-3.5 px-3 text-[var(--color-gray-500)] text-xs">{{ $param['description'] }}
+                                        {{ $param->parameterName }}</td>
+                                    <td class="py-3.5 px-3 text-[var(--color-gray-600)]">{{ $param->unit }}</td>
+                                    <td class="py-3.5 px-3 text-[var(--color-gray-500)] text-xs">{{ $param->description }}
                                     </td>
                                     <td class="py-3.5 px-3 text-right">
                                         <div class="flex items-center justify-end gap-1">
@@ -274,16 +274,16 @@
                         <tbody>
                             @foreach ($commodityParameters as $cp)
                                 <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                                    <td class="py-3.5 px-3 font-medium text-[var(--color-gray-900)]">{{ $cp['commodityName'] }}
+                                    <td class="py-3.5 px-3 font-medium text-[var(--color-gray-900)]">{{ $cp->commodity->nama ?? '-' }}
                                     </td>
-                                    <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $cp['parameterName'] }}</td>
+                                    <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $cp->parameter->parameterName ?? '-' }}</td>
                                     <td class="py-3.5 px-3">
                                         <span
-                                            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">{{ $cp['minValue'] }}</span>
+                                            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">{{ $cp->minValue }}</span>
                                     </td>
                                     <td class="py-3.5 px-3">
                                         <span
-                                            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700">{{ $cp['maxValue'] }}</span>
+                                            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700">{{ $cp->maxValue }}</span>
                                     </td>
                                     <td class="py-3.5 px-3 text-right">
                                         <div class="flex items-center justify-end gap-1">
@@ -317,100 +317,139 @@
 
         {{-- ═══ MODAL: Add Protocol ═══ --}}
         <x-iot.modal-form id="addProtocol" title="Tambah Protokol" size="md">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Nama Protokol *</label>
-                    <input type="text" placeholder="e.g. MQTT"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+            <form action="{{ route('iot.protocols.store') }}" method="POST">
+                @csrf
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Nama Protokol *</label>
+                        <input type="text" name="protocolName" placeholder="e.g. MQTT" required
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Deskripsi</label>
+                        <textarea rows="3" name="description" placeholder="Deskripsi protokol komunikasi..."
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all resize-none"></textarea>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Deskripsi</label>
-                    <textarea rows="3" placeholder="Deskripsi protokol komunikasi..."
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all resize-none"></textarea>
+                <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
+                    <button type="button" @click="modal = null"
+                            class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">
+                        Batal
+                    </button>
+                    <button type="submit"
+                            class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">
+                        Simpan Protokol
+                    </button>
                 </div>
-            </div>
+            </form>
         </x-iot.modal-form>
 
         {{-- ═══ MODAL: Add Connection ═══ --}}
         <x-iot.modal-form id="addConnection" title="Tambah Konfigurasi Koneksi" size="lg">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div class="sm:col-span-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Protokol *</label>
-                    <select
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
-                        <option value="">Pilih Protokol</option>
-                        @foreach ($protocols as $p)
-                            <option value="{{ $p['id'] }}">{{ $p['protocolName'] }}</option>
-                        @endforeach
-                    </select>
+            <form action="{{ route('iot.connections.store') }}" method="POST">
+                @csrf
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Protokol *</label>
+                        <select name="protocolId" required
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
+                            <option value="">Pilih Protokol</option>
+                            @foreach ($protocols as $p)
+                                <option value="{{ $p->id }}">{{ $p->protocolName }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Base URL</label>
+                        <input type="text" name="baseUrl" placeholder="https://platform.example.com"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Endpoint Path</label>
+                        <input type="text" name="endpointPath" placeholder="/api/v2/devices"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Broker URL</label>
+                        <input type="text" name="mqttBrokerUrl" placeholder="mqtts://broker.hivemq.cloud:8883"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Topic</label>
+                        <input type="text" name="mqttTopic" placeholder="farm/sensor/#"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Tipe Autentikasi</label>
+                        <select name="authType"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
+                            <option value="none">None</option>
+                            <option value="api_key">API Key</option>
+                            <option value="bearer">Bearer Token</option>
+                            <option value="basic">Basic Auth</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Auth Key / Token</label>
+                        <input type="password" name="authKey" placeholder="Token atau API key"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Custom Headers (JSON)</label>
+                        <textarea rows="3" name="headers" placeholder='{"Content-Type": "application/json"}'
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-mono focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all resize-none"></textarea>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Base URL</label>
-                    <input type="text" placeholder="https://platform.example.com"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
+                    <button type="button" @click="modal = null"
+                            class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">
+                        Batal
+                    </button>
+                    <button type="submit"
+                            class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">
+                        Simpan Koneksi
+                    </button>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Endpoint Path</label>
-                    <input type="text" placeholder="/api/v2/devices"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Broker URL</label>
-                    <input type="text" placeholder="mqtts://broker.hivemq.cloud:8883"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Topic</label>
-                    <input type="text" placeholder="farm/sensor/#"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Tipe Autentikasi</label>
-                    <select
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
-                        <option value="none">None</option>
-                        <option value="api_key">API Key</option>
-                        <option value="bearer">Bearer Token</option>
-                        <option value="basic">Basic Auth</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Auth Key / Token</label>
-                    <input type="password" placeholder="Token atau API key"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
-                </div>
-                <div class="sm:col-span-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Custom Headers (JSON)</label>
-                    <textarea rows="3" placeholder='{"Content-Type": "application/json"}'
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-mono focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all resize-none"></textarea>
-                </div>
-            </div>
+            </form>
         </x-iot.modal-form>
 
         {{-- ═══ MODAL: Add Parameter ═══ --}}
         <x-iot.modal-form id="addParameter" title="Tambah Parameter Sensor" size="md">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Kode Parameter *</label>
-                    <input type="text" placeholder="e.g. TEMP"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+            <form action="{{ route('iot.parameters.store') }}" method="POST">
+                @csrf
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Kode Parameter *</label>
+                        <input type="text" name="parameterCode" placeholder="e.g. TEMP" required
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Nama Parameter *</label>
+                        <input type="text" name="parameterName" placeholder="e.g. Temperature" required
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Satuan</label>
+                        <input type="text" name="unit" placeholder="e.g. °C"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Deskripsi</label>
+                        <textarea rows="2" name="description" placeholder="Penjelasan mengenai parameter..."
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all resize-none"></textarea>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Nama Parameter *</label>
-                    <input type="text" placeholder="e.g. Temperature"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
+                    <button type="button" @click="modal = null"
+                            class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">
+                        Batal
+                    </button>
+                    <button type="submit"
+                            class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">
+                        Simpan Parameter
+                    </button>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Satuan</label>
-                    <input type="text" placeholder="e.g. °C, %, ppm"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
-                </div>
-                <div class="sm:col-span-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Deskripsi</label>
-                    <textarea rows="2" placeholder="Penjelasan parameter sensor..."
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all resize-none"></textarea>
-                </div>
-            </div>
+            </form>
         </x-iot.modal-form>
 
         {{-- ═══ MODAL: Add Commodity Parameter ═══ --}}

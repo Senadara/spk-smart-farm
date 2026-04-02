@@ -1,0 +1,338 @@
+{
+  "info": {
+    "_postman_id": "e20490e5-e680-4e61-8cbd-b49a220b0e2c",
+    "name": "Smart Farm",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Phospor",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-M2M-Origin",
+            "value": "44dbb85550128192:c079ec55758e79bb",
+            "description": "API key dari Antares (username:password)",
+            "type": "text",
+            "uuid": "ec303992-2a78-4ef6-ae81-44977e6cb194"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json;ty=4",
+            "description": "Format data request",
+            "type": "text",
+            "uuid": "75231615-2169-4398-b192-123c6c95695d"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "description": "Format data yang diinginkan",
+            "type": "text",
+            "uuid": "c02e9524-db7e-4ca1-bae2-9cbf28ac660b"
+          }
+        ],
+        "url": {
+          "raw": "https://platform.antares.id:8443/~/antares-cse/antares-id/interest/phospor/la",
+          "protocol": "https",
+          "host": [
+            "platform",
+            "antares",
+            "id"
+          ],
+          "port": "8443",
+          "path": [
+            "~",
+            "antares-cse",
+            "antares-id",
+            "interest",
+            "phospor",
+            "la"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Pota",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-M2M-Origin",
+            "value": "44dbb85550128192:c079ec55758e79bb",
+            "description": "API key dari Antares (username:password)",
+            "type": "text",
+            "uuid": "b2e5477c-505c-4e13-9e54-38044b36575f"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json;ty=4",
+            "description": "Format data request",
+            "type": "text",
+            "uuid": "c45949f9-a260-41c1-b298-e57a736ac3a4"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "description": "Format data yang diinginkan",
+            "type": "text",
+            "uuid": "3d27e012-7d4c-4224-bdb1-4a97c25985a3"
+          }
+        ],
+        "url": {
+          "raw": "https://platform.antares.id:8443/~/antares-cse/antares-id/interest/pota/la",
+          "protocol": "https",
+          "host": [
+            "platform",
+            "antares",
+            "id"
+          ],
+          "port": "8443",
+          "path": [
+            "~",
+            "antares-cse",
+            "antares-id",
+            "interest",
+            "pota",
+            "la"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Nitrogen",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-M2M-Origin",
+            "value": "44dbb85550128192:c079ec55758e79bb",
+            "description": "API key dari Antares (username:password)",
+            "type": "text",
+            "uuid": "7df6d99e-204e-430c-afbd-dcf8886125b6"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json;ty=4",
+            "description": "Format data request",
+            "type": "text",
+            "uuid": "8feae8a8-d1a8-46d7-9201-588ccd8bcec6"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "description": "Format data yang diinginkan",
+            "type": "text",
+            "uuid": "fa6fd8b6-7502-4ad5-9e19-a172bda597d5"
+          }
+        ],
+        "url": {
+          "raw": "https://platform.antares.id:8443/~/antares-cse/antares-id/interest/Nitrogen/la",
+          "protocol": "https",
+          "host": [
+            "platform",
+            "antares",
+            "id"
+          ],
+          "port": "8443",
+          "path": [
+            "~",
+            "antares-cse",
+            "antares-id",
+            "interest",
+            "Nitrogen",
+            "la"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Temperature",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-M2M-Origin",
+            "value": "44dbb85550128192:c079ec55758e79bb",
+            "description": "API key dari Antares (username:password)",
+            "type": "text",
+            "uuid": "38cbc566-5e44-45ea-9b9e-75803417942e"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json;ty=4",
+            "description": "Format data request",
+            "type": "text",
+            "uuid": "957a28f3-2795-4c58-ae29-c16aac31f17c"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "description": "Format data yang diinginkan",
+            "type": "text",
+            "uuid": "afee3e5a-eb3d-4987-8756-ea9883a57d77"
+          }
+        ],
+        "url": {
+          "raw": "https://platform.antares.id:8443/~/antares-cse/antares-id/interest/temp/la",
+          "protocol": "https",
+          "host": [
+            "platform",
+            "antares",
+            "id"
+          ],
+          "port": "8443",
+          "path": [
+            "~",
+            "antares-cse",
+            "antares-id",
+            "interest",
+            "temp",
+            "la"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Humidity",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-M2M-Origin",
+            "value": "44dbb85550128192:c079ec55758e79bb",
+            "description": "API key dari Antares (username:password)",
+            "type": "text",
+            "uuid": "b06c118b-f306-441f-b198-9eb1fe226718"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json;ty=4",
+            "description": "Format data request",
+            "type": "text",
+            "uuid": "6e7f66f0-c431-4a0a-ac7a-63c9b528c58c"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "description": "Format data yang diinginkan",
+            "type": "text",
+            "uuid": "edb9f1ef-27be-46c4-9bf9-cf328a01522a"
+          }
+        ],
+        "url": {
+          "raw": "https://platform.antares.id:8443/~/antares-cse/antares-id/interest/humidity/la",
+          "protocol": "https",
+          "host": [
+            "platform",
+            "antares",
+            "id"
+          ],
+          "port": "8443",
+          "path": [
+            "~",
+            "antares-cse",
+            "antares-id",
+            "interest",
+            "humidity",
+            "la"
+          ]
+        }
+      }
+    },
+    {
+      "name": "EC",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-M2M-Origin",
+            "value": "44dbb85550128192:c079ec55758e79bb",
+            "description": "API key dari Antares (username:password)",
+            "type": "text",
+            "uuid": "ef276460-aaca-4b17-93a1-152fc64db708"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json;ty=4",
+            "description": "Format data request",
+            "type": "text",
+            "uuid": "15365e22-066b-4e5f-ae2f-4ad6945ec1aa"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "description": "Format data yang diinginkan",
+            "type": "text",
+            "uuid": "1af963ac-6b80-4a08-b27f-fc954160578e"
+          }
+        ],
+        "url": {
+          "raw": "https://platform.antares.id:8443/~/antares-cse/antares-id/interest/EC/la",
+          "protocol": "https",
+          "host": [
+            "platform",
+            "antares",
+            "id"
+          ],
+          "port": "8443",
+          "path": [
+            "~",
+            "antares-cse",
+            "antares-id",
+            "interest",
+            "EC",
+            "la"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Ph",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-M2M-Origin",
+            "value": "44dbb85550128192:c079ec55758e79bb",
+            "description": "API key dari Antares (username:password)",
+            "type": "text",
+            "uuid": "6c1e450c-3e6c-480e-80ed-55f7ed32e1e5"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json;ty=4",
+            "description": "Format data request",
+            "type": "text",
+            "uuid": "fc7cc99f-5b5b-47d0-8c1f-c873ff1d282b"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "description": "Format data yang diinginkan",
+            "type": "text",
+            "uuid": "9f1b27eb-6787-4844-8275-f2e7763289e9"
+          }
+        ],
+        "url": {
+          "raw": "https://platform.antares.id:8443/~/antares-cse/antares-id/interest/ph/la",
+          "protocol": "https",
+          "host": [
+            "platform",
+            "antares",
+            "id"
+          ],
+          "port": "8443",
+          "path": [
+            "~",
+            "antares-cse",
+            "antares-id",
+            "interest",
+            "ph",
+            "la"
+          ]
+        }
+      }
+    }
+  ]
+}

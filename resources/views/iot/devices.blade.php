@@ -50,31 +50,31 @@
                     </thead>
                     <tbody>
                         @foreach ($devices as $device)
-                            @php
-                                $statusColors = [
-                                    'active'      => ['bg' => '#ECFDF5', 'text' => '#065F46'],
-                                    'inactive'    => ['bg' => '#F3F4F6', 'text' => '#374151'],
-                                    'maintenance' => ['bg' => '#FFFBEB', 'text' => '#92400E'],
-                                ];
-                                $sc = $statusColors[$device['status']] ?? $statusColors['inactive'];
-                            @endphp
                             <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                                 <td class="py-3.5 px-3">
-                                    <span class="font-mono text-xs font-medium bg-gray-100 px-2 py-1 rounded-lg text-[var(--color-gray-800)]">
-                                        {{ $device['deviceCode'] }}
-                                    </span>
+                                    <div class="font-medium text-[var(--color-gray-900)]">
+                                        {{ $device->deviceCode }}
+                                    </div>
                                 </td>
-                                <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $device['deviceName'] }}</td>
-                                <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $device['unitBudidaya'] }}</td>
-                                <td class="py-3.5 px-3 text-[var(--color-gray-700)] text-xs">{{ $device['connectionConfig'] }}</td>
+                                <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $device->deviceName ?? '-' }}</td>
+                                <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $device->unitBudidaya->nama ?? '-' }}</td>
+                                <td class="py-3.5 px-3 text-[var(--color-gray-700)] text-xs">{{ $device->connectionConfig->protocol->protocolName ?? '-' }}</td>
                                 <td class="py-3.5 px-3">
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+                                    @php
+                                    $statusColors = [
+                                        'active'      => ['bg' => '#ECFDF5', 'text' => '#065F46'],
+                                        'inactive'    => ['bg' => '#F3F4F6', 'text' => '#374151'],
+                                        'maintenance' => ['bg' => '#FFFBEB', 'text' => '#92400E'],
+                                    ];
+                                    $sc = $statusColors[$device->status] ?? $statusColors['inactive'];
+                                @endphp
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase"
                                         style="background: {{ $sc['bg'] }}; color: {{ $sc['text'] }};">
-                                        {{ ucfirst($device['status']) }}
-                                    </span>
-                                </td>
-                                <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $device['pollingInterval'] }}s</td>
-                                <td class="py-3.5 px-3 text-[var(--color-gray-500)] text-xs">{{ $device['installedAt'] }}</td>
+                                        {{ ucfirst($device->status) }}
+                                </span>
+                            </td>
+                            <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $device->pollingInterval ? $device->pollingInterval . 's' : '-' }}</td>
+                            <td class="py-3.5 px-3 text-[var(--color-gray-500)] text-xs">{{ optional($device->installedAt)->format('d M Y') ?? '-' }}</td>
                                 <td class="py-3.5 px-3 text-right">
                                     <div class="flex items-center justify-end gap-1">
                                         <button
@@ -120,13 +120,13 @@
                         @foreach ($mappings as $mapping)
                             <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                                 <td class="py-3.5 px-3">
-                                    <span class="font-mono text-xs font-medium bg-blue-50 px-2 py-1 rounded-lg text-blue-700">
-                                        {{ $mapping['deviceName'] }}
-                                    </span>
+                                    <div class="font-medium text-[var(--color-gray-900)]">
+                                        {{ $mapping->device->deviceName ?? $mapping->device->deviceCode ?? '-' }}
+                                    </div>
                                 </td>
-                                <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $mapping['parameterName'] }}</td>
+                                <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $mapping->parameter->parameterName ?? '-' }}</td>
                                 <td class="py-3.5 px-3">
-                                    <code class="text-xs bg-gray-100 px-2 py-1 rounded text-[var(--color-gray-800)]">{{ $mapping['payloadKey'] }}</code>
+                                    <code class="text-xs bg-gray-100 px-2 py-1 rounded text-[var(--color-gray-800)]">{{ $mapping->payloadKey }}</code>
                                 </td>
                                 <td class="py-3.5 px-3 text-right">
                                     <button
@@ -147,89 +147,115 @@
 
         {{-- ═══ MODAL: Add Device ═══ --}}
         <x-iot.modal-form id="addDevice" title="Registrasi Device Baru" size="lg">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Kode Device *</label>
-                    <input type="text" placeholder="e.g. DHT22-KA-01"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+            <form action="{{ route('iot.devices.store') }}" method="POST">
+                @csrf
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Kode Device *</label>
+                        <input type="text" name="deviceCode" placeholder="e.g. DHT22-KA-01" required
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Nama Device</label>
+                        <input type="text" name="deviceName" placeholder="e.g. Sensor Suhu Kandang A"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Kandang *</label>
+                        <select name="unitBudidayaId" required
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
+                            <option value="">Pilih Kandang</option>
+                            @foreach ($unitBudidaya as $ub)
+                                <option value="{{ $ub->id }}">{{ $ub->nama }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Konfigurasi Koneksi *</label>
+                        <select name="connectionConfigId" required
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
+                            <option value="">Pilih Koneksi</option>
+                            @foreach ($connectionConfigs as $cc)
+                                <option value="{{ $cc->id }}">{{ $cc->protocol->protocolName }} — {{ $cc->mqttBrokerUrl ?? $cc->baseUrl }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Polling Interval (detik)</label>
+                        <input type="number" name="pollingInterval" value="300" min="10"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
+                        <select name="status"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="maintenance">Maintenance</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Tanggal Pemasangan</label>
+                        <input type="datetime-local" name="installedAt"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Nama Device</label>
-                    <input type="text" placeholder="e.g. Sensor Suhu Kandang A"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
+                    <button type="button" @click="modal = null"
+                            class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">
+                        Batal
+                    </button>
+                    <button type="submit"
+                            class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">
+                        Simpan Device
+                    </button>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Kandang *</label>
-                    <select
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
-                        <option value="">Pilih Kandang</option>
-                        @foreach ($unitBudidaya as $ub)
-                            <option value="{{ $ub['id'] }}">{{ $ub['nama'] }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Konfigurasi Koneksi *</label>
-                    <select
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
-                        <option value="">Pilih Koneksi</option>
-                        @foreach ($connectionConfigs as $cc)
-                            <option value="{{ $cc['id'] }}">{{ $cc['protocolName'] }} — {{ $cc['mqttBrokerUrl'] ?? $cc['baseUrl'] }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Polling Interval (detik)</label>
-                    <input type="number" value="300" min="10"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
-                    <select
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="maintenance">Maintenance</option>
-                    </select>
-                </div>
-                <div class="sm:col-span-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Tanggal Pemasangan</label>
-                    <input type="datetime-local"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
-                </div>
-            </div>
+            </form>
         </x-iot.modal-form>
 
         {{-- ═══ MODAL: Add Mapping ═══ --}}
         <x-iot.modal-form id="addMapping" title="Tambah Mapping Parameter" size="md">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Device *</label>
-                    <select
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
-                        <option value="">Pilih Device</option>
-                        @foreach ($devices as $d)
-                            <option value="{{ $d['id'] }}">{{ $d['deviceCode'] }} — {{ $d['deviceName'] }}</option>
-                        @endforeach
-                    </select>
+            <form action="{{ route('iot.mappings.store') }}" method="POST">
+                @csrf
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Device *</label>
+                        <select name="deviceId" required
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
+                            <option value="">Pilih Device</option>
+                            @foreach ($devices as $d)
+                                <option value="{{ $d->id }}">{{ $d->deviceCode }} — {{ $d->deviceName }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Parameter Sensor *</label>
+                        <select name="parameterId" required
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
+                            <option value="">Pilih Parameter</option>
+                            @foreach ($parameters as $p)
+                                <option value="{{ $p->id }}">{{ $p->parameterCode }} — {{ $p->parameterName }} ({{ $p->unit }})</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Payload Key *</label>
+                        <input type="text" name="payloadKey" placeholder="e.g. temperature" required
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                        <p class="text-xs text-[var(--color-gray-400)] mt-1">Key yang digunakan pada JSON payload dari device IoT (Contoh Postman: phospor/la => phospor)</p>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Parameter Sensor *</label>
-                    <select
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
-                        <option value="">Pilih Parameter</option>
-                        @foreach ($parameters as $p)
-                            <option value="{{ $p['id'] }}">{{ $p['parameterCode'] }} — {{ $p['parameterName'] }} ({{ $p['unit'] }})</option>
-                        @endforeach
-                    </select>
+                <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
+                    <button type="button" @click="modal = null"
+                            class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">
+                        Batal
+                    </button>
+                    <button type="submit"
+                            class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">
+                        Simpan Mapping
+                    </button>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Payload Key *</label>
-                    <input type="text" placeholder="e.g. temperature"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
-                    <p class="text-xs text-[var(--color-gray-400)] mt-1">Key yang digunakan pada JSON payload dari device IoT</p>
-                </div>
-            </div>
+            </form>
         </x-iot.modal-form>
     </div>
 @endsection

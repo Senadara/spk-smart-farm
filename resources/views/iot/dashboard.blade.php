@@ -58,11 +58,11 @@
                             @foreach ($devices as $device)
                                 <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                                     <td class="py-3.5 px-3">
-                                        <div class="font-medium text-[var(--color-gray-900)]">{{ $device['deviceCode'] }}</div>
-                                        <div class="text-xs text-[var(--color-gray-500)]">{{ $device['deviceName'] }}</div>
+                                        <div class="font-medium text-[var(--color-gray-900)]">{{ $device->deviceCode }}</div>
+                                        <div class="text-xs text-[var(--color-gray-500)]">{{ $device->deviceName ?? '-' }}</div>
                                     </td>
-                                    <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $device['unitBudidaya'] }}</td>
-                                    <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $device['connectionConfig'] }}</td>
+                                    <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $device->unitBudidaya->nama ?? '-' }}</td>
+                                    <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $device->connectionConfig->protocol->protocolName ?? '-' }}</td>
                                     <td class="py-3.5 px-3">
                                         @php
                                             $statusColors = [
@@ -70,14 +70,14 @@
                                                 'inactive' => ['bg' => '#F3F4F6', 'text' => '#374151'],
                                                 'maintenance' => ['bg' => '#FFFBEB', 'text' => '#92400E'],
                                             ];
-                                            $sc = $statusColors[$device['status']] ?? $statusColors['inactive'];
+                                            $sc = $statusColors[$device->status] ?? $statusColors['inactive'];
                                         @endphp
                                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
                                             style="background: {{ $sc['bg'] }}; color: {{ $sc['text'] }};">
-                                            {{ ucfirst($device['status']) }}
+                                            {{ ucfirst($device->status) }}
                                         </span>
                                     </td>
-                                    <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $device['pollingInterval'] }}s</td>
+                                    <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $device->pollingInterval ? $device->pollingInterval . 's' : '-' }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -101,18 +101,21 @@
                                 'WARNING' => ['bg' => '#FFFBEB', 'text' => '#92400E', 'dot' => '#F59E0B'],
                                 'ERROR' => ['bg' => '#FEF2F2', 'text' => '#991B1B', 'dot' => '#EF4444'],
                             ];
-                            $tc = $typeColors[$log['logType']] ?? $typeColors['INFO'];
+                            $tc = $typeColors[$log->logType] ?? $typeColors['INFO'];
                         @endphp
                         <div class="flex items-start gap-3 p-3 rounded-xl" style="background: {{ $tc['bg'] }}40;">
-                            <div class="w-2 h-2 rounded-full mt-1.5 shrink-0" style="background: {{ $tc['dot'] }};"></div>
-                            <div class="min-w-0 flex-1">
-                                <div class="flex items-center gap-2 mb-0.5">
-                                    <span class="text-xs font-semibold" style="color: {{ $tc['text'] }};">
-                                        {{ $log['logType'] }}
-                                    </span>
-                                    <span class="text-xs text-[var(--color-gray-400)]">{{ $log['deviceName'] }}</span>
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                                style="background: {{ $tc['bg'] }}; color: {{ $tc['text'] }};">
+                                <span class="w-2.5 h-2.5 rounded-full" style="background: {{ $tc['dot'] }};"></span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-start justify-between gap-2">
+                                    <p class="text-sm font-medium text-[var(--color-gray-900)]">{{ $log->device->deviceName ?? $log->device->deviceCode ?? 'Unknown' }}
+                                    </p>
+                                    <span class="text-xs text-[var(--color-gray-500)] whitespace-nowrap">{{ $log->createdAt->diffForHumans() }}</span>
                                 </div>
-                                <p class="text-xs text-[var(--color-gray-600)] m-0 leading-relaxed">{{ $log['message'] }}</p>
+                                <p class="text-xs text-[var(--color-gray-600)] mt-0.5 line-clamp-2">
+                                    {{ $log->message }}</p>
                                 <span class="text-[10px] text-[var(--color-gray-400)] mt-1 block">{{ $log['createdAt'] }}</span>
                             </div>
                         </div>
