@@ -1,0 +1,80 @@
+[
+    {
+        "id": "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
+        "nama": "Ayam Broiler",
+        "tipe": "hewan",
+        "latin": "Gallus gallus domesticus",
+        "status": 1,
+        "detail": "Ayam pedaging yang dipelihara untuk produksi daging",
+        "gambar": "https:\/\/example.com\/images\/ayam-broiler.jpg",
+        "periodePanen": 40,
+        "isDeleted": 0,
+        "createdAt": "2026-03-09 17:41:39",
+        "updatedAt": "2026-03-09 17:41:39"
+    },
+    {
+        "id": "b2c3d4e5-f6a7-4b5c-9d0e-1f2a3b4c5d6e",
+        "nama": "Ayam Petelur",
+        "tipe": "hewan",
+        "latin": "Gallus gallus domesticus",
+        "status": 1,
+        "detail": "Ayam yang dipelihara untuk produksi telur",
+        "gambar": "https:\/\/example.com\/images\/ayam-petelur.jpg",
+        "periodePanen": 90,
+        "isDeleted": 0,
+        "createdAt": "2026-03-09 17:41:39",
+        "updatedAt": "2026-03-09 17:41:39"
+    },
+    {
+        "id": "c3d4e5f6-a7b8-4c5d-0e1f-2a3b4c5d6e7f",
+        "nama": "Ikan Lele",
+        "tipe": "hewan",
+        "latin": "Clarias batrachus",
+        "status": 1,
+        "detail": "Ikan air tawar yang mudah dibudidayakan",
+        "gambar": "https:\/\/example.com\/images\/ikan-lele.jpg",
+        "periodePanen": 90,
+        "isDeleted": 0,
+        "createdAt": "2026-03-09 17:41:39",
+        "updatedAt": "2026-03-09 17:41:39"
+    },
+    {
+        "id": "d4e5f6a7-b8c9-4d5e-1f2a-3b4c5d6e7f8a",
+        "nama": "Sawi",
+        "tipe": "tumbuhan",
+        "latin": "Brassica juncea",
+        "status": 1,
+        "detail": "Tanaman sayuran daun yang cepat panen",
+        "gambar": "https:\/\/example.com\/images\/sawi.jpg",
+        "periodePanen": 45,
+        "isDeleted": 0,
+        "createdAt": "2026-03-09 17:41:39",
+        "updatedAt": "2026-03-09 17:41:39"
+    },
+    {
+        "id": "e5f6a7b8-c9d0-4e5f-2a3b-4c5d6e7f8a9b",
+        "nama": "Kangkung",
+        "tipe": "tumbuhan",
+        "latin": "Ipomoea aquatica",
+        "status": 1,
+        "detail": "Tanaman sayuran air yang mudah tumbuh",
+        "gambar": "https:\/\/example.com\/images\/kangkung.jpg",
+        "periodePanen": 30,
+        "isDeleted": 0,
+        "createdAt": "2026-03-09 17:41:39",
+        "updatedAt": "2026-03-09 17:41:39"
+    },
+    {
+        "id": "f6a7b8c9-d0e1-4f5a-3b4c-5d6e7f8a9b0c",
+        "nama": "Cabai Rawit",
+        "tipe": "tumbuhan",
+        "latin": "Capsicum frutescens",
+        "status": 1,
+        "detail": "Tanaman cabai yang tahan lama dan produktif",
+        "gambar": "https:\/\/example.com\/images\/cabai-rawit.jpg",
+        "periodePanen": 90,
+        "isDeleted": 0,
+        "createdAt": "2026-03-09 17:41:39",
+        "updatedAt": "2026-03-09 17:41:39"
+    }
+]

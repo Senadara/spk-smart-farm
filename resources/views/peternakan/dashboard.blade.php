@@ -194,7 +194,7 @@
                 </div>
 
                 {{-- Link to detail page --}}
-                <a :href="'{{ url('/peternakan') }}/' + activeBarn"
+                <a :href="'{{ url('/peternakan') }}/' + barns[activeBarn].id"
                     class="mt-4 flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors"
                     style="text-decoration: none;">
                     Lihat Detail Kandang

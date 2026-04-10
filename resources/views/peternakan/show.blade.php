@@ -349,8 +349,8 @@
                                 <td class="py-2.5 px-3 font-medium text-gray-900">{{ $log['date'] }}</td>
                                 <td class="py-2.5 px-3 text-right text-gray-700">{{ $log['eggs'] }}</td>
                                 <td class="py-2.5 px-3 text-right text-gray-500">{{ $log['rejects'] }}</td>
-                                <td class="py-2.5 px-3 text-right text-gray-500">{{ number_format($log['feedKg']) }}</td>
-                                <td class="py-2.5 px-3 text-right text-gray-500">{{ number_format($log['waterL']) }}</td>
+                                <td class="py-2.5 px-3 text-right text-gray-500">{{ is_numeric($log['feedKg']) ? number_format($log['feedKg']) : $log['feedKg'] }}</td>
+                                <td class="py-2.5 px-3 text-right text-gray-500">{{ is_numeric($log['waterL']) ? number_format($log['waterL']) : $log['waterL'] }}</td>
                                 <td class="py-2.5 px-3 text-right">
                                     <span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ $log['mortality'] > 2 ? 'text-red-600 bg-red-50' : 'text-emerald-600 bg-emerald-50' }}">{{ $log['mortality'] }}</span>
                                 </td>

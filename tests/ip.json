@@ -1,0 +1,29 @@
+[
+    {
+        "id": "a168562c-213e-48f3-9652-1cd398968618",
+        "parameterCode": "TEMP",
+        "parameterName": "Suhu",
+        "unit": "\u00b0C",
+        "description": null,
+        "createdAt": "2026-03-28 10:49:04",
+        "updatedAt": "2026-03-28 10:49:04"
+    },
+    {
+        "id": "a168562c-8fdc-412a-901d-318ac7875174",
+        "parameterCode": "HUMID",
+        "parameterName": "Kelembaban",
+        "unit": "%",
+        "description": null,
+        "createdAt": "2026-03-28 10:49:04",
+        "updatedAt": "2026-03-28 10:49:04"
+    },
+    {
+        "id": "a1685db5-96c4-49b4-a062-5d714a0005ea",
+        "parameterCode": "PHOS",
+        "parameterName": "Phosphor",
+        "unit": "ppm",
+        "description": null,
+        "createdAt": "2026-03-28 11:10:08",
+        "updatedAt": "2026-03-28 11:10:08"
+    }
+]
