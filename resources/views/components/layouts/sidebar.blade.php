@@ -58,9 +58,15 @@
                     Infrastruktur & Monitoring</div>
                 <ul class="space-y-1 list-none p-0 m-0">
                     <li>
-                        <x-sidebar.menu-item :href="route('spk.dashboard')" :active="request()->routeIs('spk.*')"
+                        <x-sidebar.menu-item :href="route('spk.dashboard')" :active="request()->routeIs('spk.dashboard')"
                             icon="chart">
                             Analisa SPK
+                        </x-sidebar.menu-item>
+                    </li>
+                    <li>
+                        <x-sidebar.menu-item :href="route('spk.suppliers.index')" :active="request()->routeIs('spk.suppliers.*')"
+                            icon="users">
+                            Daftar Supplier
                         </x-sidebar.menu-item>
                     </li>
                     <li>

@@ -52,6 +52,11 @@ Route::middleware('auth.api')->group(function () {
 
     // Analisa SPK
     Route::get('/spk-analysis', [\App\Http\Controllers\Spk\SpkDashboardController::class, 'index'])->name('spk.dashboard');
+    
+    // SPK Supplier Recommendations
+    Route::get('/spk-suppliers', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'index'])->name('spk.suppliers.index');
+    Route::get('/spk-suppliers/products', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'products'])->name('spk.suppliers.products');
+    Route::get('/spk-suppliers/{id}', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'show'])->name('spk.suppliers.show');
 
     // IoT Management
     Route::prefix('iot')->group(function () {
