@@ -98,6 +98,20 @@
             </ul>
         </div>
 
+        {{-- Section: KONFIGURASI SPK --}}
+        <div class="mb-4">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-gray-400)] px-3 mb-2">
+                Konfigurasi SPK</div>
+            <ul class="space-y-1 list-none p-0 m-0">
+                <li>
+                    <x-sidebar.menu-item :href="route('spk-melon.kriteria.index')" :active="request()->routeIs('spk-melon.kriteria.*')" icon="list-checks">
+                        Kriteria SPK
+                    </x-sidebar.menu-item>
+                </li>
+            </ul>
+        </div>
+
+        {{-- Section: Akun --}}
         <div class="mb-4">
             <div class="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-gray-400)] px-3 mb-2">
                 Akun</div>

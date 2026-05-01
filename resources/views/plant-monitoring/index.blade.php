@@ -136,22 +136,28 @@
             </div>
         </div>
 
-        {{-- ═══════════ SECTION D: Laporan Harian ═══════════ --}}
-        <div class="bg-white rounded-xl shadow-sm border border-[var(--color-gray-100)] flex flex-col overflow-hidden">
+        {{-- ═══════════ SECTION D: Laporan Terbaru ═══════════ --}}
+        <div x-data="{ showModal: false, selectedItem: null }"
+            class="bg-white rounded-xl shadow-sm border border-[var(--color-gray-100)] flex flex-col overflow-hidden">
             <div class="p-6 border-b border-[var(--color-gray-100)]">
                 <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="text-base font-bold text-[var(--color-gray-900)]">Laporan Harian Terbaru</h3>
-                        <p class="text-xs text-[var(--color-gray-500)] mt-0.5">Riwayat observasi visual dari perangkat
-                            mobile</p>
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                            <i data-lucide="clipboard-list" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-[var(--color-gray-900)]">Laporan Terbaru</h3>
+                            <p class="text-xs text-[var(--color-gray-500)] mt-0.5">Riwayat observasi & pelaporan dari
+                                perangkat mobile</p>
+                        </div>
                     </div>
                     <div class="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-semibold">
-                        {{ count($dailyReports) }} Laporan
+                        {{ count($laporanTerbaru) }} Laporan
                     </div>
                 </div>
             </div>
 
-            @if (!empty($dailyReports))
+            @if (!empty($laporanTerbaru))
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
@@ -163,53 +169,74 @@
                                     class="px-6 py-4 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider">
                                     Blok</th>
                                 <th
-                                    class="px-6 py-4 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider text-right">
-                                    Tinggi (cm)</th>
-                                <th
                                     class="px-6 py-4 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider">
-                                    Kondisi Daun</th>
+                                    Jenis Laporan</th>
                                 <th
                                     class="px-6 py-4 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider text-center">
                                     Action</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-[var(--color-gray-100)]">
-                            @foreach ($dailyReports as $report)
+                            @foreach ($laporanTerbaru as $index => $laporan)
                                 @php
-                                    $kondisiConfig = [
-                                        'sehat' => ['color' => 'green', 'label' => 'Sehat', 'icon' => 'check-circle-2'],
-                                        'kuning' => [
-                                            'color' => 'amber',
-                                            'label' => 'Kuning',
-                                            'icon' => 'alert-triangle',
+                                    $jenisConfig = [
+                                        'Laporan Harian' => [
+                                            'color' => 'green',
+                                            'icon' => 'leaf',
+                                            'badgeClass' => 'bg-green-100 text-green-800 border-green-200',
                                         ],
-                                        'layu' => ['color' => 'red', 'label' => 'Layu', 'icon' => 'x-circle'],
-                                        'bercak' => ['color' => 'amber', 'label' => 'Bercak', 'icon' => 'bug'],
+                                        'Tanaman Sakit' => [
+                                            'color' => 'amber',
+                                            'icon' => 'heart-crack',
+                                            'badgeClass' => 'bg-amber-100 text-amber-800 border-amber-200',
+                                        ],
+                                        'Tanaman Mati' => [
+                                            'color' => 'red',
+                                            'icon' => 'skull',
+                                            'badgeClass' => 'bg-red-100 text-red-800 border-red-200',
+                                        ],
+                                        'Hama Tanaman' => [
+                                            'color' => 'orange',
+                                            'icon' => 'bug',
+                                            'badgeClass' => 'bg-orange-100 text-orange-800 border-orange-200',
+                                        ],
+                                        'Hasil Panen' => [
+                                            'color' => 'blue',
+                                            'icon' => 'package-check',
+                                            'badgeClass' => 'bg-blue-100 text-blue-800 border-blue-200',
+                                        ],
+                                        'Pemberian Nutrisi' => [
+                                            'color' => 'teal',
+                                            'icon' => 'flask-conical',
+                                            'badgeClass' => 'bg-teal-100 text-teal-800 border-teal-200',
+                                        ],
                                     ];
-                                    $kc = $kondisiConfig[$report['kondisiDaun'] ?? 'sehat'] ?? $kondisiConfig['sehat'];
+                                    $jc = $jenisConfig[$laporan['jenis']] ?? [
+                                        'color' => 'gray',
+                                        'icon' => 'file-text',
+                                        'badgeClass' => 'bg-gray-100 text-gray-800 border-gray-200',
+                                    ];
                                 @endphp
                                 <tr class="hover:bg-[var(--color-gray-50)]/50 transition-colors group">
                                     <td class="px-6 py-4 text-sm font-medium text-[var(--color-gray-600)]">
-                                        {{ \Carbon\Carbon::parse($report['tanggal'])->translatedFormat('d M Y') }}
+                                        {{ \Carbon\Carbon::parse($laporan['tanggal'])->translatedFormat('d M Y') }}
                                     </td>
                                     <td class="px-6 py-4 text-sm font-bold text-[var(--color-gray-900)]">
-                                        {{ $report['namaBlok'] }}
-                                    </td>
-                                    <td class="px-6 py-4 text-sm font-semibold text-[var(--color-gray-900)] text-right">
-                                        {{ number_format($report['tinggiTanaman'], 1) }}
+                                        {{ $laporan['blok'] }}
                                     </td>
                                     <td class="px-6 py-4">
-                                        <x-badge :color="$kc['color']" class="gap-1.5 px-2.5 py-1">
-                                            <i data-lucide="{{ $kc['icon'] }}" class="w-3.5 h-3.5"></i>
-                                            {{ $kc['label'] }}
-                                        </x-badge>
+                                        <span
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border {{ $jc['badgeClass'] }}">
+                                            <i data-lucide="{{ $jc['icon'] }}" class="w-3.5 h-3.5"></i>
+                                            {{ $laporan['jenis'] }}
+                                        </span>
                                     </td>
-                                    {{-- TODO: saat ini tidak ada action, next update action ketika icon berikut di klik --}}
                                     <td class="px-6 py-4 text-center">
                                         <button
-                                            class="w-8 h-8 rounded-lg flex items-center justify-center mx-auto text-[var(--color-gray-400)] hover:bg-emerald-50 hover:text-emerald-600 transition-colors tooltip"
-                                            title="{{ $report['catatan'] }}">
-                                            <i data-lucide="file-text" class="w-4 h-4"></i>
+                                            @click="selectedItem = {{ json_encode($laporan) }}; showModal = true; $nextTick(() => lucide.createIcons())"
+                                            class="w-8 h-8 rounded-lg flex items-center justify-center mx-auto text-[var(--color-gray-400)] hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                                            title="Lihat Detail">
+                                            <i data-lucide="eye" class="w-6 h-6"></i>
                                         </button>
                                     </td>
                                 </tr>
@@ -221,13 +248,16 @@
                 <div class="text-center py-12">
                     <div
                         class="w-16 h-16 rounded-full bg-[var(--color-gray-100)] flex items-center justify-center mx-auto mb-4 text-[var(--color-gray-400)]">
-                        <i data-lucide="file-text" class="w-8 h-8"></i>
+                        <i data-lucide="clipboard-list" class="w-8 h-8"></i>
                     </div>
-                    <h3 class="text-lg font-bold text-[var(--color-gray-900)] mb-1">Belum ada laporan harian</h3>
-                    <p class="text-sm text-[var(--color-gray-500)] max-w-sm mx-auto mt-1">Laporan harian kebun akan muncul
-                        setelah petugas mengisinya via aplikasi Mobile RFC.</p>
+                    <h3 class="text-lg font-bold text-[var(--color-gray-900)] mb-1">Belum ada laporan</h3>
+                    <p class="text-sm text-[var(--color-gray-500)] max-w-sm mx-auto mt-1">Laporan dari berbagai jenis akan
+                        muncul setelah petugas mengisinya via aplikasi Mobile RFC.</p>
                 </div>
             @endif
+
+            {{-- Modal Detail Laporan --}}
+            <x-plant-monitoring.laporan-detail-modal />
         </div>
 
     </div>

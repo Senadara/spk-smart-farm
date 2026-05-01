@@ -22,9 +22,9 @@ class PlantMonitoringController extends Controller
         $periode = $request->input('periode', '7');
 
         // 3. Data sections
-        $sensorData    = $this->getLatestSensorData($selectedBlokId);
-        $sensorHistory = $this->getSensorHistory($selectedBlokId, (int)$periode);
-        $dailyReports  = $this->getLatestDailyReports($selectedBlokId, $periode);
+        $sensorData      = $this->getLatestSensorData($selectedBlokId);
+        $sensorHistory   = $this->getSensorHistory($selectedBlokId, (int)$periode);
+        $laporanTerbaru  = $this->getLaporanTerbaru($selectedBlokId, $periode);
 
         return view('plant-monitoring.index', compact(
             'blokKebun',
@@ -32,7 +32,7 @@ class PlantMonitoringController extends Controller
             'periode',
             'sensorData',
             'sensorHistory',
-            'dailyReports'
+            'laporanTerbaru'
         ));
     }
 
@@ -210,62 +210,135 @@ class PlantMonitoringController extends Controller
     }
 
     /**
-     * Ambil ringkasan laporan harian terbaru per blok kebun.
-     * Sumber: tabel harianKebun JOIN laporan (filter tipe = 'harian').
+     * Ambil laporan terbaru dari berbagai jenis (harian, sakit, hama, panen, nutrisi).
+     * Sumber: tabel laporan JOIN harianKebun/hama/panenKebun/sakit/kematian/penggunaanInventaris.
      * Status: TABEL KOSONG. Scaffold query + return dummy.
-     * Tabel harianKebun dan laporan milik Node.js/Sequelize — READ ONLY.
+     * Tabel-tabel ini milik Node.js/Sequelize — READ ONLY.
      */
-    private function getLatestDailyReports(?string $blokKebunId, string $periode): array
+    private function getLaporanTerbaru(?string $blokKebunId, string $periode): array
     {
         // --- SCAFFOLD ELOQUENT QUERY (aktifkan saat data tersedia) ---
-        // $query = DB::table('harianKebun as hk')
-        //     ->join('laporan as l', 'hk.LaporanId', '=', 'l.id')
-        //     ->join('unitBudidaya as u', 'l.UnitBudidayaId', '=', 'u.id')
-        //     ->where('l.tipe', 'harian')
-        //     ->where('hk.isDeleted', 0)
-        //     ->where('l.isDeleted', 0)
-        //     ->whereBetween('l.createdAt', [
-        //         now()->subDays((int)$periode)->toDateString() . ' 00:00:00',
-        //         now()->toDateString() . ' 23:59:59'
-        //     ]);
-        //
-        // if ($blokKebunId) {
-        //     $query->where('l.UnitBudidayaId', $blokKebunId);
-        // }
-        //
-        // $results = $query->select(/* columns */)->orderBy('l.createdAt', 'desc')->limit(10)->get()->toArray();
-        // if (!empty($results)) return $results;
+        // TODO: [DASH-03] Replace with actual API call
+        // Real: GET /api/farm/laporan/harian-kebun + /api/farm/laporan/hama + /api/farm/laporan/panen-kebun
         // --- END SCAFFOLD ---
 
-        // TODO: [IOT-01] Replace dummy setelah data laporan tersedia
+        // TODO: [DASH-03] Dummy data — replace with actual API call
         return [
             [
-                'tanggal'        => now()->subDays(0)->format('Y-m-d'),
-                'namaBlok'       => 'Greenhouse A',
-                'tinggiTanaman'  => 45.5,
-                'kondisiDaun'    => 'sehat',
-                'catatan'        => 'Pertumbuhan normal, tidak ada kelainan pada daun.',
+                'tanggal' => now()->subDays(0)->format('Y-m-d'),
+                'blok' => 'Greenhouse A',
+                'jenis' => 'Laporan Harian',
+                'tipe' => 'harian',
+                'detail' => [
+                    'kode_tanaman' => 'Melon #1',
+                    'nama_tanaman' => 'Melon Fujisawa',
+                    'penyiraman' => true,
+                    'pruning' => false,
+                    'nutrisi' => true,
+                    'repotting' => false,
+                    'tinggi' => 45.5,
+                    'kondisi_daun' => 'Sehat',
+                    'status_pertumbuhan' => 'Vegetatif',
+                    'pelapor' => 'Pak Adi',
+                    'catatan' => 'Tanaman sudah dilakukan perawatan harian.',
+                    'foto' => null,
+                ],
             ],
             [
-                'tanggal'        => now()->subDays(0)->format('Y-m-d'),
-                'namaBlok'       => 'Greenhouse B',
-                'tinggiTanaman'  => 42.0,
-                'kondisiDaun'    => 'kuning',
-                'catatan'        => 'Beberapa daun menguning, perlu pengecekan nutrisi.',
+                'tanggal' => now()->subDays(0)->format('Y-m-d'),
+                'blok' => 'Greenhouse B',
+                'jenis' => 'Tanaman Sakit',
+                'tipe' => 'khusus',
+                'detail' => [
+                    'kode_tanaman' => 'Melon #2',
+                    'nama_tanaman' => 'Melon',
+                    'nama_penyakit' => 'Embun Tepung',
+                    'pelapor' => 'Adi Santoso',
+                    'catatan' => 'Terdapat lapisan putih seperti bedak pada permukaan daun bagian atas.',
+                    'foto' => null,
+                ],
             ],
             [
-                'tanggal'        => now()->subDays(1)->format('Y-m-d'),
-                'namaBlok'       => 'Greenhouse A',
-                'tinggiTanaman'  => 44.2,
-                'kondisiDaun'    => 'sehat',
-                'catatan'        => 'Semua tanaman tumbuh normal.',
+                'tanggal' => now()->subDays(1)->format('Y-m-d'),
+                'blok' => 'Greenhouse A',
+                'jenis' => 'Hama Tanaman',
+                'tipe' => 'khusus',
+                'detail' => [
+                    'nama_hama' => 'Tikus',
+                    'jumlah' => 2,
+                    'status_hama' => 'Ada',
+                    'pelapor' => 'Pak Adi',
+                    'catatan' => 'Tikus merupakan hama pengerat yang menyerang tanaman melon.',
+                    'foto' => null,
+                ],
             ],
             [
-                'tanggal'        => now()->subDays(1)->format('Y-m-d'),
-                'namaBlok'       => 'Greenhouse C',
-                'tinggiTanaman'  => 38.0,
-                'kondisiDaun'    => 'layu',
-                'catatan'        => 'Tanaman menunjukkan tanda stres panas.',
+                'tanggal' => now()->subDays(1)->format('Y-m-d'),
+                'blok' => 'Greenhouse C',
+                'jenis' => 'Laporan Harian',
+                'tipe' => 'harian',
+                'detail' => [
+                    'kode_tanaman' => 'Melon #14',
+                    'nama_tanaman' => 'Melon',
+                    'penyiraman' => true,
+                    'pruning' => true,
+                    'nutrisi' => false,
+                    'repotting' => false,
+                    'tinggi' => 38.0,
+                    'kondisi_daun' => 'Layu',
+                    'status_pertumbuhan' => 'Vegetatif',
+                    'pelapor' => 'Adi Santoso',
+                    'catatan' => 'Kondisi daun layu, perlu penanganan segera.',
+                    'foto' => null,
+                ],
+            ],
+            [
+                'tanggal' => now()->subDays(2)->format('Y-m-d'),
+                'blok' => 'Greenhouse A',
+                'jenis' => 'Hasil Panen',
+                'tipe' => 'khusus',
+                'detail' => [
+                    'nama_komoditas' => 'Buah Melon',
+                    'estimasi_panen' => 15,
+                    'realisasi_panen' => 14,
+                    'gagal_panen' => 1,
+                    'umur_tanaman' => 60,
+                    'satuan' => 'Kilogram - Kg',
+                    'pelapor' => 'Adi Santoso',
+                    'catatan' => 'Kebun A berhasil panen 14 buah melon, dengan berat total 15 Kg.',
+                    'foto' => null,
+                ],
+            ],
+            [
+                'tanggal' => now()->subDays(2)->format('Y-m-d'),
+                'blok' => 'Greenhouse B',
+                'jenis' => 'Pemberian Nutrisi',
+                'tipe' => 'khusus',
+                'detail' => [
+                    'kategori_inventaris' => 'Pupuk Cair',
+                    'nama_inventaris' => 'Nutrisi AB Mix',
+                    'jumlah_digunakan' => 2.5,
+                    'satuan' => 'Liter',
+                    'kode_tanaman' => 'Melon #7',
+                    'keperluan' => 'Pemupukan rutin fase generatif',
+                    'pelapor' => 'Pak Adi',
+                    'catatan' => 'Pemberian nutrisi dilakukan pagi hari sebelum jam 9, konsentrasi EC 2.5 mS/cm.',
+                    'foto' => null,
+                ],
+            ],
+            [
+                'tanggal' => now()->subDays(3)->format('Y-m-d'),
+                'blok' => 'Greenhouse C',
+                'jenis' => 'Tanaman Mati',
+                'tipe' => 'khusus',
+                'detail' => [
+                    'kode_tanaman' => 'Melon #9',
+                    'nama_tanaman' => 'Melon',
+                    'penyebab_kematian' => 'Layu Fusarium',
+                    'pelapor' => 'Adi Santoso',
+                    'catatan' => 'Tanaman menunjukkan gejala layu total sejak 2 hari sebelumnya. Akar membusuk dengan warna coklat kemerahan khas Fusarium oxysporum.',
+                    'foto' => null,
+                ],
             ],
         ];
     }

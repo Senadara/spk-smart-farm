@@ -8,6 +8,7 @@ use App\Http\Controllers\Perkebunan\PerkebunanController;
 use App\Http\Controllers\Master\DataMasterController;
 use App\Http\Controllers\Monitoring\PlantMonitoringController;
 use App\Http\Controllers\Profile\ProfileController;
+use App\Http\Controllers\SPKMelon\KriteriaController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -37,6 +38,11 @@ Route::middleware('guest.api')->group(function () {
 });
 
 // Auth routes — hanya bisa diakses jika berhasil login
+/*
+semua user dengan role yang berbeda tetap bisa mengakses semua fitur.
+Dan kondisi yang dibuat saat ini hanya user yang sudah berhasil login saja,
+bukan spesifik ke role tertentu
+*/
 Route::middleware('auth.api')->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -65,5 +71,20 @@ Route::middleware('auth.api')->group(function () {
 
     // Logout
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+    // SPK Melon — Konfigurasi & Kalkulasi
+    // Middleware role:inventor,admin melindungi semua route CRUD kriteria SPK.
+    // TODO: added role 'petugas' during development phase, later will change to admin, inventor again
+    Route::middleware(['role:inventor,admin,petugas'])->prefix('spk-melon')->name('spk-melon.')->group(function () {
+        // SPK-01
+        Route::prefix('kriteria')->name('kriteria.')->group(function () {
+            Route::get('/', [KriteriaController::class, 'index'])->name('index');
+            // AJAX endpoint: diletakkan sebelum /{kriteria} agar tidak di-resolve sebagai model binding
+            Route::get('/spi-sumber/by-kategori', [KriteriaController::class, 'spiSumberByKategori'])->name('spi-sumber.by-kategori');
+            Route::post('/', [KriteriaController::class, 'store'])->name('store');
+            Route::put('/{kriteria}', [KriteriaController::class, 'update'])->name('update');
+            Route::delete('/{kriteria}', [KriteriaController::class, 'destroy'])->name('destroy');
+        });
+
+    });
 });
-    
