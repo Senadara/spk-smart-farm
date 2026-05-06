@@ -1,0 +1,57 @@
+1. RULE BASE — STATUS LINGKUNGAN
+No	Suhu	Kelembapan	Amonia	Status Lingkungan	Diagnosis Singkat
+1	Dingin	Kering	Aman	Waspada	Risiko dehidrasi & dingin
+2	Dingin	Kering	Tinggi	Buruk	Dingin + udara tercemar
+3	Dingin	Ideal	Aman	Baik	Toleransi batas bawah
+4	Dingin	Ideal	Tinggi	Waspada	Ventilasi kurang
+5	Dingin	Basah	Aman	Waspada	Risiko jamur & lembap
+6	Dingin	Basah	Tinggi	Buruk	Lingkungan tidak sehat
+7	Nyaman	Kering	Aman	Baik	Sedikit kering, aman
+8	Nyaman	Kering	Tinggi	Waspada	Amonia mulai naik
+9	Nyaman	Ideal	Aman	Optimal	Kondisi ideal
+10	Nyaman	Ideal	Tinggi	Waspada	Kotoran menumpuk
+11	Nyaman	Basah	Aman	Waspada	Kelembapan tinggi
+12	Nyaman	Basah	Tinggi	Buruk	Risiko penyakit tinggi
+13	Panas	Kering	Aman	Waspada	Awal heat stress
+14	Panas	Kering	Tinggi	Buruk	Heat stress + polusi
+15	Panas	Ideal	Aman	Waspada	Perlu pendinginan
+16	Panas	Ideal	Tinggi	Buruk	Heat stress berat
+17	Panas	Basah	Aman	Waspada	Heat index tinggi
+18	Panas	Basah	Tinggi	Buruk	Kondisi ekstrem
+
+2. RULE BASE — INDEKS KESEHATAN
+No	HDP	Pakan	Mortalitas	Indeks Kesehatan	Diagnosis Singkat
+1	Rendah	Kurang	Wajar	Waspada	Nafsu makan turun
+2	Rendah	Kurang	Tinggi	Buruk	Indikasi penyakit serius
+3	Rendah	Normal	Wajar	Waspada	Inefisiensi produksi
+4	Rendah	Normal	Tinggi	Buruk	Gangguan kesehatan
+5	Rendah	Berlebih	Wajar	Waspada	Pakan tidak efisien
+6	Rendah	Berlebih	Tinggi	Buruk	Gangguan metabolisme
+7	Sedang	Kurang	Wajar	Waspada	Potensi penurunan
+8	Sedang	Kurang	Tinggi	Buruk	Gejala penyakit awal
+9	Sedang	Normal	Wajar	Baik	Performa standar
+10	Sedang	Normal	Tinggi	Waspada	Investigasi kematian
+11	Sedang	Berlebih	Wajar	Waspada	Inefisiensi pakan
+12	Sedang	Berlebih	Tinggi	Buruk	Gangguan pencernaan
+13	Tinggi	Kurang	Wajar	Waspada	Anomali produksi
+14	Tinggi	Kurang	Tinggi	Buruk	Produksi dipaksakan
+15	Tinggi	Normal	Wajar	Optimal	Kondisi ideal
+16	Tinggi	Normal	Tinggi	Waspada	Anomali mortalitas
+17	Tinggi	Berlebih	Wajar	Baik	Produksi tinggi
+18	Tinggi	Berlebih	Tinggi	Waspada	Risiko saat puncak
+
+3. RULE BASE — DIAGNOSIS KAUSALITAS
+No	Lingkungan	Kesehatan	Diagnosis Kausalitas	Rekomendasi Umum
+1	Buruk	Buruk	Krisis Total	Perbaikan total + tindakan darurat
+2	Buruk	Waspada	Stres Lingkungan	Perbaiki ventilasi & suhu
+3	Buruk	Baik	Lingkungan Berisiko	Ayam masih tahan, segera perbaiki
+4	Waspada	Buruk	Gangguan Non-Lingkungan	Fokus medis & pakan
+5	Waspada	Waspada	Performa Tidak Stabil	Evaluasi manajemen
+6	Waspada	Baik	Toleransi Baik	Monitoring kondisi
+7	Baik	Buruk	Wabah Internal	Indikasi penyakit
+8	Baik	Waspada	Inefisiensi Sistem	Audit pakan & manajemen
+9	Baik	Baik	Stabil	Kondisi aman
+10	Optimal	Buruk	Anomali Medis	Cek penyakit serius
+11	Optimal	Waspada	Perlu Monitoring	Pantau tren
+12	Optimal	Baik	Kondisi Baik	Stabil & aman
+13	Optimal	Optimal	Kondisi Optimal	Pertahankan

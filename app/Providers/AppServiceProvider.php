@@ -19,6 +19,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        \App\Models\SpkSupplierParameterValue::observe(\App\Observers\SpkSupplierParameterValueObserver::class);
+        \App\Models\SpkAhpBobot::observe(\App\Observers\SpkAhpBobotObserver::class);
+        \App\Models\InventorySupplierProduk::observe(\App\Observers\InventorySupplierProdukObserver::class);
     }
 }

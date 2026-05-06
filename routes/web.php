@@ -52,6 +52,14 @@ Route::middleware('auth.api')->group(function () {
 
     // Analisa SPK
     Route::get('/spk-analysis', [\App\Http\Controllers\Spk\SpkDashboardController::class, 'index'])->name('spk.dashboard');
+
+    // Fuzzy Mamdani Engine
+    Route::prefix('spk-fuzzy')->group(function () {
+        Route::post('/process', [\App\Http\Controllers\Spk\FuzzyController::class, 'processFuzzy'])->name('spk.fuzzy.process');
+        Route::get('/history', [\App\Http\Controllers\Spk\FuzzyController::class, 'getHistory'])->name('spk.fuzzy.history');
+        Route::get('/history/{id}', [\App\Http\Controllers\Spk\FuzzyController::class, 'getHistoryDetail'])->name('spk.fuzzy.history.detail');
+        Route::get('/config', [\App\Http\Controllers\Spk\FuzzyController::class, 'getConfig'])->name('spk.fuzzy.config');
+    });
     
     // SPK Supplier Recommendations
     Route::get('/spk-suppliers', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'index'])->name('spk.suppliers.index');
@@ -89,6 +97,16 @@ Route::middleware('auth.api')->group(function () {
 
     // Profil
     Route::get('/profil', [ProfileController::class, 'show'])->name('profile');
+
+    // Supplier Management & SPK AHP-SAW Config 
+    Route::prefix('supplier-spk')->group(function () {
+        Route::apiResource('suppliers', \App\Http\Controllers\SupplierController::class);
+        Route::get('parameters', [\App\Http\Controllers\SpkParameterController::class, 'index'])->name('spk.parameters.index');
+        Route::post('parameters', [\App\Http\Controllers\SpkParameterController::class, 'store'])->name('spk.parameters.store');
+        Route::post('parameters/assign', [\App\Http\Controllers\SpkParameterController::class, 'assignValue'])->name('spk.parameters.assign');
+        Route::post('ahp/perbandingan', [\App\Http\Controllers\SpkAHPController::class, 'storePerbandingan'])->name('spk.ahp.perbandingan');
+        Route::get('recommendation/{produkId}', [\App\Http\Controllers\RecommendationController::class, 'getRanking'])->name('spk.recommendation');
+    });
 
     // Logout
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');

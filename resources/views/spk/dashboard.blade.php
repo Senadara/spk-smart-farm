@@ -26,9 +26,9 @@
                     </select>
 
                     {{-- Lokasi / Kandang --}}
-                    <select name="lokasi" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-emerald-400 cursor-pointer" onchange="document.getElementById('spkFilterForm').submit()">
-                        @foreach ($filterOptions['lokasi'] as $val => $label)
-                            <option value="{{ $val }}" {{ $lokasi === $val ? 'selected' : '' }}>{{ $label }}</option>
+                    <select name="coop_id" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-emerald-400 cursor-pointer" onchange="document.getElementById('spkFilterForm').submit()">
+                        @foreach ($barnsOption as $barn)
+                            <option value="{{ $barn['id'] }}" {{ $coopId == $barn['id'] ? 'selected' : '' }}>{{ $barn['name'] }}</option>
                         @endforeach
                     </select>
 
@@ -208,7 +208,7 @@
                                     'purple' => 'bg-purple-100 text-purple-700',
                                 ];
                             @endphp
-                            <a href="?komoditas={{ $komoditas }}&lokasi={{ $lokasi }}&history_id={{ $hist['id'] }}"
+                            <a href="?komoditas={{ $komoditas }}&coop_id={{ $coopId }}&history_id={{ $hist['id'] }}"
                                class="block rounded-lg p-3 transition-all cursor-pointer {{ $isActive ? 'bg-gray-800 text-white shadow-md ring-2 ring-gray-700' : 'bg-gray-50 hover:bg-gray-100 border border-gray-100' }}">
                                 
                                 {{-- Top row: ID + Mode Badge + Time --}}

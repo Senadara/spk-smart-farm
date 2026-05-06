@@ -3,7 +3,13 @@
 namespace App\Http\Controllers\Spk;
 
 use App\Http\Controllers\Controller;
+use App\Models\SpkFuzzyLog;
+use App\Services\Fuzzy\InputResolver;
+use App\Services\Fuzzy\MamdaniEngine;
+use App\Services\Fuzzy\NarrativeGenerator;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SpkDashboardController extends Controller
 {
@@ -12,59 +18,203 @@ class SpkDashboardController extends Controller
      */
     public function index(Request $request)
     {
-        // Get Filters
         $komoditas = $request->input('komoditas', 'petelur');
-        $lokasi = $request->input('lokasi', 'all');
-        $historyId = $request->input('history_id', null);
+        $coopId    = $request->input('coop_id');   // null = global
+        $historyId = $request->input('history_id');
 
-        // Metriks, AHP, Tiket tetap
-        $kpi = $this->getKpiMetrics();
+        // ── Jalankan Fuzzy Engine untuk mendapat data terkini ────────
+        $latestResult = $this->runFuzzyEngine($coopId);
+
+        // ── Metriks KPI (dari AHP-SAW module, tetap) ─────────────────
+        $kpi                  = $this->getKpiMetrics();
         $recommendedSuppliers = $this->getAhpSawRanking();
-        
-        // History List
-        $spkHistory = $this->getSpkHistory($lokasi);
-        $activeHistory = collect($spkHistory)->firstWhere('id', $historyId) ?? $spkHistory[0];
 
-        // Action Tickets related to this specific history run (mock: filtering by history ID or just returning mock)
-        $actionTickets = $this->getActionTickets($activeHistory['id']);
+        // ── History dari SpkFuzzyLog ──────────────────────────────────
+        $spkHistory    = $this->getSpkHistory($coopId);
+        $activeHistory = collect($spkHistory)->firstWhere('id', $historyId) ?? ($spkHistory[0] ?? $this->emptyHistory());
 
-        // Data Dinamis
-        $fuzzyData = $this->getFuzzyStatus($activeHistory);
-        $chartData = $this->getChartData($activeHistory);
+        // ── Fuzzy Status & Chart dari hasil engine ────────────────────
+        $fuzzyData  = $this->getFuzzyStatus($latestResult);
+        $chartData  = $this->getChartData();
 
-        // Data that acts as props for x-fuzzy-decision-engine
-        $barnsOption = [];
-        // Return Data (simulasikan filter dropdown list)
+        // ── Action Tickets (tetap mock sampai modul tersedia) ─────────
+        $actionTickets = $this->getActionTickets($activeHistory['id'] ?? 'N/A');
+
+        // ── Kandang options dari unitBudidaya ─────────────────────────
+        $jenis       = DB::table('jenisBudidaya')->where('nama', 'like', '%Ayam Petelur%')->where('isDeleted', 0)->first();
+        $barnsOption = DB::table('unitBudidaya')
+            ->where('jenisBudidayaId', $jenis?->id)
+            ->where('status', 1)
+            ->where('isDeleted', 0)
+            ->get(['id', 'nama'])
+            ->map(fn($c) => ['id' => $c->id, 'name' => $c->nama])
+            ->prepend(['id' => null, 'name' => 'Semua Kandang (Global)'])
+            ->toArray();
+
         $filterOptions = [
-            'komoditas' => [
-                'petelur' => 'Ayam Petelur',
-                'lele' => 'Perikanan Lele',
-                'melon' => 'Perkebunan Melon',
-            ],
-            'lokasi' => [
-                'all' => 'Semua Wilayah',
-                'barn_a' => 'Barn A (Layer)',
-                'barn_b' => 'Barn B (Layer)',
-                'kolam_1' => 'Kolam Bioflok 1',
-                'gh_1' => 'Greenhouse 1',
-            ]
+            'komoditas' => ['petelur' => 'Ayam Petelur', 'lele' => 'Perikanan Lele', 'melon' => 'Perkebunan Melon'],
         ];
 
-        foreach ($filterOptions['lokasi'] as $key => $val) {
-            $barnsOption[] = ['id' => $key, 'name' => $val];
-        }
-
         return view('spk.dashboard', compact(
-            'komoditas', 'lokasi',
-            'filterOptions', 'kpi', 'fuzzyData', 
+            'komoditas', 'coopId', 'filterOptions', 'kpi', 'fuzzyData',
             'chartData', 'recommendedSuppliers', 'actionTickets', 'barnsOption',
-            'spkHistory', 'activeHistory'
+            'spkHistory', 'activeHistory', 'latestResult'
         ));
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // DUMMY DATA METHODS
+    // REAL DATA METHODS
     // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Jalankan Mamdani Engine dan return hasil lengkap.
+     */
+    private function runFuzzyEngine(?string $coopId): array
+    {
+        try {
+            $resolver  = app(InputResolver::class);
+            $engine    = app(MamdaniEngine::class);
+            $narrator  = app(NarrativeGenerator::class);
+
+            $inputs    = $resolver->resolve($coopId);
+            $result    = $engine->processCascaded($inputs);
+            $barnName  = $coopId ? DB::table('unitBudidaya')->where('id', $coopId)->value('nama') : null;
+            $narrative = $narrator->generate($result, $barnName);
+
+            return array_merge($result, ['narrative' => $narrative, 'error' => null]);
+        } catch (\Throwable $e) {
+            \Log::error('[SpkDashboard] FuzzyEngine error: ' . $e->getMessage());
+            return ['error' => $e->getMessage(), 'inputs' => [], 'lingkungan' => [], 'kesehatan' => [], 'kausalitas' => [], 'narrative' => null];
+        }
+    }
+
+    /**
+     * Ambil riwayat analisa dari spk_fuzzy_logs.
+     */
+    private function getSpkHistory(?string $coopId): array
+    {
+        $colorMap = ['Optimal' => 'emerald', 'Baik' => 'blue', 'Waspada' => 'amber', 'Buruk' => 'red'];
+
+        $query = SpkFuzzyLog::query()->orderBy('createdAt', 'desc')->limit(10);
+        if ($coopId) {
+            $query->where('unit_budidaya_id', $coopId);
+        }
+
+        $logs = $query->get();
+
+        if ($logs->isEmpty()) {
+            return [$this->emptyHistory()];
+        }
+
+        return $logs->map(function ($log) use ($colorMap) {
+            $lingkLabel = $log->status_lingkungan ?? 'Tidak Diketahui';
+            $barnName   = $log->unit_budidaya_id
+                ? DB::table('unitBudidaya')->where('id', $log->unit_budidaya_id)->value('nama')
+                : 'Global';
+
+            return [
+                'id'        => $log->id,
+                'date'      => Carbon::parse($log->createdAt)->locale('id')->diffForHumans(),
+                'time'      => Carbon::parse($log->createdAt)->format('H:i') . ' WIB',
+                'mode'      => 'Fuzzy Mamdani',
+                'modeColor' => 'purple',
+                'barn'      => $barnName,
+                'status'    => $log->diagnosis_kausalitas ?? $lingkLabel,
+                'color'     => $colorMap[$lingkLabel] ?? 'gray',
+                'verdict'   => $log->narrative ? \Str::limit(strip_tags($log->narrative), 150) : '-',
+                'recommendation' => $log->recommendation ?? '-',
+                'raw'       => is_array($log->input_json) ? $log->input_json : [],
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Build fuzzyData untuk view dari hasil engine terkini.
+     */
+    private function getFuzzyStatus(array $result): array
+    {
+        $lingkungan = $result['lingkungan'] ?? [];
+        $kesehatan  = $result['kesehatan']  ?? [];
+        $kausalitas = $result['kausalitas'] ?? [];
+        $inputs     = $result['inputs']     ?? [];
+
+        $colorMap = ['Optimal' => 'emerald', 'Baik' => 'blue', 'Waspada' => 'amber', 'Buruk' => 'red'];
+
+        $lingkLabel   = $lingkungan['label']  ?? 'Tidak Diketahui';
+        $kesehatLabel = $kesehatan['label']   ?? 'Tidak Diketahui';
+        $lingkScore   = (float) ($lingkungan['value'] ?? 0);
+        $kesehatScore = (float) ($kesehatan['value']  ?? 0);
+
+        // Sensor bars dari fuzzified (Engine 1)
+        $fuzzLingk = $lingkungan['fuzzified'] ?? [];
+        $fuzzKes   = $kesehatan['fuzzified']  ?? [];
+
+        $suhuPct  = isset($inputs['suhu'])      ? min(($inputs['suhu'] / 50) * 100, 100) : 0;
+        $humPct   = isset($inputs['kelembapan'])? min($inputs['kelembapan'], 100)         : 0;
+        $ammoPct  = isset($inputs['amonia'])    ? min($inputs['amonia'] * 2, 100)         : 0;
+        $hdpPct   = isset($inputs['hdp'])       ? min($inputs['hdp'], 100)                : 0;
+        $pakanPct = isset($inputs['pakan'])     ? min(($inputs['pakan'] / 150) * 100,100) : 0;
+        $mortPct  = isset($inputs['mortalitas'])? min($inputs['mortalitas'] * 20, 100)    : 0;
+
+        $suhu   = $inputs['suhu']       ?? 0;
+        $humid  = $inputs['kelembapan'] ?? 0;
+        $amonia = $inputs['amonia']     ?? 0;
+        $hdp    = $inputs['hdp']        ?? 0;
+        $pakan  = $inputs['pakan']      ?? 0;
+        $mort   = $inputs['mortalitas'] ?? 0;
+
+        return [
+            'confidence' => max($lingkScore, $kesehatScore),
+            'spider'     => [round($suhuPct), round($humPct), round($ammoPct), round($hdpPct), round($pakanPct), round(100 - $mortPct)],
+            'color'      => $colorMap[$lingkLabel] ?? 'gray',
+            'sensors'    => [
+                'lingkungan' => [
+                    ['label' => 'Suhu Udara',  'percent' => round($suhuPct),  'status' => $suhu > 30 ? 'warning' : 'normal', 'statusLabel' => round($suhu, 1) . '°C — ' . (isset($fuzzLingk['suhu']) && $fuzzLingk['suhu'] ? array_search(max($fuzzLingk['suhu']), $fuzzLingk['suhu']) : '-')],
+                    ['label' => 'Kelembapan', 'percent' => round($humPct),   'status' => $humid > 80 ? 'warning' : 'normal', 'statusLabel' => round($humid, 1) . '% — ' . (isset($fuzzLingk['kelembapan']) && $fuzzLingk['kelembapan'] ? array_search(max($fuzzLingk['kelembapan']), $fuzzLingk['kelembapan']) : '-')],
+                    ['label' => 'Amonia',     'percent' => round($ammoPct),  'status' => $amonia > 20 ? 'warning' : 'normal', 'statusLabel' => round($amonia, 1) . ' ppm — ' . (isset($fuzzLingk['amonia']) && $fuzzLingk['amonia'] ? array_search(max($fuzzLingk['amonia']), $fuzzLingk['amonia']) : '-')],
+                ],
+                'produktivitas' => [
+                    ['label' => 'HDP (Hen-Day)',  'percent' => round($hdpPct),   'status' => $hdp < 75 ? 'warning' : 'normal', 'statusLabel' => round($hdp, 1) . '% — ' . (isset($fuzzKes['hdp']) && $fuzzKes['hdp'] ? array_search(max($fuzzKes['hdp']), $fuzzKes['hdp']) : '-')],
+                    ['label' => 'Konsumsi Pakan', 'percent' => round($pakanPct), 'status' => 'normal', 'statusLabel' => round($pakan, 1) . ' g/ekor'],
+                    ['label' => 'Mortalitas',     'percent' => round(100 - $mortPct), 'status' => $mort > 1 ? 'warning' : 'normal', 'statusLabel' => round($mort, 2) . '%'],
+                ],
+            ],
+            'indicators' => [
+                ['label' => 'HDP Score',  'value' => round($hdp, 1) . '%',  'color' => $hdp >= 90 ? 'emerald' : ($hdp >= 75 ? 'blue' : 'amber')],
+                ['label' => 'FCR Score',  'value' => round($inputs['fcr'] ?? 0, 2),    'color' => ($inputs['fcr'] ?? 0) <= 1.8 ? 'emerald' : 'amber'],
+                ['label' => 'Livability', 'value' => round(100 - $mort, 2) . '%',      'color' => $mort < 0.5 ? 'emerald' : 'amber'],
+            ],
+            'results' => [
+                'lingkungan' => [
+                    'status'      => strtoupper($lingkLabel),
+                    'statusColor' => $colorMap[$lingkLabel] ?? 'gray',
+                    'title'       => $lingkungan['dominant_rule']['diagnosis'] ?? 'Analisa Lingkungan',
+                    'description' => 'Score: ' . round($lingkScore, 1) . '/100. ' . ($lingkungan['dominant_rule']['diagnosis'] ?? ''),
+                    'link'        => '#',
+                ],
+                'produktivitas' => [
+                    'status'      => strtoupper($kesehatLabel),
+                    'statusColor' => $colorMap[$kesehatLabel] ?? 'gray',
+                    'title'       => $kesehatan['dominant_rule']['diagnosis'] ?? 'Analisa Produktivitas',
+                    'description' => 'Score: ' . round($kesehatScore, 1) . '/100. ' . ($kesehatan['dominant_rule']['diagnosis'] ?? ''),
+                    'link'        => '#',
+                ],
+                'gabungan' => [
+                    'status'      => strtoupper($kausalitas['label'] ?? 'N/A'),
+                    'statusColor' => $colorMap[$lingkLabel] ?? 'gray',
+                    'title'       => $kausalitas['label'] ?? 'Diagnosis Kausalitas',
+                    'description' => $result['narrative'] ?? ($kausalitas['diagnosis'] ?? '-'),
+                    'link'        => '#',
+                    'isMain'      => true,
+                ],
+            ],
+        ];
+    }
+
+    private function emptyHistory(): array
+    {
+        return ['id' => 'N/A', 'date' => '-', 'time' => '-', 'mode' => '-', 'modeColor' => 'gray', 'barn' => '-', 'status' => '-', 'color' => 'gray', 'verdict' => 'Belum ada analisa', 'raw' => []];
+    }
 
     private function getKpiMetrics(): array
     {
@@ -76,157 +226,62 @@ class SpkDashboardController extends Controller
         ];
     }
 
-    private function getSpkHistory($lokasi): array
+
+    private function getChartData(): array
     {
-        return [
-            [
-                'id' => 'H-001', 'date' => 'Hari ini', 'time' => '14:30 WIB',
-                'mode' => 'Gabungan', 'modeColor' => 'purple',
-                'status' => 'Waspada Kritis', 'color' => 'red',
-                'barn' => 'Barn A',
-                'verdict' => 'Suhu & amonia tinggi berdampak pada produktivitas.',
-                'raw' => ['suhu' => '32.5°C', 'kelembaban' => '60%', 'amonia' => '24 ppm', 'hdp' => '92.1%', 'fcr' => '2.14'],
-            ],
-            [
-                'id' => 'H-002', 'date' => 'Hari ini', 'time' => '08:00 WIB',
-                'mode' => 'Lingkungan', 'modeColor' => 'blue',
-                'status' => 'Normal', 'color' => 'emerald',
-                'barn' => 'Barn A',
-                'verdict' => 'Parameter lingkungan stabil. Tidak ada anomali.',
-                'raw' => ['suhu' => '24.0°C', 'kelembaban' => '65%', 'amonia' => '8 ppm', 'hdp' => '-', 'fcr' => '-'],
-            ],
-            [
-                'id' => 'H-003', 'date' => 'Kemarin', 'time' => '19:45 WIB',
-                'mode' => 'Produktivitas', 'modeColor' => 'amber',
-                'status' => 'Waspada', 'color' => 'amber',
-                'barn' => 'Semua Wilayah',
-                'verdict' => 'HDP turun 2.3% dalam 3 hari terakhir.',
-                'raw' => ['suhu' => '-', 'kelembaban' => '-', 'amonia' => '-', 'hdp' => '89.8%', 'fcr' => '2.20'],
-            ],
-            [
-                'id' => 'H-004', 'date' => 'Kemarin', 'time' => '07:15 WIB',
-                'mode' => 'Gabungan', 'modeColor' => 'purple',
-                'status' => 'Normal', 'color' => 'emerald',
-                'barn' => 'Barn B',
-                'verdict' => 'Seluruh parameter kandang B dalam kondisi ideal.',
-                'raw' => ['suhu' => '23.5°C', 'kelembaban' => '68%', 'amonia' => '7 ppm', 'hdp' => '95.0%', 'fcr' => '1.45'],
-            ],
-            [
-                'id' => 'H-005', 'date' => '25 Okt 2023', 'time' => '14:00 WIB',
-                'mode' => 'Lingkungan', 'modeColor' => 'blue',
-                'status' => 'Normal', 'color' => 'emerald',
-                'barn' => 'Barn C',
-                'verdict' => 'Semua sensor dalam batas aman.',
-                'raw' => ['suhu' => '24.5°C', 'kelembaban' => '62%', 'amonia' => '10 ppm', 'hdp' => '-', 'fcr' => '-'],
-            ],
-            [
-                'id' => 'H-006', 'date' => '25 Okt 2023', 'time' => '08:30 WIB',
-                'mode' => 'Gabungan', 'modeColor' => 'purple',
-                'status' => 'Normal', 'color' => 'emerald',
-                'barn' => 'Barn A',
-                'verdict' => 'Performa puncak. Semua KPI di atas standar.',
-                'raw' => ['suhu' => '23.0°C', 'kelembaban' => '66%', 'amonia' => '6 ppm', 'hdp' => '96.1%', 'fcr' => '1.42'],
-            ],
-        ];
-    }
+        // HDP comparison: 30 hari terakhir dari SpkFuzzyLog
+        $logs = SpkFuzzyLog::query()
+            ->orderBy('createdAt', 'asc')
+            ->limit(30)
+            ->get(['input_json', 'createdAt', 'status_lingkungan']);
 
-    private function getFuzzyStatus($activeHistory): array
-    {
-        // Base Environment Sensors
-        $envSensors = [
-            ['label' => 'Suhu Udara', 'percent' => 85, 'status' => 'warning', 'statusLabel' => 'Tinggi (32.5°C)'],
-            ['label' => 'Kelembaban', 'percent' => 60, 'status' => 'normal', 'statusLabel' => 'Normal (60%)'],
-            ['label' => 'Amonia', 'percent' => 70, 'status' => 'warning', 'statusLabel' => 'Waspada (24 ppm)'],
-        ];
+        $labels      = [];
+        $hdpActual   = [];
+        $fcrActual   = [];
+        $suhuActual  = [];
+        $amoniaActual= [];
 
-        // Base Productivity Sensors
-        $prodSensors = [
-            ['label' => 'HDP (Hen-Day)', 'percent' => 92, 'status' => 'warning', 'statusLabel' => 'Turun (92.1%)'],
-            ['label' => 'FCR', 'percent' => 45, 'status' => 'normal', 'statusLabel' => 'Normal (2.12)'],
-            ['label' => 'Mortalitas', 'percent' => 95, 'status' => 'normal', 'statusLabel' => 'Aman (0.1%)'],
-        ];
-
-        // Response Logic
-        $response = [
-            'confidence' => 86,
-            'spider' => [85, 60, 70, 92, 45, 95], // All sensors connected to central spider
-            'sensors' => [
-                'lingkungan' => $envSensors,
-                'produktivitas' => $prodSensors,
-            ],
-            'color' => 'red'
-        ];
-
-        // Add indicators for the right side of spider chart
-        $response['indicators'] = [
-            ['label' => 'HDP Score', 'value' => '92.1%', 'color' => 'amber'],
-            ['label' => 'FCR Score', 'value' => '2.14', 'color' => 'emerald'],
-            ['label' => 'Livability', 'value' => '99.9%', 'color' => 'emerald'],
-        ];
-
-        // Output specific to each column
-        $response['results'] = [
-            'lingkungan' => [
-                'status' => $activeHistory['status'] === 'Normal' ? 'AMAN' : 'WASPADA',
-                'statusColor' => $activeHistory['color'],
-                'title' => $activeHistory['status'] === 'Normal' ? 'Parameter Stabil' : 'Suhu & Amonia Tinggi',
-                'description' => $activeHistory['status'] === 'Normal' ? 'Fluktuasi suhu harian wajar. Kipas exhaust beroperasi optimal.' : 'Suhu 32.5°C dan Amonia mendekati batas. Segera nyalakan kipas exhaust.',
-                'link' => '#',
-            ],
-            'produktivitas' => [
-                'status' => 'WASPADA',
-                'statusColor' => 'amber',
-                'title' => 'Penurunan HDP',
-                'description' => 'Produksi turun di angka 92.1%. Periksa asupan nutrisi.',
-                'link' => '#',
-            ],
-            'gabungan' => [
-                'status' => strtoupper($activeHistory['status']),
-                'statusColor' => $activeHistory['color'],
-                'title' => 'Diagnostic Verdict',
-                'description' => $activeHistory['status'] === 'Normal' ? 'Aktivitas kandang normal. Tidak ada rekomendasi khusus untuk penanganan saat ini.' : 'Kondisi LINGKUNGAN buruk mulai berdampak pada PRODUKTIVITAS. Berikan multivitamin.',
-                'link' => '#',
-                'isMain' => true,
-            ]
-        ];
-
-        return $response;
-    }
-
-    private function getChartData($activeHistory): array
-    {
-        // Dummy data for HDP vs Standard (Week 20 to 40)
-        $weeks = [];
-        $hdpActual = [];
-        $hdpStandard = [];
-        
-        for ($w = 20; $w <= 40; $w++) {
-            $weeks[] = 'W' . $w;
-            // Standard Lohmann Brown curve
-            if ($w < 25) { $std = 60 + (($w - 20) * 7); } 
-            elseif ($w >= 25 && $w <= 30) { $std = 95 - (($w - 25) * 0.2); } 
-            else { $std = 94 - (($w - 30) * 0.4); }
-            $hdpStandard[] = round($std, 1);
-            
-            // Actual
-            if ($w >= 38) { $hdpActual[] = round($std - 3 - ($w - 38), 1); } 
-            elseif ($w <= 37 && $w > 20) { $hdpActual[] = round($std + mt_rand(-15, 15) / 10, 1); } 
-            else { $hdpActual[] = null; }
+        foreach ($logs as $log) {
+            $inputs       = is_array($log->input_json) ? $log->input_json : [];
+            $labels[]     = \Carbon\Carbon::parse($log->createdAt)->format('d/m H:i');
+            $hdpActual[]  = round($inputs['hdp'] ?? 0, 1);
+            $fcrActual[]  = round($inputs['fcr'] ?? 0, 2);
+            $suhuActual[] = round($inputs['suhu'] ?? 0, 1);
+            $amoniaActual[]= round($inputs['amonia'] ?? 0, 1);
         }
+
+        // Jika belum ada log, tampilkan kurva Lohmann Brown standar saja
+        if (empty($labels)) {
+            $weeks = []; $hdpStd = [];
+            for ($w = 20; $w <= 40; $w++) {
+                $weeks[] = 'W' . $w;
+                if ($w < 25)       { $std = 60 + (($w - 20) * 7); }
+                elseif ($w <= 30)  { $std = 95 - (($w - 25) * 0.2); }
+                else               { $std = 94 - (($w - 30) * 0.4); }
+                $hdpStd[] = round($std, 1);
+            }
+            return [
+                'hdpComparison' => ['labels' => $weeks, 'actual' => array_fill(0, count($weeks), null), 'standard' => $hdpStd],
+                'causality'     => ['labels' => [], 'fcr' => [], 'suhu' => [], 'kelembaban' => [], 'amonia' => []],
+            ];
+        }
+
+        // HDP standard (Lohmann Brown, per-observasi disesuaikan indeks)
+        $hdpStandard = array_fill(0, count($hdpActual), 93.0);
 
         return [
             'hdpComparison' => [
-                'labels' => $weeks,
-                'actual' => $hdpActual,
+                'labels'   => $labels,
+                'actual'   => $hdpActual,
                 'standard' => $hdpStandard,
             ],
             'causality' => [
-                'labels' => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                'fcr' => [2.1, 2.12, 2.15, 2.2, 2.18, 2.22, 2.25],            // Trend naik
-                'suhu' => [29.5, 30.1, 31.0, 32.5, 31.8, 32.2, 32.8],       // Suhu naik mendorong FCR naik
-                'kelembaban' => [65, 62, 58, 55, 60, 58, 54],               // Kelembaban turun saat Suhu naik
-                'amonia' => [15, 18, 20, 24, 22, 25, 26]                    // Amonia menumpuk bertahap
-            ]
+                'labels'     => $labels,
+                'fcr'        => $fcrActual,
+                'suhu'       => $suhuActual,
+                'kelembaban' => [],
+                'amonia'     => $amoniaActual,
+            ],
         ];
     }
 
