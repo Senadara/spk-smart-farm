@@ -95,6 +95,25 @@ Route::middleware('auth.api')->group(function () {
     // Pengaturan (Settings Hub)
     Route::get('/settings', [\App\Http\Controllers\Settings\SettingsController::class, 'index'])->name('settings.index');
 
+    // Konfigurasi Fuzzy Mamdani
+    Route::prefix('settings/fuzzy')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'index'])->name('settings.fuzzy.index');
+        // CRUD Variables
+        Route::post('/variables', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'storeVariable'])->name('settings.fuzzy.variables.store');
+        Route::put('/variables/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'updateVariable'])->name('settings.fuzzy.variables.update');
+        Route::delete('/variables/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'destroyVariable'])->name('settings.fuzzy.variables.destroy');
+        // CRUD Sets
+        Route::post('/sets', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'storeSet'])->name('settings.fuzzy.sets.store');
+        Route::put('/sets/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'updateSet'])->name('settings.fuzzy.sets.update');
+        Route::delete('/sets/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'destroySet'])->name('settings.fuzzy.sets.destroy');
+        // CRUD Rules
+        Route::post('/rules', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'storeRule'])->name('settings.fuzzy.rules.store');
+        Route::put('/rules/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'updateRule'])->name('settings.fuzzy.rules.update');
+        Route::delete('/rules/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'destroyRule'])->name('settings.fuzzy.rules.destroy');
+        // Reset
+        Route::post('/reset', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'resetToDefault'])->name('settings.fuzzy.reset');
+    });
+
     // Profil
     Route::get('/profil', [ProfileController::class, 'show'])->name('profile');
 
