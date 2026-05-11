@@ -12,6 +12,19 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
 
     /**
+     * Tabel dibuat oleh Sequelize migration (DDL).
+     * Nama tabel: 'user' (singular, sesuai Sequelize freezeTableName).
+     * Primary key: UUID v4 (bukan auto-increment).
+     */
+    protected $table = 'user';
+    protected $keyType = 'string';
+    public $incrementing = false;
+
+    // Timestamps camelCase (Sequelize convention)
+    const CREATED_AT = 'createdAt';
+    const UPDATED_AT = 'updatedAt';
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var array<int, string>

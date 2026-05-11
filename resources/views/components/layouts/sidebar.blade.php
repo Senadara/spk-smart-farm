@@ -98,7 +98,7 @@
             </ul>
         </div>
 
-        {{-- Section: KONFIGURASI SPK --}}
+        {{-- Section: KONFIGURASI SPK (SPK-01) --}}
         <div class="mb-4">
             <div class="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-gray-400)] px-3 mb-2">
                 Konfigurasi SPK</div>
@@ -106,6 +106,19 @@
                 <li>
                     <x-sidebar.menu-item :href="route('spk-melon.kriteria.index')" :active="request()->routeIs('spk-melon.kriteria.*')" icon="list-checks">
                         Kriteria SPK
+                    </x-sidebar.menu-item>
+                </li>
+            </ul>
+        </div>
+
+        {{-- Section: EVALUASI SPK (SPK-02) --}}
+        <div class="mb-4">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-gray-400)] px-3 mb-2">
+                Evaluasi SPK</div>
+            <ul class="space-y-1 list-none p-0 m-0">
+                <li>
+                    <x-sidebar.menu-item :href="route('spk-melon.sesi-penilaian.index')" :active="request()->routeIs('spk-melon.sesi-penilaian.*')" icon="clipboard-list">
+                        Sesi Penilaian
                     </x-sidebar.menu-item>
                 </li>
             </ul>

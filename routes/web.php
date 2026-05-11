@@ -9,6 +9,7 @@ use App\Http\Controllers\Master\DataMasterController;
 use App\Http\Controllers\Monitoring\PlantMonitoringController;
 use App\Http\Controllers\Profile\ProfileController;
 use App\Http\Controllers\SPKMelon\KriteriaController;
+use App\Http\Controllers\SPKMelon\SesiPenilaianController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -73,18 +74,31 @@ Route::middleware('auth.api')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     // SPK Melon — Konfigurasi & Kalkulasi
-    // Middleware role:inventor,admin melindungi semua route CRUD kriteria SPK.
-    // TODO: added role 'petugas' during development phase, later will change to admin, inventor again
-    Route::middleware(['role:inventor,admin,petugas'])->prefix('spk-melon')->name('spk-melon.')->group(function () {
-        // SPK-01
+    // Middleware role melindungi semua route SPK-melon.
+    // Role: inventor (pakar), admin, pjawab (PJ RFC), petugas (view-only).
+    Route::middleware(['role:inventor,admin,pjawab,petugas'])->prefix('spk-melon')->name('spk-melon.')->group(function () {
+        // SPK-01: Kriteria
         Route::prefix('kriteria')->name('kriteria.')->group(function () {
             Route::get('/', [KriteriaController::class, 'index'])->name('index');
             // AJAX endpoint: diletakkan sebelum /{kriteria} agar tidak di-resolve sebagai model binding
             Route::get('/spi-sumber/by-kategori', [KriteriaController::class, 'spiSumberByKategori'])->name('spi-sumber.by-kategori');
+            // AJAX endpoint SPK-02: kriteria by tipe evaluasi (untuk live preview di modal create sesi)
+            Route::get('/tipe-evaluasi/{tipe}', [KriteriaController::class, 'byTipeEvaluasi'])
+                ->name('by-tipe-evaluasi')
+                ->whereIn('tipe', ['produktivitas', 'kualitas']);
             Route::post('/', [KriteriaController::class, 'store'])->name('store');
             Route::put('/{kriteria}', [KriteriaController::class, 'update'])->name('update');
             Route::delete('/{kriteria}', [KriteriaController::class, 'destroy'])->name('destroy');
         });
 
+        // SPK-02: Sesi Penilaian
+        Route::prefix('sesi-penilaian')->name('sesi-penilaian.')->group(function () {
+            Route::get('/', [SesiPenilaianController::class, 'index'])->name('index');
+            Route::post('/', [SesiPenilaianController::class, 'store'])->name('store');
+            Route::get('/{id}', [SesiPenilaianController::class, 'show'])->name('show');
+            Route::delete('/{id}', [SesiPenilaianController::class, 'destroy'])->name('destroy');
+        });
+
     });
 });
+

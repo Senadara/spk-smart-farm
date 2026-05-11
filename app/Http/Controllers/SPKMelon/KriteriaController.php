@@ -97,4 +97,44 @@ class KriteriaController extends Controller
 
         return response()->json(['data' => $spiSumber]);
     }
+
+    /**
+     * Endpoint AJAX: ambil daftar kriteria sesuai tipe evaluasi.
+     * Digunakan oleh form pembuatan sesi (SPK-02) untuk live preview.
+     *
+     * Aturan filter:
+     * - tipe 'produktivitas' -> kategori 'produktivitas' + 'lingkungan'
+     * - tipe 'kualitas'      -> kategori 'kualitas' + 'lingkungan'
+     *
+     * Field yang di-return mengikuti database-schema.md:
+     * id, kode, nama, tipe, kategori, spiSumber, spiHitung
+     */
+    public function byTipeEvaluasi(string $tipe): JsonResponse
+    {
+        if (!in_array($tipe, ['produktivitas', 'kualitas'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tipe evaluasi tidak valid.',
+                'data' => [],
+            ], 422);
+        }
+
+        $kriteria = SpkMelonKriteria::where(function ($q) use ($tipe) {
+            $q->where('kategori', $tipe)
+                ->orWhere('kategori', 'lingkungan');
+        })
+            ->orderBy('kode', 'asc')
+            ->get(['id', 'kode', 'nama', 'tipe', 'kategori', 'spiSumber', 'spiHitung']);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Berhasil memuat {$kriteria->count()} kriteria.",
+            'data' => $kriteria,
+            'meta' => [
+                'tipeEvaluasi' => $tipe,
+                'jumlah' => $kriteria->count(),
+                'cukupUntukSesi' => $kriteria->count() >= 2,
+            ],
+        ]);
+    }
 }
