@@ -48,13 +48,19 @@
 
         <div class="flex items-center gap-2 flex-wrap">
             @if($sesi->status === 'draft' && in_array(session('user')['role'] ?? '', ['inventor', 'admin']))
-                {{-- TODO: SPK-03 - link ke halaman input perbandingan berpasangan --}}
-                <a href="#"
-                   class="flex items-center gap-2 px-5 py-2.5 bg-gray-200 text-gray-500 font-semibold rounded-xl text-sm min-h-[44px] cursor-not-allowed"
-                   title="Akan tersedia setelah SPK-03 selesai">
-                    <i data-lucide="git-compare" class="w-4 h-4"></i>
-                    Mulai Input Perbandingan (SPK-03)
-                </a>
+                @if($sesi->perbandingan()->exists())
+                    <a href="{{ route('spk-melon.sesi-penilaian.perbandingan.edit', $sesi->id) }}"
+                       class="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl text-sm min-h-[44px] shadow-sm transition-all">
+                        <i data-lucide="git-compare" class="w-4 h-4"></i>
+                        Edit Perbandingan
+                    </a>
+                @else
+                    <a href="{{ route('spk-melon.sesi-penilaian.perbandingan.edit', $sesi->id) }}"
+                       class="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl text-sm min-h-[44px] shadow-sm transition-all">
+                        <i data-lucide="git-compare" class="w-4 h-4"></i>
+                        Mulai Input Perbandingan
+                    </a>
+                @endif
                 <button type="button"
                         @click="deleteModal.open = true"
                         class="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl text-sm min-h-[44px] shadow-sm transition-all">
@@ -62,14 +68,27 @@
                     Hapus Sesi
                 </button>
             @elseif($sesi->status === 'proses')
-                {{-- TODO: SPK-03 - link untuk melanjutkan input perbandingan --}}
-                <a href="#"
-                   class="flex items-center gap-2 px-5 py-2.5 bg-gray-200 text-gray-500 font-semibold rounded-xl text-sm min-h-[44px] cursor-not-allowed"
-                   title="Akan tersedia setelah SPK-03 selesai">
-                    <i data-lucide="git-compare" class="w-4 h-4"></i>
-                    Lanjutkan Input Perbandingan (SPK-03)
-                </a>
+                @if(in_array(session('user')['role'] ?? '', ['inventor', 'admin']))
+                    <a href="{{ route('spk-melon.sesi-penilaian.perbandingan.edit', $sesi->id) }}"
+                       class="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl text-sm min-h-[44px] shadow-sm transition-all">
+                        <i data-lucide="git-compare" class="w-4 h-4"></i>
+                        Edit Perbandingan
+                    </a>
+                @elseif((session('user')['role'] ?? '') === 'pjawab')
+                    <a href="{{ route('spk-melon.sesi-penilaian.perbandingan.edit', $sesi->id) }}"
+                       class="flex items-center gap-2 px-5 py-2.5 border-2 border-gray-200 text-gray-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-gray-300 hover:bg-gray-50 transition-all">
+                        <i data-lucide="eye" class="w-4 h-4"></i>
+                        Lihat Matriks Perbandingan
+                    </a>
+                @endif
             @elseif($sesi->status === 'selesai')
+                @if($sesi->perbandingan()->exists())
+                    <a href="{{ route('spk-melon.sesi-penilaian.perbandingan.edit', $sesi->id) }}"
+                       class="flex items-center gap-2 px-5 py-2.5 border-2 border-gray-200 text-gray-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-gray-300 hover:bg-gray-50 transition-all">
+                        <i data-lucide="eye" class="w-4 h-4"></i>
+                        Lihat Matriks Perbandingan
+                    </a>
+                @endif
                 {{-- TODO: SPK-07 - link ke halaman ranking --}}
                 <a href="#"
                    class="flex items-center gap-2 px-5 py-2.5 bg-gray-200 text-gray-500 font-semibold rounded-xl text-sm min-h-[44px] cursor-not-allowed"
@@ -78,7 +97,13 @@
                     Lihat Hasil Ranking (SPK-07)
                 </a>
             @elseif($sesi->status === 'gagal')
-                {{-- Tidak ada tombol aksi untuk status gagal --}}
+                @if($sesi->perbandingan()->exists())
+                    <a href="{{ route('spk-melon.sesi-penilaian.perbandingan.edit', $sesi->id) }}"
+                       class="flex items-center gap-2 px-5 py-2.5 border-2 border-gray-200 text-gray-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-gray-300 hover:bg-gray-50 transition-all">
+                        <i data-lucide="eye" class="w-4 h-4"></i>
+                        Lihat Matriks Perbandingan
+                    </a>
+                @endif
             @endif
         </div>
     </div>

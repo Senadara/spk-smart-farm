@@ -9,6 +9,7 @@ use App\Http\Controllers\Master\DataMasterController;
 use App\Http\Controllers\Monitoring\PlantMonitoringController;
 use App\Http\Controllers\Profile\ProfileController;
 use App\Http\Controllers\SPKMelon\KriteriaController;
+use App\Http\Controllers\SPKMelon\PerbandinganController;
 use App\Http\Controllers\SPKMelon\SesiPenilaianController;
 use Illuminate\Support\Facades\Route;
 
@@ -97,6 +98,12 @@ Route::middleware('auth.api')->group(function () {
             Route::post('/', [SesiPenilaianController::class, 'store'])->name('store');
             Route::get('/{id}', [SesiPenilaianController::class, 'show'])->name('show');
             Route::delete('/{id}', [SesiPenilaianController::class, 'destroy'])->name('destroy');
+
+            // SPK-03: Perbandingan Berpasangan (Pairwise Comparison)
+            Route::get('/{id}/perbandingan', [PerbandinganController::class, 'edit'])
+                ->name('perbandingan.edit');
+            Route::put('/{id}/perbandingan', [PerbandinganController::class, 'update'])
+                ->name('perbandingan.update');
         });
 
     });

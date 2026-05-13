@@ -4,6 +4,7 @@ namespace App\Models\SPKMelon;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 use App\Models\User;
 
@@ -117,5 +118,26 @@ class SpkMelonSesiPenilaian extends Model
             'kualitas' => $durasi >= 1 && $durasi <= 7,
             default => true,
         };
+    }
+
+    // ─── RELASI SPK-03 ──────────────────────────────
+
+    /**
+     * Relasi ke perbandingan berpasangan milik sesi ini.
+     */
+    public function perbandingan(): HasMany
+    {
+        return $this->hasMany(SpkMelonPerbandingan::class, 'sesiId', 'id');
+    }
+
+    // ─── HELPER SPK-03 ──────────────────────────────
+
+    /**
+     * Cek apakah matriks perbandingan masih bisa di-edit.
+     * Hanya status 'draft' atau 'proses' yang boleh edit.
+     */
+    public function isPerbandinganEditable(): bool
+    {
+        return in_array($this->status, ['draft', 'proses'], true);
     }
 }
