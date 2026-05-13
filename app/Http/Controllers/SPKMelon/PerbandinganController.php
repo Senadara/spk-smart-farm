@@ -94,28 +94,9 @@ class PerbandinganController extends Controller
                 ->with('error', 'Gagal menyimpan matriks perbandingan: ' . $e->getMessage());
         }
 
-        // ============================================================
-        // TODO: SPK-04 (UPDATE WAJIB SAAT SPK-04 SUDAH DIIMPLEMENTASI)
-        // ============================================================
-        // Target redirect FINAL setelah SPK-04 selesai:
-        //
-        //   return redirect()
-        //       ->route('spk-melon.sesi-penilaian.validasi-konsistensi.show', $sesi->id)
-        //       ->with('success', 'Matriks perbandingan berhasil disimpan. Memvalidasi konsistensi matriks...');
-        //
-        // Saat ini (SPK-04 belum ada), gunakan FALLBACK SEMENTARA ke halaman detail
-        // sesi agar tidak terjadi RouteNotFoundException. AI Agent yang mengerjakan
-        // SPK-04 WAJIB:
-        //   1. Hapus blok fallback di bawah ini.
-        //   2. Aktifkan blok target redirect FINAL di atas.
-        //   3. Pastikan route name 'spk-melon.sesi-penilaian.validasi-konsistensi.show'
-        //      sudah terdaftar di routes/web.php.
-        // ------------------------------------------------------------
-        // [FALLBACK SEMENTARA — HAPUS SAAT SPK-04 SELESAI]
         return redirect()
-            ->route('spk-melon.sesi-penilaian.show', $sesi->id)
-            ->with('success', 'Matriks perbandingan berhasil disimpan. Halaman validasi konsistensi (SPK-04) sedang dalam pengembangan.');
-        // ============================================================
+            ->route('spk-melon.sesi-penilaian.validasi-konsistensi.show', $sesi->id)
+            ->with('success', 'Matriks perbandingan berhasil disimpan. Memvalidasi konsistensi matriks...');
     }
 
     /**

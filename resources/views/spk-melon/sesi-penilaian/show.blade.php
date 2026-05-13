@@ -74,12 +74,26 @@
                         <i data-lucide="git-compare" class="w-4 h-4"></i>
                         Edit Perbandingan
                     </a>
+                    @if($sesi->perbandingan()->exists())
+                        <a href="{{ route('spk-melon.sesi-penilaian.validasi-konsistensi.show', $sesi->id) }}"
+                           class="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm min-h-[44px] shadow-sm transition-all">
+                            <i data-lucide="shield-check" class="w-4 h-4"></i>
+                            Validasi Konsistensi
+                        </a>
+                    @endif
                 @elseif((session('user')['role'] ?? '') === 'pjawab')
                     <a href="{{ route('spk-melon.sesi-penilaian.perbandingan.edit', $sesi->id) }}"
                        class="flex items-center gap-2 px-5 py-2.5 border-2 border-gray-200 text-gray-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-gray-300 hover:bg-gray-50 transition-all">
                         <i data-lucide="eye" class="w-4 h-4"></i>
                         Lihat Matriks Perbandingan
                     </a>
+                    @if($sesi->perbandingan()->exists())
+                        <a href="{{ route('spk-melon.sesi-penilaian.validasi-konsistensi.show', $sesi->id) }}"
+                           class="flex items-center gap-2 px-5 py-2.5 border-2 border-blue-200 text-blue-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-blue-300 hover:bg-blue-50 transition-all">
+                            <i data-lucide="shield-check" class="w-4 h-4"></i>
+                            Lihat Validasi Konsistensi
+                        </a>
+                    @endif
                 @endif
             @elseif($sesi->status === 'selesai')
                 @if($sesi->perbandingan()->exists())
@@ -87,6 +101,11 @@
                        class="flex items-center gap-2 px-5 py-2.5 border-2 border-gray-200 text-gray-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-gray-300 hover:bg-gray-50 transition-all">
                         <i data-lucide="eye" class="w-4 h-4"></i>
                         Lihat Matriks Perbandingan
+                    </a>
+                    <a href="{{ route('spk-melon.sesi-penilaian.validasi-konsistensi.show', $sesi->id) }}"
+                       class="flex items-center gap-2 px-5 py-2.5 border-2 border-blue-200 text-blue-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-blue-300 hover:bg-blue-50 transition-all">
+                        <i data-lucide="shield-check" class="w-4 h-4"></i>
+                        Lihat Validasi Konsistensi
                     </a>
                 @endif
                 {{-- TODO: SPK-07 - link ke halaman ranking --}}
@@ -102,6 +121,11 @@
                        class="flex items-center gap-2 px-5 py-2.5 border-2 border-gray-200 text-gray-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-gray-300 hover:bg-gray-50 transition-all">
                         <i data-lucide="eye" class="w-4 h-4"></i>
                         Lihat Matriks Perbandingan
+                    </a>
+                    <a href="{{ route('spk-melon.sesi-penilaian.validasi-konsistensi.show', $sesi->id) }}"
+                       class="flex items-center gap-2 px-5 py-2.5 border-2 border-blue-200 text-blue-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-blue-300 hover:bg-blue-50 transition-all">
+                        <i data-lucide="shield-check" class="w-4 h-4"></i>
+                        Lihat Validasi Konsistensi
                     </a>
                 @endif
             @endif

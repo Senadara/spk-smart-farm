@@ -8,6 +8,7 @@ use App\Http\Controllers\Perkebunan\PerkebunanController;
 use App\Http\Controllers\Master\DataMasterController;
 use App\Http\Controllers\Monitoring\PlantMonitoringController;
 use App\Http\Controllers\Profile\ProfileController;
+use App\Http\Controllers\SPKMelon\KonsistensiController;
 use App\Http\Controllers\SPKMelon\KriteriaController;
 use App\Http\Controllers\SPKMelon\PerbandinganController;
 use App\Http\Controllers\SPKMelon\SesiPenilaianController;
@@ -104,6 +105,10 @@ Route::middleware('auth.api')->group(function () {
                 ->name('perbandingan.edit');
             Route::put('/{id}/perbandingan', [PerbandinganController::class, 'update'])
                 ->name('perbandingan.update');
+
+            // SPK-04: Validasi Consistency Ratio
+            Route::get('/{id}/validasi-konsistensi', [KonsistensiController::class, 'show'])
+                ->name('validasi-konsistensi.show');
         });
 
     });
