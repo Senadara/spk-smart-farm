@@ -111,7 +111,11 @@ class PollIotDeviceJob implements ShouldQueue
         $dataTarget = $this->extractData($payload);
 
         foreach ($device->parameterMappings as $mapping) {
-            $value = data_get($dataTarget, $mapping->payloadKey);
+            // Jika response hanyalah scalar nilai
+            $value = is_array($dataTarget) && isset($dataTarget[$mapping->payloadKey]) 
+                        ? data_get($dataTarget, $mapping->payloadKey) 
+                        : (is_array($dataTarget) ? data_get($dataTarget, $mapping->payloadKey) : $dataTarget);
+
             $this->storeAndBroadcast($device, $mapping, $value);
         }
     }

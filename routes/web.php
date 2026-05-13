@@ -73,15 +73,35 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/config', [IotController::class, 'config'])->name('iot.config');
         Route::get('/monitoring', [IotController::class, 'monitoring'])->name('iot.monitoring');
 
-        // CRUD Endpoints
+        // CRUD Endpoints — Devices
         Route::post('/devices', [IotController::class, 'storeDevice'])->name('iot.devices.store');
         Route::put('/devices/{id}', [IotController::class, 'updateDevice'])->name('iot.devices.update');
         Route::delete('/devices/{id}', [IotController::class, 'destroyDevice'])->name('iot.devices.destroy');
+
+        // CRUD Endpoints — Mappings
         Route::post('/mappings', [IotController::class, 'storeMapping'])->name('iot.mappings.store');
+        Route::put('/mappings/{id}', [IotController::class, 'updateMapping'])->name('iot.mappings.update');
         Route::delete('/mappings/{id}', [IotController::class, 'destroyMapping'])->name('iot.mappings.destroy');
+
+        // CRUD Endpoints — Protocols
         Route::post('/protocols', [IotController::class, 'storeProtocol'])->name('iot.protocols.store');
+        Route::put('/protocols/{id}', [IotController::class, 'updateProtocol'])->name('iot.protocols.update');
+        Route::delete('/protocols/{id}', [IotController::class, 'destroyProtocol'])->name('iot.protocols.destroy');
+
+        // CRUD Endpoints — Connections
         Route::post('/connections', [IotController::class, 'storeConnection'])->name('iot.connections.store');
+        Route::put('/connections/{id}', [IotController::class, 'updateConnection'])->name('iot.connections.update');
+        Route::delete('/connections/{id}', [IotController::class, 'destroyConnection'])->name('iot.connections.destroy');
+
+        // CRUD Endpoints — Parameters
         Route::post('/parameters', [IotController::class, 'storeParameter'])->name('iot.parameters.store');
+        Route::put('/parameters/{id}', [IotController::class, 'updateParameter'])->name('iot.parameters.update');
+        Route::delete('/parameters/{id}', [IotController::class, 'destroyParameter'])->name('iot.parameters.destroy');
+
+        // CRUD Endpoints — Commodity Parameters
+        Route::post('/commodity-params', [IotController::class, 'storeCommodityParam'])->name('iot.commodity-params.store');
+        Route::put('/commodity-params/{id}', [IotController::class, 'updateCommodityParam'])->name('iot.commodity-params.update');
+        Route::delete('/commodity-params/{id}', [IotController::class, 'destroyCommodityParam'])->name('iot.commodity-params.destroy');
     });
 
     Route::get('/perkebunan', [PerkebunanController::class, 'index'])->name('perkebunan.index');

@@ -133,17 +133,24 @@
                                     <code class="text-xs bg-gray-100 px-2 py-1 rounded text-[var(--color-gray-800)]">{{ $mapping->payloadKey }}</code>
                                 </td>
                                 <td class="py-3.5 px-3 text-right">
-                                    <form action="{{ route('iot.mappings.destroy', $mapping->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Apakah Anda yakin ingin menghapus mapping parameter ini?');">
-                                        @csrf @method('DELETE')
-                                        <button type="submit"
-                                            class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                            title="Hapus">
-                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
+                                    <div class="flex items-center justify-end gap-1">
+                                        <button @click="editData = {{ json_encode($mapping) }}; modal = 'editMapping'"
+                                            class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                            title="Edit Payload Key">
+                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                         </button>
-                                    </form>
+                                        <form action="{{ route('iot.mappings.destroy', $mapping->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Apakah Anda yakin ingin menghapus mapping parameter ini?');">
+                                            @csrf @method('DELETE')
+                                            <button type="submit"
+                                                class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                title="Hapus">
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                         @endforeach
@@ -153,9 +160,9 @@
         </div>
 
         {{-- ═══ MODAL: Add Device ═══ --}}
-        <x-iot.modal-form id="addDevice" title="Registrasi Device Baru" size="lg">
-            <form action="{{ route('iot.devices.store') }}" method="POST">
-                @csrf
+        <form action="{{ route('iot.devices.store') }}" method="POST">
+            @csrf
+            <x-iot.modal-form id="addDevice" title="Registrasi Device Baru" size="lg">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Kode Device *</label>
@@ -207,25 +214,15 @@
                             class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
                     </div>
                 </div>
-                <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
-                    <button type="button" @click="modal = null"
-                            class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">
-                        Batal
-                    </button>
-                    <button type="submit"
-                            class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">
-                        Simpan Device
-                    </button>
-                </div>
-            </form>
-        </x-iot.modal-form>
+            </x-iot.modal-form>
+        </form>
 
-        {{-- ═══ MODAL: Ada Edit Device ═══ --}}
-        <x-iot.modal-form id="editDevice" title="Edit Device" size="lg">
-            <template x-if="editData.id">
-                <form :action="`{{ url('/iot/devices') }}/${editData.id}`" method="POST">
-                    @csrf
-                    @method('PUT')
+        {{-- ═══ MODAL: Edit Device ═══ --}}
+        <template x-if="editData.id">
+            <form :action="`{{ url('/iot/devices') }}/${editData.id}`" method="POST">
+                @csrf
+                @method('PUT')
+                <x-iot.modal-form id="editDevice" title="Edit Device" size="lg">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1.5">Kode Device *</label>
@@ -272,24 +269,14 @@
                             </select>
                         </div>
                     </div>
-                    <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
-                        <button type="button" @click="modal = null"
-                                class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">
-                            Batal
-                        </button>
-                        <button type="submit"
-                                class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">
-                            Simpan Perubahan
-                        </button>
-                    </div>
-                </form>
-            </template>
-        </x-iot.modal-form>
+                </x-iot.modal-form>
+            </form>
+        </template>
 
         {{-- ═══ MODAL: Add Mapping ═══ --}}
-        <x-iot.modal-form id="addMapping" title="Tambah Mapping Parameter" size="md">
-            <form action="{{ route('iot.mappings.store') }}" method="POST">
-                @csrf
+        <form action="{{ route('iot.mappings.store') }}" method="POST">
+            @csrf
+            <x-iot.modal-form id="addMapping" title="Tambah Mapping Parameter" size="md">
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Device *</label>
@@ -318,17 +305,25 @@
                         <p class="text-xs text-[var(--color-gray-400)] mt-1">Key yang digunakan pada JSON payload dari device IoT (Contoh Postman: phospor/la => phospor)</p>
                     </div>
                 </div>
-                <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
-                    <button type="button" @click="modal = null"
-                            class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">
-                        Batal
-                    </button>
-                    <button type="submit"
-                            class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">
-                        Simpan Mapping
-                    </button>
-                </div>
+            </x-iot.modal-form>
+        </form>
+
+        {{-- ═══ MODAL: Edit Mapping ═══ --}}
+        <template x-if="editData.id">
+            <form :action="`{{ url('/iot/mappings') }}/${editData.id}`" method="POST">
+                @csrf
+                @method('PUT')
+                <x-iot.modal-form id="editMapping" title="Edit Mapping Parameter" size="md">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Payload Key *</label>
+                            <input type="text" name="payloadKey" x-model="editData.payloadKey" required
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                            <p class="text-xs text-[var(--color-gray-400)] mt-1">Key yang digunakan pada JSON payload dari device IoT</p>
+                        </div>
+                    </div>
+                </x-iot.modal-form>
             </form>
-        </x-iot.modal-form>
+        </template>
     </div>
 @endsection

@@ -123,7 +123,17 @@ class PollIotDevices extends Command
 
                     if (isset($payload['m2m:cin']['con'])) {
                         $con = $payload['m2m:cin']['con'];
-                        $dataTarget = is_string($con) ? json_decode($con, true) : $con;
+                        if (is_string($con)) {
+                            $decoded = json_decode($con, true);
+                            if (json_last_error() === JSON_ERROR_NONE) {
+                                $dataTarget = $decoded;
+                            } else {
+                                $cleanCon = trim(str_replace(["'", '"'], "", $con));
+                                $dataTarget = is_numeric($cleanCon) ? (float)$cleanCon : $cleanCon;
+                            }
+                        } else {
+                            $dataTarget = $con;
+                        }
                     }
 
                     // Jika response hanyalah scalar nilai
@@ -185,11 +195,24 @@ class PollIotDevices extends Command
 
         if (isset($payload['m2m:cin']['con'])) {
             $con = $payload['m2m:cin']['con'];
-            $dataTarget = is_string($con) ? json_decode($con, true) : $con;
+            if (is_string($con)) {
+                $decoded = json_decode($con, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $dataTarget = $decoded;
+                } else {
+                    $cleanCon = trim(str_replace(["'", '"'], "", $con));
+                    $dataTarget = is_numeric($cleanCon) ? (float)$cleanCon : $cleanCon;
+                }
+            } else {
+                $dataTarget = $con;
+            }
         }
 
         foreach ($device->parameterMappings as $mapping) {
-            $value = data_get($dataTarget, $mapping->payloadKey);
+            // Jika response hanyalah scalar nilai
+            $value = is_array($dataTarget) && isset($dataTarget[$mapping->payloadKey]) 
+                        ? data_get($dataTarget, $mapping->payloadKey) 
+                        : (is_array($dataTarget) ? data_get($dataTarget, $mapping->payloadKey) : $dataTarget);
 
             if ($value !== null && is_numeric($value)) {
                 $sensorModel = IotSensorData::create([

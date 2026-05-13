@@ -3,13 +3,28 @@
 @section('title', 'Konfigurasi IoT')
 
 @section('content')
-    <div x-data="{ modal: null, activeTab: 'protocols' }" class="space-y-6">
+    <div x-data="{ modal: null, activeTab: 'protocols', editProtocol: {}, editConnection: {}, editParameter: {}, editCommodityParam: {} }" class="space-y-6">
         {{-- Page Header --}}
         <div>
             <h1 class="text-2xl font-bold text-[var(--color-gray-900)]">Konfigurasi IoT</h1>
-            <p class="text-sm text-[var(--color-gray-500)] mt-1">Kelola protokol, koneksi, parameter sensor, dan threshold
-                komoditas</p>
+            <p class="text-sm text-[var(--color-gray-500)] mt-1">Kelola protokol, koneksi, parameter sensor, dan threshold komoditas</p>
         </div>
+
+        @if(session('success'))
+        <div class="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            {{ session('success') }}
+        </div>
+        @endif
+        @if($errors->any())
+        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+            <div class="flex items-center gap-2 font-semibold mb-1">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                Validasi Gagal
+            </div>
+            <ul class="list-disc list-inside space-y-0.5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+        </div>
+        @endif
 
         {{-- Tabs --}}
         <div class="bg-white rounded-2xl overflow-hidden" style="box-shadow: var(--shadow-sm);">
@@ -61,24 +76,17 @@
                                     <td class="py-3.5 px-3 text-[var(--color-gray-600)] text-xs">{{ $p->description }}</td>
                                     <td class="py-3.5 px-3 text-right">
                                         <div class="flex items-center justify-end gap-1">
-                                            <button
+                                            <button @click="editProtocol = {{ $p->toJson() }}; modal = 'editProtocol'"
                                                 class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                                                 title="Edit">
-                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                                                    stroke-width="2">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                </svg>
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                             </button>
-                                            <button
-                                                class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                title="Hapus">
-                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                                                    stroke-width="2">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                </svg>
-                                            </button>
+                                            <form action="{{ route('iot.protocols.destroy', $p->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Hapus protokol &quot;{{ $p->protocolName }}&quot;?\nProtokol yang masih digunakan koneksi tidak bisa dihapus.');">
+                                                @csrf @method('DELETE')
+                                                <button type="submit" class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Hapus">
+                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            </form>
                                         </div>
                                     </td>
                                 </tr>
@@ -139,24 +147,17 @@
                                         <td class="py-3.5 px-3 text-xs text-[var(--color-gray-600)]">{{ $cc->authType }}</td>
                                         <td class="py-3.5 px-3 text-right">
                                             <div class="flex items-center justify-end gap-1">
-                                                <button
+                                                <button @click="editConnection = {{ json_encode($cc) }}; modal = 'editConnection'"
                                                     class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                                                     title="Edit">
-                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                                                        stroke-width="2">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                    </svg>
+                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                                 </button>
-                                                <button
-                                                    class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                    title="Hapus">
-                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                                                        stroke-width="2">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                </button>
+                                                <form action="{{ route('iot.connections.destroy', $cc->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Hapus koneksi ini?\nKoneksi yang masih dipakai device tidak bisa dihapus.');">
+                                                    @csrf @method('DELETE')
+                                                    <button type="submit" class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Hapus">
+                                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    </button>
+                                                </form>
                                             </div>
                                         </td>
                                     </tr>
@@ -212,24 +213,17 @@
                                     </td>
                                     <td class="py-3.5 px-3 text-right">
                                         <div class="flex items-center justify-end gap-1">
-                                            <button
+                                            <button @click="editParameter = {{ $param->toJson() }}; modal = 'editParameter'"
                                                 class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                                                 title="Edit">
-                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                                                    stroke-width="2">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                </svg>
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                             </button>
-                                            <button
-                                                class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                title="Hapus">
-                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                                                    stroke-width="2">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                </svg>
-                                            </button>
+                                            <form action="{{ route('iot.parameters.destroy', $param->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Hapus parameter &quot;{{ $param->parameterCode }}&quot;?\nParameter yang masih di-mapping tidak bisa dihapus.');">
+                                                @csrf @method('DELETE')
+                                                <button type="submit" class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Hapus">
+                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            </form>
                                         </div>
                                     </td>
                                 </tr>
@@ -287,24 +281,17 @@
                                     </td>
                                     <td class="py-3.5 px-3 text-right">
                                         <div class="flex items-center justify-end gap-1">
-                                            <button
+                                            <button @click="editCommodityParam = {{ $cp->toJson() }}; modal = 'editCommodityParam'"
                                                 class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                                                 title="Edit">
-                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                                                    stroke-width="2">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                </svg>
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                             </button>
-                                            <button
-                                                class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                title="Hapus">
-                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                                                    stroke-width="2">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                </svg>
-                                            </button>
+                                            <form action="{{ route('iot.commodity-params.destroy', $cp->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Hapus parameter komoditas ini?');">
+                                                @csrf @method('DELETE')
+                                                <button type="submit" class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Hapus">
+                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            </form>
                                         </div>
                                     </td>
                                 </tr>
@@ -316,9 +303,9 @@
         </div>
 
         {{-- ═══ MODAL: Add Protocol ═══ --}}
-        <x-iot.modal-form id="addProtocol" title="Tambah Protokol" size="md">
-            <form action="{{ route('iot.protocols.store') }}" method="POST">
-                @csrf
+        <form action="{{ route('iot.protocols.store') }}" method="POST">
+            @csrf
+            <x-iot.modal-form id="addProtocol" title="Tambah Protokol" size="md">
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Nama Protokol *</label>
@@ -331,28 +318,17 @@
                             class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all resize-none"></textarea>
                     </div>
                 </div>
-                <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
-                    <button type="button" @click="modal = null"
-                            class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">
-                        Batal
-                    </button>
-                    <button type="submit"
-                            class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">
-                        Simpan Protokol
-                    </button>
-                </div>
-            </form>
-        </x-iot.modal-form>
+            </x-iot.modal-form>
+        </form>
 
         {{-- ═══ MODAL: Add Connection ═══ --}}
-        <x-iot.modal-form id="addConnection" title="Tambah Konfigurasi Koneksi" size="lg">
-            <form action="{{ route('iot.connections.store') }}" method="POST">
-                @csrf
+        <form action="{{ route('iot.connections.store') }}" method="POST">
+            @csrf
+            <x-iot.modal-form id="addConnection" title="Tambah Konfigurasi Koneksi" size="lg">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="sm:col-span-2">
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Protokol *</label>
-                        <select name="protocolId" required
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
+                        <select name="protocolId" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
                             <option value="">Pilih Protokol</option>
                             @foreach ($protocols as $p)
                                 <option value="{{ $p->id }}">{{ $p->protocolName }}</option>
@@ -361,28 +337,23 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Base URL</label>
-                        <input type="text" name="baseUrl" placeholder="https://platform.example.com"
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                        <input type="text" name="baseUrl" placeholder="https://platform.example.com" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Endpoint Path</label>
-                        <input type="text" name="endpointPath" placeholder="/api/v2/devices"
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                        <input type="text" name="endpointPath" placeholder="/api/v2/devices" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Broker URL</label>
-                        <input type="text" name="mqttBrokerUrl" placeholder="mqtts://broker.hivemq.cloud:8883"
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                        <input type="text" name="mqttBrokerUrl" placeholder="mqtts://broker.hivemq.cloud:8883" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Topic</label>
-                        <input type="text" name="mqttTopic" placeholder="farm/sensor/#"
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                        <input type="text" name="mqttTopic" placeholder="farm/sensor/#" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Tipe Autentikasi</label>
-                        <select name="authType"
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
+                        <select name="authType" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
                             <option value="none">None</option>
                             <option value="api_key">API Key</option>
                             <option value="bearer">Bearer Token</option>
@@ -391,101 +362,195 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Auth Key / Token</label>
-                        <input type="password" name="authKey" placeholder="Token atau API key"
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                        <input type="password" name="authKey" placeholder="Token atau API key" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                     <div class="sm:col-span-2">
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Custom Headers (JSON)</label>
-                        <textarea rows="3" name="headers" placeholder='{"Content-Type": "application/json"}'
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-mono focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all resize-none"></textarea>
+                        <textarea rows="3" name="headers" placeholder='{"Content-Type": "application/json"}' class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-mono focus:outline-none focus:border-[var(--color-primary)] transition-all resize-none"></textarea>
                     </div>
                 </div>
-                <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
-                    <button type="button" @click="modal = null"
-                            class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">
-                        Batal
-                    </button>
-                    <button type="submit"
-                            class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">
-                        Simpan Koneksi
-                    </button>
-                </div>
-            </form>
-        </x-iot.modal-form>
+                <p class="text-xs text-gray-400 mt-2">💡 Harus mengisi minimal Base URL atau MQTT Broker URL.</p>
+            </x-iot.modal-form>
+        </form>
 
         {{-- ═══ MODAL: Add Parameter ═══ --}}
-        <x-iot.modal-form id="addParameter" title="Tambah Parameter Sensor" size="md">
-            <form action="{{ route('iot.parameters.store') }}" method="POST">
-                @csrf
+        <form action="{{ route('iot.parameters.store') }}" method="POST">
+            @csrf
+            <x-iot.modal-form id="addParameter" title="Tambah Parameter Sensor" size="md">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Kode Parameter *</label>
-                        <input type="text" name="parameterCode" placeholder="e.g. TEMP" required
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                        <input type="text" name="parameterCode" placeholder="e.g. TEMP" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Nama Parameter *</label>
-                        <input type="text" name="parameterName" placeholder="e.g. Temperature" required
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                        <input type="text" name="parameterName" placeholder="e.g. Temperature" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Satuan</label>
-                        <input type="text" name="unit" placeholder="e.g. °C"
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                        <input type="text" name="unit" placeholder="e.g. °C" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                     <div class="sm:col-span-2">
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Deskripsi</label>
-                        <textarea rows="2" name="description" placeholder="Penjelasan mengenai parameter..."
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all resize-none"></textarea>
+                        <textarea rows="2" name="description" placeholder="Penjelasan mengenai parameter..." class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all resize-none"></textarea>
                     </div>
                 </div>
-                <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
-                    <button type="button" @click="modal = null"
-                            class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">
-                        Batal
-                    </button>
-                    <button type="submit"
-                            class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">
-                        Simpan Parameter
-                    </button>
-                </div>
-            </form>
-        </x-iot.modal-form>
+            </x-iot.modal-form>
+        </form>
 
-        {{-- ═══ MODAL: Add Commodity Parameter ═══ --}}
-        <x-iot.modal-form id="addCommodityParam" title="Tambah Parameter Komoditas" size="md">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Komoditas *</label>
-                    <select
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
-                        <option value="">Pilih Komoditas</option>
-                        @foreach ($commodities as $k)
-                            <option value="{{ $k['id'] }}">{{ $k['nama'] }}</option>
-                        @endforeach
-                    </select>
+        {{-- ═══ MODAL: Add Commodity Parameter (FIXED) ═══ --}}
+        <form action="{{ route('iot.commodity-params.store') }}" method="POST" onsubmit="return validateMinMax(this)">
+            @csrf
+            <x-iot.modal-form id="addCommodityParam" title="Tambah Parameter Komoditas" size="md">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Komoditas *</label>
+                        <select name="commodityId" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            <option value="">Pilih Komoditas</option>
+                            @foreach ($commodities as $k)
+                                <option value="{{ $k['id'] }}">{{ $k['nama'] }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Parameter *</label>
+                        <select name="parameterId" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            <option value="">Pilih Parameter</option>
+                            @foreach ($parameters as $p)
+                                <option value="{{ $p['id'] }}">{{ $p['parameterCode'] }} — {{ $p['parameterName'] }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Nilai Minimum</label>
+                        <input type="number" step="0.1" name="minValue" placeholder="e.g. 20" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Nilai Maksimum</label>
+                        <input type="number" step="0.1" name="maxValue" placeholder="e.g. 28" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Parameter *</label>
-                    <select
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all bg-white">
-                        <option value="">Pilih Parameter</option>
-                        @foreach ($parameters as $p)
-                            <option value="{{ $p['id'] }}">{{ $p['parameterCode'] }} — {{ $p['parameterName'] }}</option>
-                        @endforeach
-                    </select>
+                <p class="text-xs text-gray-400 mt-2">💡 Nilai minimum harus lebih kecil dari nilai maksimum.</p>
+            </x-iot.modal-form>
+        </form>
+
+        {{-- ═══ MODAL: Edit Protocol ═══ --}}
+        <form :action="`{{ url('/iot/protocols') }}/${editProtocol.id}`" method="POST">
+            @csrf @method('PUT')
+            <x-iot.modal-form id="editProtocol" title="Edit Protokol" size="md">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Nama Protokol *</label>
+                        <input type="text" name="protocolName" x-model="editProtocol.protocolName" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Deskripsi</label>
+                        <textarea rows="3" name="description" x-model="editProtocol.description" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all resize-none"></textarea>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Nilai Minimum</label>
-                    <input type="number" step="0.1" placeholder="e.g. 20"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+            </x-iot.modal-form>
+        </form>
+
+        {{-- ═══ MODAL: Edit Connection ═══ --}}
+        <form :action="`{{ url('/iot/connections') }}/${editConnection.id}`" method="POST">
+            @csrf @method('PUT')
+            <x-iot.modal-form id="editConnection" title="Edit Konfigurasi Koneksi" size="lg">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Protokol *</label>
+                        <select name="protocolId" x-model="editConnection.protocolId" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            @foreach ($protocols as $p)
+                                <option value="{{ $p->id }}">{{ $p->protocolName }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Base URL</label>
+                        <input type="text" name="baseUrl" x-model="editConnection.baseUrl" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Endpoint Path</label>
+                        <input type="text" name="endpointPath" x-model="editConnection.endpointPath" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Broker URL</label>
+                        <input type="text" name="mqttBrokerUrl" x-model="editConnection.mqttBrokerUrl" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Topic</label>
+                        <input type="text" name="mqttTopic" x-model="editConnection.mqttTopic" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Tipe Autentikasi</label>
+                        <select name="authType" x-model="editConnection.authType" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            <option value="none">None</option>
+                            <option value="api_key">API Key</option>
+                            <option value="bearer">Bearer Token</option>
+                            <option value="basic">Basic Auth</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Auth Key / Token</label>
+                        <input type="password" name="authKey" placeholder="Kosongkan jika tidak berubah" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Nilai Maksimum</label>
-                    <input type="number" step="0.1" placeholder="e.g. 28"
-                        class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
+                <p class="text-xs text-gray-400 mt-2">💡 Harus mengisi minimal Base URL atau MQTT Broker URL.</p>
+            </x-iot.modal-form>
+        </form>
+
+        {{-- ═══ MODAL: Edit Parameter ═══ --}}
+        <form :action="`{{ url('/iot/parameters') }}/${editParameter.id}`" method="POST">
+            @csrf @method('PUT')
+            <x-iot.modal-form id="editParameter" title="Edit Parameter Sensor" size="md">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Kode Parameter *</label>
+                        <input type="text" name="parameterCode" x-model="editParameter.parameterCode" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Nama Parameter *</label>
+                        <input type="text" name="parameterName" x-model="editParameter.parameterName" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Satuan</label>
+                        <input type="text" name="unit" x-model="editParameter.unit" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Deskripsi</label>
+                        <textarea rows="2" name="description" x-model="editParameter.description" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all resize-none"></textarea>
+                    </div>
                 </div>
-            </div>
-        </x-iot.modal-form>
+            </x-iot.modal-form>
+        </form>
+
+        {{-- ═══ MODAL: Edit Commodity Parameter ═══ --}}
+        <form :action="`{{ url('/iot/commodity-params') }}/${editCommodityParam.id}`" method="POST" onsubmit="return validateMinMax(this)">
+            @csrf @method('PUT')
+            <x-iot.modal-form id="editCommodityParam" title="Edit Threshold Komoditas" size="md">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Nilai Minimum</label>
+                        <input type="number" step="0.1" name="minValue" x-model="editCommodityParam.minValue" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Nilai Maksimum</label>
+                        <input type="number" step="0.1" name="maxValue" x-model="editCommodityParam.maxValue" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
+                </div>
+                <p class="text-xs text-gray-400 mt-2">💡 Nilai minimum harus lebih kecil dari nilai maksimum.</p>
+            </x-iot.modal-form>
+        </form>
     </div>
+
+    <script>
+    function validateMinMax(form) {
+        const min = parseFloat(form.minValue?.value);
+        const max = parseFloat(form.maxValue?.value);
+        if (!isNaN(min) && !isNaN(max) && min >= max) {
+            alert('Nilai minimum harus lebih kecil dari nilai maksimum.');
+            return false;
+        }
+        return true;
+    }
+    </script>
 @endsection

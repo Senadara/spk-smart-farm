@@ -50,7 +50,7 @@
             </div>
         @else
             <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
-                <button @click="modal = null"
+                <button type="button" @click="modal = null"
                     class="px-4 py-2 rounded-xl text-sm font-medium text-gray-600 bg-gray-100 border-none cursor-pointer hover:bg-gray-200 transition-colors">
                     Batal
                 </button>
