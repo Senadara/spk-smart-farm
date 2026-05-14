@@ -12,6 +12,7 @@ use App\Http\Controllers\SPKMelon\KonsistensiController;
 use App\Http\Controllers\SPKMelon\KriteriaController;
 use App\Http\Controllers\SPKMelon\PerbandinganController;
 use App\Http\Controllers\SPKMelon\SesiPenilaianController;
+use App\Http\Controllers\SPKMelon\BobotController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -109,6 +110,14 @@ Route::middleware('auth.api')->group(function () {
             // SPK-04: Validasi Consistency Ratio
             Route::get('/{id}/validasi-konsistensi', [KonsistensiController::class, 'show'])
                 ->name('validasi-konsistensi.show');
+            Route::post('/{id}/validasi-konsistensi/hitung', [KonsistensiController::class, 'calculate'])
+                ->name('validasi-konsistensi.calculate');
+
+            // SPK-05: Kalkulasi Bobot Fuzzy AHP
+            Route::get('/{id}/bobot-kriteria', [BobotController::class, 'show'])
+                ->name('bobot-kriteria.show');
+            Route::post('/{id}/bobot-kriteria/hitung', [BobotController::class, 'calculate'])
+                ->name('bobot-kriteria.calculate');
         });
 
     });

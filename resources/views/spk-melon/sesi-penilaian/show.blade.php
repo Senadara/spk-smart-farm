@@ -41,7 +41,7 @@
     {{-- Action Buttons Row --}}
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <a href="{{ route('spk-melon.sesi-penilaian.index') }}"
-           class="flex items-center gap-2 px-5 py-2.5 border-2 border-gray-200 text-gray-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-gray-300 hover:bg-gray-50 transition-all w-fit">
+           class="flex items-center gap-2 px-5 py-2.5 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl text-sm min-h-[44px] shadow-sm transition-all w-fit">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
             Kembali
         </a>
@@ -80,6 +80,21 @@
                             <i data-lucide="shield-check" class="w-4 h-4"></i>
                             Validasi Konsistensi
                         </a>
+                        @if($sesi->rasioKonsistensi !== null && ($sesi->rasioKonsistensi < 0.10 || count($sesi->kriteriaList ?? []) < 3))
+                            @if(\App\Models\SPKMelon\SpkMelonBobot::where('sesiId', $sesi->id)->exists())
+                                <a href="{{ route('spk-melon.sesi-penilaian.bobot-kriteria.show', $sesi->id) }}"
+                                   class="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl text-sm min-h-[44px] shadow-sm transition-all">
+                                    <i data-lucide="scale" class="w-4 h-4"></i>
+                                    Lihat Bobot Kriteria
+                                </a>
+                            @else
+                                <a href="{{ route('spk-melon.sesi-penilaian.bobot-kriteria.show', $sesi->id) }}"
+                                   class="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl text-sm min-h-[44px] shadow-sm transition-all">
+                                    <i data-lucide="scale" class="w-4 h-4"></i>
+                                    Kalkulasi Bobot Fuzzy AHP
+                                </a>
+                            @endif
+                        @endif
                     @endif
                 @elseif((session('user')['role'] ?? '') === 'pjawab')
                     <a href="{{ route('spk-melon.sesi-penilaian.perbandingan.edit', $sesi->id) }}"
@@ -93,6 +108,13 @@
                             <i data-lucide="shield-check" class="w-4 h-4"></i>
                             Lihat Validasi Konsistensi
                         </a>
+                        @if(\App\Models\SPKMelon\SpkMelonBobot::where('sesiId', $sesi->id)->exists())
+                            <a href="{{ route('spk-melon.sesi-penilaian.bobot-kriteria.show', $sesi->id) }}"
+                               class="flex items-center gap-2 px-5 py-2.5 border-2 border-purple-200 text-purple-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-purple-300 hover:bg-purple-50 transition-all">
+                                <i data-lucide="scale" class="w-4 h-4"></i>
+                                Lihat Bobot Kriteria
+                            </a>
+                        @endif
                     @endif
                 @endif
             @elseif($sesi->status === 'selesai')
@@ -107,6 +129,13 @@
                         <i data-lucide="shield-check" class="w-4 h-4"></i>
                         Lihat Validasi Konsistensi
                     </a>
+                    @if(\App\Models\SPKMelon\SpkMelonBobot::where('sesiId', $sesi->id)->exists())
+                        <a href="{{ route('spk-melon.sesi-penilaian.bobot-kriteria.show', $sesi->id) }}"
+                           class="flex items-center gap-2 px-5 py-2.5 border-2 border-purple-200 text-purple-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-purple-300 hover:bg-purple-50 transition-all">
+                            <i data-lucide="scale" class="w-4 h-4"></i>
+                            Lihat Bobot Kriteria
+                        </a>
+                    @endif
                 @endif
                 {{-- TODO: SPK-07 - link ke halaman ranking --}}
                 <a href="#"
@@ -127,6 +156,13 @@
                         <i data-lucide="shield-check" class="w-4 h-4"></i>
                         Lihat Validasi Konsistensi
                     </a>
+                    @if(\App\Models\SPKMelon\SpkMelonBobot::where('sesiId', $sesi->id)->exists())
+                        <a href="{{ route('spk-melon.sesi-penilaian.bobot-kriteria.show', $sesi->id) }}"
+                           class="flex items-center gap-2 px-5 py-2.5 border-2 border-purple-200 text-purple-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-purple-300 hover:bg-purple-50 transition-all">
+                            <i data-lucide="scale" class="w-4 h-4"></i>
+                            Lihat Bobot Kriteria
+                        </a>
+                    @endif
                 @endif
             @endif
         </div>

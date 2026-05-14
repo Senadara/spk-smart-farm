@@ -104,4 +104,111 @@ class TfnHelper
         $key = (int) round($absSaaty);
         return ($labels[$key] ?? '') . $direction;
     }
+
+    // ─── TFN ARITHMETIC (SPK-05) ────────────────────────────────────────
+
+    /**
+     * Perkalian dua TFN secara element-wise: (l1*l2, m1*m2, u1*u2).
+     *
+     * Digunakan dalam perhitungan Fuzzy Geometric Mean (akumulasi produk
+     * per baris matriks fuzzy).
+     *
+     * @param array $tfn1 [l, m, u]
+     * @param array $tfn2 [l, m, u]
+     * @return array [l, m, u]
+     */
+    public static function multiply(array $tfn1, array $tfn2): array
+    {
+        return [
+            round($tfn1[0] * $tfn2[0], 6),
+            round($tfn1[1] * $tfn2[1], 6),
+            round($tfn1[2] * $tfn2[2], 6),
+        ];
+    }
+
+    /**
+     * Penjumlahan dua TFN secara element-wise: (l1+l2, m1+m2, u1+u2).
+     *
+     * Digunakan dalam akumulasi Σ r_i (jumlah geometric mean).
+     *
+     * @param array $tfn1 [l, m, u]
+     * @param array $tfn2 [l, m, u]
+     * @return array [l, m, u]
+     */
+    public static function add(array $tfn1, array $tfn2): array
+    {
+        return [
+            round($tfn1[0] + $tfn2[0], 6),
+            round($tfn1[1] + $tfn2[1], 6),
+            round($tfn1[2] + $tfn2[2], 6),
+        ];
+    }
+
+    /**
+     * Pembagian TFN dengan skalar: (l/d, m/d, u/d).
+     *
+     * @param array $tfn [l, m, u]
+     * @param float $divisor Pembagi (tidak boleh nol)
+     * @return array [l, m, u]
+     * @throws \InvalidArgumentException jika divisor = 0
+     */
+    public static function divideByScalar(array $tfn, float $divisor): array
+    {
+        if ($divisor == 0) {
+            throw new \InvalidArgumentException('Divisor tidak boleh nol dalam pembagian TFN.');
+        }
+
+        return [
+            round($tfn[0] / $divisor, 6),
+            round($tfn[1] / $divisor, 6),
+            round($tfn[2] / $divisor, 6),
+        ];
+    }
+
+    /**
+     * Akar pangkat n dari TFN: (l^(1/n), m^(1/n), u^(1/n)).
+     *
+     * Digunakan untuk menghitung Fuzzy Geometric Mean setelah akumulasi
+     * produk per baris: r_i = (∏ tfn_ij)^(1/n).
+     *
+     * @param array $tfn [l, m, u]
+     * @param int $n Pangkat akar (jumlah kriteria, harus >= 1)
+     * @return array [l, m, u]
+     * @throws \InvalidArgumentException jika n < 1 atau elemen TFN negatif
+     */
+    public static function nthRoot(array $tfn, int $n): array
+    {
+        if ($n < 1) {
+            throw new \InvalidArgumentException('Pangkat akar (n) harus >= 1.');
+        }
+
+        foreach ($tfn as $i => $val) {
+            if ($val < 0) {
+                throw new \InvalidArgumentException(
+                    "Elemen TFN pada indeks {$i} bernilai negatif ({$val}). Akar pangkat tidak terdefinisi untuk bilangan negatif."
+                );
+            }
+        }
+
+        $exp = 1 / $n;
+
+        return [
+            round(pow($tfn[0], $exp), 6),
+            round(pow($tfn[1], $exp), 6),
+            round(pow($tfn[2], $exp), 6),
+        ];
+    }
+
+    /**
+     * Defuzzifikasi Center of Area (CoA): (L + M + U) / 3.
+     *
+     * Mengubah TFN menjadi satu nilai crisp tunggal.
+     *
+     * @param array $tfn [l, m, u]
+     * @return float Nilai crisp hasil defuzzifikasi
+     */
+    public static function defuzzify(array $tfn): float
+    {
+        return round(($tfn[0] + $tfn[1] + $tfn[2]) / 3, 6);
+    }
 }

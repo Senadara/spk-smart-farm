@@ -130,6 +130,14 @@ class SpkMelonSesiPenilaian extends Model
         return $this->hasMany(SpkMelonPerbandingan::class, 'sesiId', 'id');
     }
 
+    /**
+     * Relasi ke bobot kriteria milik sesi ini (SPK-05).
+     */
+    public function bobot(): HasMany
+    {
+        return $this->hasMany(SpkMelonBobot::class, 'sesiId', 'id');
+    }
+
     // ─── HELPER SPK-03 ──────────────────────────────
 
     /**

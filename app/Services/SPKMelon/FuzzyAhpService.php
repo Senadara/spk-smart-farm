@@ -2,18 +2,22 @@
 
 namespace App\Services\SPKMelon;
 
+use App\Models\SPKMelon\SpkMelonBobot;
 use App\Models\SPKMelon\SpkMelonKriteria;
 use App\Models\SPKMelon\SpkMelonPerbandingan;
 use App\Models\SPKMelon\SpkMelonSesiPenilaian;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Service untuk kalkulasi Fuzzy AHP.
  *
  * Stage 2: Pairwise comparison input (dilakukan di PerbandinganService — SPK-03)
- * Stage 3: Consistency Ratio validation (SPK-04 — implementasi saat ini)
- * Stage 4: Weight calculation (SPK-05 — belum diimplementasi)
+ * Stage 3: Consistency Ratio validation (SPK-04)
+ * Stage 4: Weight calculation (SPK-05)
  *
- * @see docs/references/algorithm-implementation.md Stage 3
+ * @see docs/references/algorithm-implementation.md Stage 3-4
  */
 class FuzzyAhpService
 {
@@ -167,7 +171,144 @@ class FuzzyAhpService
         $sesi->update(['rasioKonsistensi' => $cr]);
     }
 
-    // ─── PRIVATE HELPERS ────────────────────────────────────────────────────
+    // ─── SPK-05: KALKULASI BOBOT FUZZY AHP ──────────────────────────────
+
+    /**
+     * Menghitung bobot prioritas kriteria menggunakan Fuzzy AHP.
+     *
+     * Method ini PURE FUNCTION — tidak melakukan operasi tulis ke database.
+     * Seluruh hasil kalkulasi dikembalikan sebagai array untuk digunakan
+     * oleh controller (display) dan saveWeights() (persist).
+     *
+     * Algoritma sesuai algorithm-implementation.md Stage 4 (Buckley 1985):
+     * 1. Bangun fuzzy matrix n×n dari TFN perbandingan
+     * 2. Hitung Fuzzy Geometric Mean per baris
+     * 3. Fuzzy Synthesis (pembagian silang L/U — metode Buckley)
+     * 4. Defuzzifikasi Center of Area
+     * 5. Normalisasi akhir (Σ W = 1.0)
+     *
+     * @param SpkMelonSesiPenilaian $sesi
+     * @param array $kriteriaList Array of SpkMelonKriteria, ordered by kode
+     * @return array{
+     *   n: int,
+     *   kriteriaList: array,
+     *   fuzzyMatrix: array,
+     *   geometricMeans: array,
+     *   sumGeometricMean: array,
+     *   fuzzyWeights: array,
+     *   crispWeights: array,
+     *   sumCrispWeights: float,
+     *   normalizedWeights: array
+     * }
+     */
+    public function calculateWeights(SpkMelonSesiPenilaian $sesi, array $kriteriaList): array
+    {
+        $n = count($kriteriaList);
+
+        // Edge case: satu kriteria → bobot otomatis 100%
+        if ($n === 1) {
+            return [
+                'n'                 => 1,
+                'kriteriaList'      => $kriteriaList,
+                'fuzzyMatrix'       => [[[
+                    'l' => 1.0, 'm' => 1.0, 'u' => 1.0,
+                ]]],
+                'geometricMeans'    => [['l' => 1.0, 'm' => 1.0, 'u' => 1.0]],
+                'sumGeometricMean'  => ['l' => 1.0, 'm' => 1.0, 'u' => 1.0],
+                'fuzzyWeights'      => [['l' => 1.0, 'm' => 1.0, 'u' => 1.0]],
+                'crispWeights'      => [1.0],
+                'sumCrispWeights'   => 1.0,
+                'normalizedWeights' => [1.0],
+            ];
+        }
+
+        // Langkah 1: Bangun fuzzy matrix n×n
+        $fuzzyMatrix = $this->buildFuzzyMatrix($sesi, $kriteriaList);
+
+        // Langkah 2: Fuzzy Geometric Mean per baris
+        $geometricMeans = $this->calculateGeometricMeans($fuzzyMatrix, $n);
+
+        // Langkah 3: Fuzzy Synthesis (Buckley 1985)
+        $synthesis = $this->calculateFuzzySynthesis($geometricMeans, $n);
+
+        // Langkah 4: Defuzzifikasi Center of Area
+        $crispWeights = $this->defuzzifyWeights($synthesis['weights'], $n);
+
+        // Langkah 5: Normalisasi akhir
+        $normalization = $this->normalizeFinalWeights($crispWeights, $n);
+
+        return [
+            'n'                 => $n,
+            'kriteriaList'      => $kriteriaList,
+            'fuzzyMatrix'       => $fuzzyMatrix,
+            'geometricMeans'    => $geometricMeans,
+            'sumGeometricMean'  => $synthesis['sum'],
+            'fuzzyWeights'      => $synthesis['weights'],
+            'crispWeights'      => $crispWeights,
+            'sumCrispWeights'   => $normalization['sum'],
+            'normalizedWeights' => $normalization['normalized'],
+        ];
+    }
+
+    /**
+     * Menyimpan bobot ke tabel spk_melon_bobot dengan pattern soft delete + insert.
+     *
+     * Operasi wajib di dalam DB::transaction() untuk konsistensi:
+     * 1. Soft delete row lama (audit trail terjaga)
+     * 2. Insert row baru dengan hasil kalkulasi terkini
+     *
+     * @param SpkMelonSesiPenilaian $sesi
+     * @param array $kriteriaList Array of SpkMelonKriteria, ordered by kode
+     * @param array $result Output dari calculateWeights()
+     */
+    public function saveWeights(SpkMelonSesiPenilaian $sesi, array $kriteriaList, array $result): void
+    {
+        DB::transaction(function () use ($sesi, $kriteriaList, $result) {
+            // 1. Soft delete row lama (audit trail terjaga)
+            SpkMelonBobot::where('sesiId', $sesi->id)
+                ->where('isDeleted', 0)
+                ->update(['isDeleted' => 1, 'updatedAt' => now()]);
+
+            // 2. Build dan insert row baru
+            $rows = [];
+            $now = now();
+            foreach ($kriteriaList as $i => $kriteria) {
+                $rows[] = [
+                    'id'          => (string) Str::uuid(),
+                    'sesiId'      => $sesi->id,
+                    'kriteriaId'  => $kriteria->id,
+                    'bobotFuzzyL' => $result['fuzzyWeights'][$i]['l'],
+                    'bobotFuzzyM' => $result['fuzzyWeights'][$i]['m'],
+                    'bobotFuzzyU' => $result['fuzzyWeights'][$i]['u'],
+                    'bobotAkhir'  => $result['normalizedWeights'][$i],
+                    'isDeleted'   => 0,
+                    'createdAt'   => $now,
+                    'updatedAt'   => $now,
+                ];
+            }
+            SpkMelonBobot::insert($rows);
+        });
+    }
+
+    /**
+     * Mengambil bobot tersimpan untuk sesi tertentu (hybrid mode).
+     *
+     * Mengembalikan Collection yang sudah eager-load relasi kriteria,
+     * atau null jika belum ada bobot yang dihitung.
+     *
+     * @param SpkMelonSesiPenilaian $sesi
+     * @return Collection|null
+     */
+    public function getExistingWeights(SpkMelonSesiPenilaian $sesi): ?Collection
+    {
+        $bobot = SpkMelonBobot::where('sesiId', $sesi->id)
+            ->with('kriteria')
+            ->get();
+
+        return $bobot->isEmpty() ? null : $bobot;
+    }
+
+    // ─── PRIVATE HELPERS (SPK-04: Consistency Ratio) ────────────────────
 
     /**
      * Bangun crisp matrix n×n dari kolom tfnM pada tabel spk_melon_perbandingan.
@@ -274,4 +415,177 @@ class FuzzyAhpService
 
         return $result;
     }
+
+    // ─── PRIVATE HELPERS (SPK-05: Fuzzy AHP Weights) ────────────────────
+
+    /**
+     * Bangun fuzzy matrix n×n dari TFN (tfnL, tfnM, tfnU) di spk_melon_perbandingan.
+     *
+     * Setiap sel [i][j] berisi TFN associative array ['l' => x, 'm' => y, 'u' => z].
+     * Urutan baris/kolom mengikuti $kriteriaList (ordered by kode).
+     *
+     * @return array 2D fuzzy matrix [i][j] => ['l', 'm', 'u']
+     */
+    private function buildFuzzyMatrix(SpkMelonSesiPenilaian $sesi, array $kriteriaList): array
+    {
+        $rows = SpkMelonPerbandingan::where('sesiId', $sesi->id)->get();
+
+        // Buat lookup map: "kriteria1Id::kriteria2Id" => ['l', 'm', 'u']
+        $lookup = [];
+        foreach ($rows as $row) {
+            $key = $row->kriteria1Id . '::' . $row->kriteria2Id;
+            $lookup[$key] = [
+                'l' => (float) $row->tfnL,
+                'm' => (float) $row->tfnM,
+                'u' => (float) $row->tfnU,
+            ];
+        }
+
+        $n = count($kriteriaList);
+        $matrix = [];
+
+        for ($i = 0; $i < $n; $i++) {
+            for ($j = 0; $j < $n; $j++) {
+                $key = $kriteriaList[$i]->id . '::' . $kriteriaList[$j]->id;
+                $matrix[$i][$j] = $lookup[$key] ?? ['l' => 1.0, 'm' => 1.0, 'u' => 1.0];
+            }
+        }
+
+        return $matrix;
+    }
+
+    /**
+     * Menghitung Fuzzy Geometric Mean per baris matriks fuzzy.
+     *
+     * Untuk setiap baris i:
+     *   prod = ∏ fuzzyMatrix[i][j] untuk j = 0..n-1 (TFN element-wise)
+     *   r_i = prod^(1/n) (akar pangkat n, TFN element-wise)
+     *
+     * @return array [i] => ['l' => x, 'm' => y, 'u' => z]
+     */
+    private function calculateGeometricMeans(array $fuzzyMatrix, int $n): array
+    {
+        $geometricMeans = [];
+
+        for ($i = 0; $i < $n; $i++) {
+            // Inisialisasi produk akumulatif sebagai [1, 1, 1]
+            $prod = [1.0, 1.0, 1.0];
+
+            for ($j = 0; $j < $n; $j++) {
+                $tfn = $fuzzyMatrix[$i][$j];
+                $prod = TfnHelper::multiply($prod, [$tfn['l'], $tfn['m'], $tfn['u']]);
+            }
+
+            // Akar pangkat n
+            $root = TfnHelper::nthRoot($prod, $n);
+
+            $geometricMeans[$i] = [
+                'l' => $root[0],
+                'm' => $root[1],
+                'u' => $root[2],
+            ];
+        }
+
+        return $geometricMeans;
+    }
+
+    /**
+     * Menghitung Fuzzy Synthesis (metode Buckley 1985).
+     *
+     * 1. Hitung S = Σ r_i (jumlahkan semua geometric mean, TFN-wise)
+     * 2. Untuk setiap kriteria i, hitung bobot fuzzy:
+     *    w_i.l = r_i.l / S.u  (pembagian silang — bukan typo!)
+     *    w_i.m = r_i.m / S.m
+     *    w_i.u = r_i.u / S.l  (pembagian silang — bukan typo!)
+     *
+     * Catatan: Pembagian silang L/U dan U/L adalah metode Buckley (1985)
+     * untuk menjaga sifat TFN setelah pembagian fuzzy.
+     *
+     * @return array{sum: array, weights: array}
+     * @throws \RuntimeException jika S.l = 0
+     */
+    private function calculateFuzzySynthesis(array $geometricMeans, int $n): array
+    {
+        // Hitung S = Σ r_i
+        $sumL = 0.0;
+        $sumM = 0.0;
+        $sumU = 0.0;
+
+        foreach ($geometricMeans as $gm) {
+            $sumL = round($sumL + $gm['l'], 6);
+            $sumM = round($sumM + $gm['m'], 6);
+            $sumU = round($sumU + $gm['u'], 6);
+        }
+
+        // Guard: S.l tidak boleh nol
+        if ($sumL == 0) {
+            throw new \RuntimeException(
+                'Sum geometric mean lower bound zero, kalkulasi sintesis tidak dapat dilanjutkan.'
+            );
+        }
+
+        $sum = ['l' => $sumL, 'm' => $sumM, 'u' => $sumU];
+
+        // Hitung bobot fuzzy per kriteria (pembagian silang Buckley)
+        $weights = [];
+        for ($i = 0; $i < $n; $i++) {
+            $weights[$i] = [
+                'l' => round($geometricMeans[$i]['l'] / $sumU, 6),
+                'm' => round($geometricMeans[$i]['m'] / $sumM, 6),
+                'u' => round($geometricMeans[$i]['u'] / $sumL, 6),
+            ];
+        }
+
+        return [
+            'sum'     => $sum,
+            'weights' => $weights,
+        ];
+    }
+
+    /**
+     * Menghitung defuzzifikasi Center of Area untuk setiap bobot fuzzy.
+     *
+     * W_i = (w_i.l + w_i.m + w_i.u) / 3
+     *
+     * @return array [i] => float (crisp weight sebelum normalisasi)
+     */
+    private function defuzzifyWeights(array $fuzzyWeights, int $n): array
+    {
+        $crispWeights = [];
+
+        for ($i = 0; $i < $n; $i++) {
+            $crispWeights[$i] = TfnHelper::defuzzify([
+                $fuzzyWeights[$i]['l'],
+                $fuzzyWeights[$i]['m'],
+                $fuzzyWeights[$i]['u'],
+            ]);
+        }
+
+        return $crispWeights;
+    }
+
+    /**
+     * Normalisasi bobot crisp agar Σ W_final = 1.0.
+     *
+     * W_final_i = W_i / Σ W_j
+     *
+     * @return array{sum: float, normalized: array}
+     */
+    private function normalizeFinalWeights(array $crispWeights, int $n): array
+    {
+        $sumCrisp = round(array_sum($crispWeights), 6);
+
+        $normalized = [];
+        for ($i = 0; $i < $n; $i++) {
+            $normalized[$i] = ($sumCrisp > 0)
+                ? round($crispWeights[$i] / $sumCrisp, 6)
+                : 0.0;
+        }
+
+        return [
+            'sum'        => $sumCrisp,
+            'normalized' => $normalized,
+        ];
+    }
 }
+

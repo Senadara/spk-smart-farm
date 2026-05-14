@@ -51,7 +51,7 @@
             <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Validasi <em>Consistency Ratio</em></h1>
         </div>
         <a href="{{ route('spk-melon.sesi-penilaian.show', $sesi->id) }}"
-           class="flex items-center gap-2 px-5 py-2.5 border-2 border-gray-200 text-gray-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-gray-300 hover:bg-gray-50 transition-all w-fit">
+           class="flex items-center gap-2 px-5 py-2.5 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl text-sm min-h-[44px] shadow-sm transition-all w-fit">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
             Kembali ke Detail Sesi
         </a>
@@ -133,13 +133,12 @@
     @if(! $isReadOnly)
     <div class="flex items-center gap-3 flex-wrap">
         @if($result['isConsistent'])
-            {{-- CR konsisten: tombol lanjut (disabled, SPK-05 belum tersedia) + revisi --}}
-            <button disabled
-                    title="Akan tersedia setelah SPK-05 selesai diimplementasi"
-                    class="flex items-center gap-2 px-5 py-2.5 bg-gray-200 text-gray-400 font-semibold rounded-xl text-sm min-h-[44px] cursor-not-allowed">
+            {{-- CR konsisten: tombol lanjut (aktif) + revisi --}}
+            <a href="{{ route('spk-melon.sesi-penilaian.bobot-kriteria.show', $sesi->id) }}"
+               class="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl text-sm min-h-[44px] shadow-sm transition-all">
                 <i data-lucide="calculator" class="w-4 h-4"></i>
                 Lanjut ke Kalkulasi Bobot (SPK-05)
-            </button>
+            </a>
             <a href="{{ route('spk-melon.sesi-penilaian.perbandingan.edit', $sesi->id) }}"
                class="flex items-center gap-2 px-5 py-2.5 border-2 border-gray-300 text-gray-600 font-semibold rounded-xl text-sm min-h-[44px] hover:border-gray-400 hover:bg-gray-50 transition-all">
                 <i data-lucide="git-compare" class="w-4 h-4"></i>
@@ -357,7 +356,15 @@
         </h3>
         <ul class="text-sm text-gray-600 space-y-1.5 list-disc list-inside">
             <li>Nilai <em>Consistency Ratio</em> (CR) mengukur tingkat konsistensi logis penilaian perbandingan berpasangan.</li>
+            @if($result['isConsistent'] && in_array(session('user')['role'] ?? '', ['inventor', 'admin']))
+            <li>
+                Jika <strong>CR &lt; 0.10</strong>, matriks dianggap konsisten dan proses dapat dilanjutkan ke
+                <a href="{{ route('spk-melon.sesi-penilaian.bobot-kriteria.show', $sesi->id) }}"
+                   class="text-blue-600 hover:underline font-semibold">kalkulasi bobot Fuzzy AHP</a>.
+            </li>
+            @else
             <li>Jika <strong>CR &lt; 0.10</strong>, matriks dianggap konsisten dan proses dapat dilanjutkan ke kalkulasi bobot Fuzzy AHP (SPK-05).</li>
+            @endif
             <li>Jika <strong>CR ≥ 0.10</strong>, penilaian perlu ditinjau ulang. Periksa apakah terdapat inkonsistensi transitif, misalnya A lebih penting dari B, B lebih penting dari C, tetapi C dinilai lebih penting dari A.</li>
             <li>Kalkulasi CR menggunakan nilai <em>crisp</em> (kolom <code class="text-xs bg-gray-200 px-1 rounded">tfnM</code>) dari <em>Triangular Fuzzy Number</em>, bukan nilai Saaty mentah.</li>
             <li>Nilai CR dihitung ulang setiap kali halaman ini diakses berdasarkan data matriks terbaru.</li>
