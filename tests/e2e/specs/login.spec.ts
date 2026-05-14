@@ -1,11 +1,11 @@
-import { test, expect } from '@playwright/test';
-import { LoginPage } from '../pages/LoginPage.js';
+﻿import { test, expect } from '@playwright/test';
+import { AuthPage } from '../pages/AuthPage.js';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test.describe('Authentication - Login Scenarios', () => {
+test.describe('Autentikasi - Skenario Login', () => {
 
-    let loginPage: LoginPage;
+    let authPage: AuthPage;
 
     test.beforeEach(async ({ page }) => {
         test.setTimeout(120000);
@@ -13,25 +13,25 @@ test.describe('Authentication - Login Scenarios', () => {
         await page.route('**/:5173/**', route => route.abort());
         await page.route(/.*:5173.*/, route => route.abort());
 
-        loginPage = new LoginPage(page);
-        await loginPage.goto();
+        authPage = new AuthPage(page);
+        await authPage.gotoLogin();
     });
 
-    test('Positive - Harus berhasil login dengan kredensial valid (Petugas)', async ({ page }) => {
-        await loginPage.login('petugas@email.com', 'Password123.');
+    test('Positif - Berhasil login dengan kredensial valid (Petugas)', async ({ page }) => {
+        await authPage.login('petugas@email.com', 'Password123.');
 
         await expect(page).toHaveURL(/.*dashboard/, { timeout: 80000 });
 
         await expect(page.locator('body')).toBeVisible();
     });
 
-    test('Negative - Gagal login dengan kata sandi yang salah', async ({ page }) => {
-        await loginPage.login('petugas@email.com', 'SalahPassword123!');
-        await loginPage.expectErrorMessageToBeVisible();
+    test('Negatif - Gagal login dengan kata sandi yang salah', async ({ page }) => {
+        await authPage.login('petugas@email.com', 'SalahPassword123!');
+        await authPage.expectErrorMessageToBeVisible();
     });
 
-    test('Negative - Gagal login dengan validasi format email yang invalid', async () => {
-        await loginPage.login('petugas_invalid_email', 'Password123.');
-        await expect(loginPage.page).toHaveURL(/.*login/);
+    test('Negatif - Gagal login saat format email tidak valid', async () => {
+        await authPage.login('petugas_invalid_email', 'Password123.');
+        await expect(authPage.page).toHaveURL(/.*login/);
     });
 });

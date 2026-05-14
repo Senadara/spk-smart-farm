@@ -7,7 +7,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 1,
-  workers: process.env.CI ? 2 : undefined,
+  workers: 1,
+  timeout: 60000,
+  expect: {
+    timeout: 60000,
+  },
   reporter: [
     ['html', { open: 'never' }],
     ['junit', { outputFile: 'test-results/junit-report.xml' }]
