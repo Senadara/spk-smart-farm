@@ -52,6 +52,19 @@
             </p>
         </a>
 
+        {{-- Konfigurasi Fuzzy Mamdani --}}
+        <a href="{{ route('settings.fuzzy.index') }}" class="group block bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all">
+            <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-amber-100 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 group-hover:text-emerald-700 transition-colors">Fuzzy Mamdani</h3>
+            <p class="text-xs text-gray-500 mt-2 leading-relaxed">
+                Kelola variabel, membership function, dan aturan inferensi fuzzy untuk analisis kondisi kandang.
+            </p>
+        </a>
+
     </div>
 </div>
 @endsection

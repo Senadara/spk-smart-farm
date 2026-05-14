@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Iot;
 
 use App\Http\Controllers\Controller;
+use App\Models\CommodityParameter;
 use App\Models\IotConnectionConfig;
 use App\Models\IotDevice;
 use App\Models\IotDeviceLog;
@@ -54,13 +55,18 @@ class IotController extends Controller
     public function storeDevice(Request $request)
     {
         $validated = $request->validate([
-            'deviceCode' => 'required|string|max:100|unique:iot_device,deviceCode',
-            'deviceName' => 'nullable|string|max:150',
-            'unitBudidayaId' => 'required|string',
-            'connectionConfigId' => 'required|string',
-            'pollingInterval' => 'nullable|integer|min:10',
-            'status' => 'required|in:active,inactive,maintenance',
-            'installedAt' => 'nullable|date',
+            'deviceCode'         => 'required|string|max:100|unique:iot_device,deviceCode',
+            'deviceName'         => 'nullable|string|max:150',
+            'unitBudidayaId'     => 'required|string|exists:unitBudidaya,id',
+            'connectionConfigId' => 'required|string|exists:iot_connection_config,id',
+            'pollingInterval'    => 'nullable|integer|min:10|max:86400',
+            'status'             => 'required|in:active,inactive,maintenance',
+            'installedAt'        => 'nullable|date',
+        ], [
+            'deviceCode.unique'            => 'Kode device sudah terdaftar.',
+            'unitBudidayaId.exists'        => 'Unit budidaya tidak ditemukan.',
+            'connectionConfigId.exists'    => 'Konfigurasi koneksi tidak ditemukan.',
+            'pollingInterval.min'          => 'Interval polling minimal 10 detik.',
         ]);
 
         IotDevice::create($validated);
@@ -70,36 +76,72 @@ class IotController extends Controller
     public function updateDevice(Request $request, $id)
     {
         $validated = $request->validate([
-            'deviceCode' => 'required|string|max:100|unique:iot_device,deviceCode,' . $id,
-            'deviceName' => 'nullable|string|max:150',
-            'unitBudidayaId' => 'required|string',
-            'connectionConfigId' => 'required|string',
-            'pollingInterval' => 'nullable|integer|min:10',
-            'status' => 'required|in:active,inactive,maintenance',
-            'installedAt' => 'nullable|date',
+            'deviceCode'         => 'required|string|max:100|unique:iot_device,deviceCode,' . $id,
+            'deviceName'         => 'nullable|string|max:150',
+            'unitBudidayaId'     => 'required|string|exists:unitBudidaya,id',
+            'connectionConfigId' => 'required|string|exists:iot_connection_config,id',
+            'pollingInterval'    => 'nullable|integer|min:10|max:86400',
+            'status'             => 'required|in:active,inactive,maintenance',
+            'installedAt'        => 'nullable|date',
+        ], [
+            'deviceCode.unique' => 'Kode device sudah terdaftar.',
         ]);
 
-        $device = IotDevice::findOrFail($id);
-        $device->update($validated);
+        IotDevice::findOrFail($id)->update($validated);
         return back()->with('success', 'Device berhasil diperbarui.');
     }
 
     public function destroyDevice($id)
     {
-        IotDevice::findOrFail($id)->delete();
-        return back()->with('success', 'Device berhasil dihapus.');
+        $device = IotDevice::findOrFail($id);
+
+        // Cek relasi
+        $mappingCount = IotParameterMapping::where('deviceId', $id)->count();
+        $sensorCount  = IotSensorData::where('deviceId', $id)->count();
+
+        if ($sensorCount > 0) {
+            return back()->withErrors(['delete' => "Device '{$device->deviceCode}' memiliki {$sensorCount} data sensor. Hapus data sensor terlebih dahulu atau nonaktifkan device."]);
+        }
+
+        // Cascade delete mappings & logs
+        IotParameterMapping::where('deviceId', $id)->delete();
+        IotDeviceLog::where('deviceId', $id)->delete();
+        $device->delete();
+
+        return back()->with('success', "Device '{$device->deviceCode}' beserta {$mappingCount} mapping berhasil dihapus.");
     }
+
+    // ─── Parameter Mappings ────────────────────────────────────────
 
     public function storeMapping(Request $request)
     {
         $validated = $request->validate([
-            'deviceId' => 'required|string|exists:iot_device,id',
+            'deviceId'    => 'required|string|exists:iot_device,id',
             'parameterId' => 'required|string|exists:iot_parameter,id',
-            'payloadKey' => 'required|string|max:100',
+            'payloadKey'  => 'required|string|max:100',
+        ], [
+            'deviceId.exists'    => 'Device tidak ditemukan.',
+            'parameterId.exists' => 'Parameter tidak ditemukan.',
+            'payloadKey.required'=> 'Payload key wajib diisi.',
         ]);
+
+        // Cek duplikat kombinasi
+        if (IotParameterMapping::where('deviceId', $validated['deviceId'])->where('parameterId', $validated['parameterId'])->exists()) {
+            return back()->withErrors(['mapping' => 'Parameter ini sudah di-mapping ke device yang dipilih.'])->withInput();
+        }
 
         IotParameterMapping::create($validated);
         return back()->with('success', 'Mapping parameter berhasil ditambahkan.');
+    }
+
+    public function updateMapping(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'payloadKey' => 'required|string|max:100',
+        ]);
+
+        IotParameterMapping::findOrFail($id)->update($validated);
+        return back()->with('success', 'Mapping parameter berhasil diperbarui.');
     }
 
     public function destroyMapping($id)
@@ -112,39 +154,227 @@ class IotController extends Controller
     public function config()
     {
         return view('iot.config', [
-            'protocols' => IotProtocol::all(),
-            'connectionConfigs' => IotConnectionConfig::with('protocol')->get(),
-            'parameters' => IotParameter::all(),
-            'commodityParameters' => \App\Models\CommodityParameter::with(['commodity', 'parameter'])->get(),
-            'commodities' => Komoditas::all(),
+            'protocols'           => IotProtocol::all(),
+            'connectionConfigs'   => IotConnectionConfig::with('protocol')->get(),
+            'parameters'          => IotParameter::all(),
+            'commodityParameters' => CommodityParameter::with(['commodity', 'parameter'])->get(),
+            'commodities'         => Komoditas::all(),
         ]);
     }
+
+    // ─── Protocols ─────────────────────────────────────────────────
 
     public function storeProtocol(Request $request)
     {
         $validated = $request->validate([
-            'protocolName' => 'required|string|max:50',
-            'description' => 'nullable|string',
+            'protocolName' => 'required|string|max:50|unique:iot_protocol,protocolName',
+            'description'  => 'nullable|string|max:500',
+        ], [
+            'protocolName.unique' => 'Nama protokol sudah ada.',
         ]);
 
         IotProtocol::create($validated);
         return back()->with('success', 'Protokol berhasil ditambahkan.');
     }
 
+    public function updateProtocol(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'protocolName' => 'required|string|max:50|unique:iot_protocol,protocolName,' . $id,
+            'description'  => 'nullable|string|max:500',
+        ], [
+            'protocolName.unique' => 'Nama protokol sudah ada.',
+        ]);
+
+        IotProtocol::findOrFail($id)->update($validated);
+        return back()->with('success', 'Protokol berhasil diperbarui.');
+    }
+
+    public function destroyProtocol($id)
+    {
+        $protocol = IotProtocol::findOrFail($id);
+        $connCount = IotConnectionConfig::where('protocolId', $id)->count();
+
+        if ($connCount > 0) {
+            return back()->withErrors(['delete' => "Protokol '{$protocol->protocolName}' masih digunakan oleh {$connCount} konfigurasi koneksi. Hapus koneksi terlebih dahulu."]);
+        }
+
+        $protocol->delete();
+        return back()->with('success', "Protokol '{$protocol->protocolName}' berhasil dihapus.");
+    }
+
+    // ─── Connections ───────────────────────────────────────────────
+
     public function storeConnection(Request $request)
     {
         $validated = $request->validate([
-            'protocolId' => 'required|string|exists:iot_protocol,id',
-            'baseUrl' => 'nullable|string|max:255',
-            'endpointPath' => 'nullable|string|max:255',
+            'protocolId'    => 'required|string|exists:iot_protocol,id',
+            'baseUrl'       => 'nullable|string|max:255',
+            'endpointPath'  => 'nullable|string|max:255',
             'mqttBrokerUrl' => 'nullable|string|max:255',
-            'mqttTopic' => 'nullable|string|max:255',
-            'authType' => 'nullable|in:none,api_key,bearer,basic',
-            'authKey' => 'nullable|string|max:255',
+            'mqttTopic'     => 'nullable|string|max:255',
+            'authType'      => 'nullable|in:none,api_key,bearer,basic',
+            'authKey'       => 'nullable|string|max:255',
+            'headers'       => 'nullable|string',
+        ], [
+            'protocolId.exists' => 'Protokol tidak ditemukan.',
         ]);
+
+        // Validasi: harus ada minimal satu endpoint
+        if (empty($validated['baseUrl']) && empty($validated['mqttBrokerUrl'])) {
+            return back()->withErrors(['connection' => 'Harus mengisi minimal Base URL atau MQTT Broker URL.'])->withInput();
+        }
+
+        // Parse headers JSON jika ada
+        if (!empty($validated['headers'])) {
+            $decoded = json_decode($validated['headers'], true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return back()->withErrors(['headers' => 'Format headers harus JSON yang valid.'])->withInput();
+            }
+            $validated['headers'] = $decoded;
+        }
 
         IotConnectionConfig::create($validated);
         return back()->with('success', 'Konfigurasi koneksi berhasil ditambahkan.');
+    }
+
+    public function updateConnection(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'protocolId'    => 'required|string|exists:iot_protocol,id',
+            'baseUrl'       => 'nullable|string|max:255',
+            'endpointPath'  => 'nullable|string|max:255',
+            'mqttBrokerUrl' => 'nullable|string|max:255',
+            'mqttTopic'     => 'nullable|string|max:255',
+            'authType'      => 'nullable|in:none,api_key,bearer,basic',
+            'authKey'       => 'nullable|string|max:255',
+            'headers'       => 'nullable|string',
+        ]);
+
+        if (empty($validated['baseUrl']) && empty($validated['mqttBrokerUrl'])) {
+            return back()->withErrors(['connection' => 'Harus mengisi minimal Base URL atau MQTT Broker URL.'])->withInput();
+        }
+
+        if (!empty($validated['headers'])) {
+            $decoded = json_decode($validated['headers'], true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return back()->withErrors(['headers' => 'Format headers harus JSON yang valid.'])->withInput();
+            }
+            $validated['headers'] = $decoded;
+        }
+
+        IotConnectionConfig::findOrFail($id)->update($validated);
+        return back()->with('success', 'Konfigurasi koneksi berhasil diperbarui.');
+    }
+
+    public function destroyConnection($id)
+    {
+        $conn = IotConnectionConfig::findOrFail($id);
+        $deviceCount = IotDevice::where('connectionConfigId', $id)->count();
+
+        if ($deviceCount > 0) {
+            return back()->withErrors(['delete' => "Koneksi ini masih digunakan oleh {$deviceCount} device. Pindahkan device terlebih dahulu."]);
+        }
+
+        $conn->delete();
+        return back()->with('success', 'Konfigurasi koneksi berhasil dihapus.');
+    }
+
+    // ─── Parameters ────────────────────────────────────────────────
+
+    public function storeParameter(Request $request)
+    {
+        $validated = $request->validate([
+            'parameterCode' => 'required|string|max:50|unique:iot_parameter,parameterCode',
+            'parameterName' => 'required|string|max:100',
+            'unit'          => 'nullable|string|max:20',
+            'description'   => 'nullable|string|max:500',
+        ], [
+            'parameterCode.unique' => 'Kode parameter sudah terdaftar.',
+        ]);
+
+        IotParameter::create($validated);
+        return back()->with('success', 'Parameter berhasil didaftarkan.');
+    }
+
+    public function updateParameter(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'parameterCode' => 'required|string|max:50|unique:iot_parameter,parameterCode,' . $id,
+            'parameterName' => 'required|string|max:100',
+            'unit'          => 'nullable|string|max:20',
+            'description'   => 'nullable|string|max:500',
+        ], [
+            'parameterCode.unique' => 'Kode parameter sudah terdaftar.',
+        ]);
+
+        IotParameter::findOrFail($id)->update($validated);
+        return back()->with('success', 'Parameter berhasil diperbarui.');
+    }
+
+    public function destroyParameter($id)
+    {
+        $param = IotParameter::findOrFail($id);
+        $mappingCount   = IotParameterMapping::where('parameterId', $id)->count();
+        $commodityCount = CommodityParameter::where('parameterId', $id)->count();
+
+        if ($mappingCount > 0 || $commodityCount > 0) {
+            return back()->withErrors(['delete' => "Parameter '{$param->parameterCode}' masih digunakan oleh {$mappingCount} mapping dan {$commodityCount} komoditas. Hapus referensi terlebih dahulu."]);
+        }
+
+        $param->delete();
+        return back()->with('success', "Parameter '{$param->parameterCode}' berhasil dihapus.");
+    }
+
+    // ─── Commodity Parameters ──────────────────────────────────────
+
+    public function storeCommodityParam(Request $request)
+    {
+        $validated = $request->validate([
+            'commodityId'  => 'required|string|exists:komoditas,id',
+            'parameterId'  => 'required|string|exists:iot_parameter,id',
+            'minValue'     => 'nullable|numeric',
+            'maxValue'     => 'nullable|numeric',
+        ], [
+            'commodityId.exists'  => 'Komoditas tidak ditemukan.',
+            'parameterId.exists'  => 'Parameter tidak ditemukan.',
+        ]);
+
+        // Cek duplikat kombinasi
+        if (CommodityParameter::where('commodityId', $validated['commodityId'])->where('parameterId', $validated['parameterId'])->exists()) {
+            return back()->withErrors(['commodity' => 'Parameter ini sudah ditambahkan ke komoditas yang dipilih.'])->withInput();
+        }
+
+        // Validasi min < max
+        if (isset($validated['minValue']) && isset($validated['maxValue']) && $validated['minValue'] >= $validated['maxValue']) {
+            return back()->withErrors(['commodity' => 'Nilai minimum harus lebih kecil dari nilai maksimum.'])->withInput();
+        }
+
+        CommodityParameter::create($validated);
+        return back()->with('success', 'Parameter komoditas berhasil ditambahkan.');
+    }
+
+    public function updateCommodityParam(Request $request, $id)
+    {
+        $cp = CommodityParameter::findOrFail($id);
+
+        $validated = $request->validate([
+            'minValue' => 'nullable|numeric',
+            'maxValue' => 'nullable|numeric',
+        ]);
+
+        if (isset($validated['minValue']) && isset($validated['maxValue']) && $validated['minValue'] >= $validated['maxValue']) {
+            return back()->withErrors(['commodity' => 'Nilai minimum harus lebih kecil dari nilai maksimum.'])->withInput();
+        }
+
+        $cp->update($validated);
+        return back()->with('success', 'Parameter komoditas berhasil diperbarui.');
+    }
+
+    public function destroyCommodityParam($id)
+    {
+        CommodityParameter::findOrFail($id)->delete();
+        return back()->with('success', 'Parameter komoditas berhasil dihapus.');
     }
 
     // ─── Monitoring ────────────────────────────────────────────────
@@ -169,19 +399,6 @@ class IotController extends Controller
         ]);
     }
 
-    public function storeParameter(Request $request) 
-    {
-        $validated = $request->validate([
-            'parameterCode' => 'required|string|max:50|unique:iot_parameter',
-            'parameterName' => 'required|string|max:100',
-            'unit' => 'nullable|string|max:20',
-            'description' => 'nullable|string'
-        ]);
-
-        IotParameter::create($validated);
-        return back()->with('success', 'Parameter berhasil didaftarkan!');
-    }
-
     // ─── Webhook (PUSH) ────────────────────────────────────────────
     public function handleWebhook(Request $request, $deviceCode)
     {
@@ -200,12 +417,25 @@ class IotController extends Controller
         // Fallback untuk struktur Antares
         if (isset($payload['m2m:cin']['con'])) {
             $con = $payload['m2m:cin']['con'];
-            $dataTarget = is_string($con) ? json_decode($con, true) : $con;
+            if (is_string($con)) {
+                $decoded = json_decode($con, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $dataTarget = $decoded;
+                } else {
+                    $cleanCon = trim(str_replace(["'", '"'], "", $con));
+                    $dataTarget = is_numeric($cleanCon) ? (float)$cleanCon : $cleanCon;
+                }
+            } else {
+                $dataTarget = $con;
+            }
         }
 
         $insertedCount = 0;
         foreach ($device->parameterMappings as $mapping) {
-            $value = data_get($dataTarget, $mapping->payloadKey);
+            // Jika response hanyalah scalar nilai
+            $value = is_array($dataTarget) && isset($dataTarget[$mapping->payloadKey])
+                        ? data_get($dataTarget, $mapping->payloadKey)
+                        : (is_array($dataTarget) ? data_get($dataTarget, $mapping->payloadKey) : $dataTarget);
 
             if ($value !== null) {
                 $sensorModel = IotSensorData::create([

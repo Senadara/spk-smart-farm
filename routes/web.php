@@ -52,6 +52,14 @@ Route::middleware('auth.api')->group(function () {
 
     // Analisa SPK
     Route::get('/spk-analysis', [\App\Http\Controllers\Spk\SpkDashboardController::class, 'index'])->name('spk.dashboard');
+
+    // Fuzzy Mamdani Engine
+    Route::prefix('spk-fuzzy')->group(function () {
+        Route::post('/process', [\App\Http\Controllers\Spk\FuzzyController::class, 'processFuzzy'])->name('spk.fuzzy.process');
+        Route::get('/history', [\App\Http\Controllers\Spk\FuzzyController::class, 'getHistory'])->name('spk.fuzzy.history');
+        Route::get('/history/{id}', [\App\Http\Controllers\Spk\FuzzyController::class, 'getHistoryDetail'])->name('spk.fuzzy.history.detail');
+        Route::get('/config', [\App\Http\Controllers\Spk\FuzzyController::class, 'getConfig'])->name('spk.fuzzy.config');
+    });
     
     // SPK Supplier Recommendations
     Route::get('/spk-suppliers', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'index'])->name('spk.suppliers.index');
@@ -65,15 +73,35 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/config', [IotController::class, 'config'])->name('iot.config');
         Route::get('/monitoring', [IotController::class, 'monitoring'])->name('iot.monitoring');
 
-        // CRUD Endpoints
+        // CRUD Endpoints — Devices
         Route::post('/devices', [IotController::class, 'storeDevice'])->name('iot.devices.store');
         Route::put('/devices/{id}', [IotController::class, 'updateDevice'])->name('iot.devices.update');
         Route::delete('/devices/{id}', [IotController::class, 'destroyDevice'])->name('iot.devices.destroy');
+
+        // CRUD Endpoints — Mappings
         Route::post('/mappings', [IotController::class, 'storeMapping'])->name('iot.mappings.store');
+        Route::put('/mappings/{id}', [IotController::class, 'updateMapping'])->name('iot.mappings.update');
         Route::delete('/mappings/{id}', [IotController::class, 'destroyMapping'])->name('iot.mappings.destroy');
+
+        // CRUD Endpoints — Protocols
         Route::post('/protocols', [IotController::class, 'storeProtocol'])->name('iot.protocols.store');
+        Route::put('/protocols/{id}', [IotController::class, 'updateProtocol'])->name('iot.protocols.update');
+        Route::delete('/protocols/{id}', [IotController::class, 'destroyProtocol'])->name('iot.protocols.destroy');
+
+        // CRUD Endpoints — Connections
         Route::post('/connections', [IotController::class, 'storeConnection'])->name('iot.connections.store');
+        Route::put('/connections/{id}', [IotController::class, 'updateConnection'])->name('iot.connections.update');
+        Route::delete('/connections/{id}', [IotController::class, 'destroyConnection'])->name('iot.connections.destroy');
+
+        // CRUD Endpoints — Parameters
         Route::post('/parameters', [IotController::class, 'storeParameter'])->name('iot.parameters.store');
+        Route::put('/parameters/{id}', [IotController::class, 'updateParameter'])->name('iot.parameters.update');
+        Route::delete('/parameters/{id}', [IotController::class, 'destroyParameter'])->name('iot.parameters.destroy');
+
+        // CRUD Endpoints — Commodity Parameters
+        Route::post('/commodity-params', [IotController::class, 'storeCommodityParam'])->name('iot.commodity-params.store');
+        Route::put('/commodity-params/{id}', [IotController::class, 'updateCommodityParam'])->name('iot.commodity-params.update');
+        Route::delete('/commodity-params/{id}', [IotController::class, 'destroyCommodityParam'])->name('iot.commodity-params.destroy');
     });
 
     Route::get('/perkebunan', [PerkebunanController::class, 'index'])->name('perkebunan.index');
@@ -87,8 +115,37 @@ Route::middleware('auth.api')->group(function () {
     // Pengaturan (Settings Hub)
     Route::get('/settings', [\App\Http\Controllers\Settings\SettingsController::class, 'index'])->name('settings.index');
 
+    // Konfigurasi Fuzzy Mamdani
+    Route::prefix('settings/fuzzy')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'index'])->name('settings.fuzzy.index');
+        // CRUD Variables
+        Route::post('/variables', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'storeVariable'])->name('settings.fuzzy.variables.store');
+        Route::put('/variables/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'updateVariable'])->name('settings.fuzzy.variables.update');
+        Route::delete('/variables/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'destroyVariable'])->name('settings.fuzzy.variables.destroy');
+        // CRUD Sets
+        Route::post('/sets', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'storeSet'])->name('settings.fuzzy.sets.store');
+        Route::put('/sets/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'updateSet'])->name('settings.fuzzy.sets.update');
+        Route::delete('/sets/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'destroySet'])->name('settings.fuzzy.sets.destroy');
+        // CRUD Rules
+        Route::post('/rules', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'storeRule'])->name('settings.fuzzy.rules.store');
+        Route::put('/rules/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'updateRule'])->name('settings.fuzzy.rules.update');
+        Route::delete('/rules/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'destroyRule'])->name('settings.fuzzy.rules.destroy');
+        // Reset
+        Route::post('/reset', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'resetToDefault'])->name('settings.fuzzy.reset');
+    });
+
     // Profil
     Route::get('/profil', [ProfileController::class, 'show'])->name('profile');
+
+    // Supplier Management & SPK AHP-SAW Config 
+    Route::prefix('supplier-spk')->group(function () {
+        Route::apiResource('suppliers', \App\Http\Controllers\SupplierController::class);
+        Route::get('parameters', [\App\Http\Controllers\SpkParameterController::class, 'index'])->name('spk.parameters.index');
+        Route::post('parameters', [\App\Http\Controllers\SpkParameterController::class, 'store'])->name('spk.parameters.store');
+        Route::post('parameters/assign', [\App\Http\Controllers\SpkParameterController::class, 'assignValue'])->name('spk.parameters.assign');
+        Route::post('ahp/perbandingan', [\App\Http\Controllers\SpkAHPController::class, 'storePerbandingan'])->name('spk.ahp.perbandingan');
+        Route::get('recommendation/{produkId}', [\App\Http\Controllers\RecommendationController::class, 'getRanking'])->name('spk.recommendation');
+    });
 
     // Logout
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
