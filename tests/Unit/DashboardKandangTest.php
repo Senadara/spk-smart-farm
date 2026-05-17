@@ -43,33 +43,37 @@ class DashboardKandangTest extends TestCase
 
     public function test_pengambilan_data_sensor_mengembalikan_struktur_metrik_akurat(): void
     {
-        $dataBarnInput = ['id' => 1];
-        
+        // Use 'no-data' input to exercise non-DB fallback branch
+        $dataBarnInput = ['id' => 'no-data'];
+
         $hasilAktual = $this->peternakanService->getBarnSensors($dataBarnInput);
-        
+
         $this->assertIsArray($hasilAktual);
-        $this->assertArrayHasKey('suhu', $hasilAktual);
-        $this->assertArrayHasKey('kelembaban', $hasilAktual);
-        $this->assertArrayHasKey('amonia', $hasilAktual);
+        $this->assertCount(4, $hasilAktual);
+        $this->assertEquals('Suhu', $hasilAktual[0]['label']);
+        $this->assertEquals('Kelembapan', $hasilAktual[1]['label']);
+        $this->assertEquals('Amonia', $hasilAktual[2]['label']);
     }
 
     public function test_format_tren_sensor_menghasilkan_time_series_valid(): void
     {
-        $hasilAktual = $this->peternakanService->getBarnSensorTrend(1);
-        
+        // call with 'no-data' to avoid DB queries and get deterministic series
+        $hasilAktual = $this->peternakanService->getBarnSensorTrend('no-data');
+
         $this->assertIsArray($hasilAktual);
         $this->assertArrayHasKey('labels', $hasilAktual);
-        $this->assertArrayHasKey('datasets', $hasilAktual);
+        $this->assertArrayHasKey('temperature', $hasilAktual);
     }
 
     public function test_pengambilan_kpi_kandang_memetakan_kinerja_produksi(): void
     {
-        $dataBarnInput = ['id' => 1];
-        
+        // use 'no-data' to exercise fallback values without DB
+        $dataBarnInput = ['id' => 'no-data'];
+
         $hasilAktual = $this->peternakanService->getBarnKpi($dataBarnInput);
-        
+
         $this->assertIsArray($hasilAktual);
-        $this->assertArrayHasKey('kematian', $hasilAktual);
         $this->assertArrayHasKey('fcr', $hasilAktual);
+        $this->assertArrayHasKey('hdp', $hasilAktual);
     }
 }

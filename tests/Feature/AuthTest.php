@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
-use Illuminate\Support\Facades\Http;
+use App\Models\LoginHistory;
+use App\Services\AuthService;
+use Mockery;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -11,38 +13,74 @@ class AuthTest extends TestCase
     {
         $response = $this->get('/login');
 
-        $response->assertViewIs('auth.unimplemented_login_view');
+        $response->assertStatus(200);
+        $response->assertViewIs('auth.login');
     }
 
     public function test_kredensial_kosong_mengembalikan_error_validasi_saat_login(): void
     {
-        $response = $this->post('/login', [
+        $response = $this->withSession(['_token' => 'test-csrf-token'])->post('/login', [
+            '_token' => 'test-csrf-token',
             'email' => '',
-            'password' => ''
+            'password' => '',
         ]);
 
+        $response->assertStatus(302);
         $response->assertSessionHasErrors(['email', 'password']);
     }
 
-    public function test_login_sukses_mengarahkan_pengguna_ke_dashboard(): void
+    public function test_login_berhasil_menyimpan_session_dan_redirect_ke_dashboard(): void
     {
-        Http::fake([
-            '*/auth/login*' => Http::response([
-                'token' => 'fake-token-123',
+        $authService = Mockery::mock(AuthService::class);
+        $authService->shouldReceive('login')
+            ->once()
+            ->with('admin@farm.com', 'secret')
+            ->andReturn([
+                'token' => 'token-123',
                 'data' => [
-                    'id' => 'uuid-user-1',
+                    'id' => 1,
                     'name' => 'QA Tester',
-                    'email' => 'qa@farm.com',
-                    'role' => 'admin'
-                ]
-            ], 200)
+                    'email' => 'admin@farm.com',
+                    'role' => 'admin',
+                ],
+            ]);
+        $authService->shouldReceive('storeSession')->once();
+        $this->app->instance(AuthService::class, $authService);
+
+        $loginHistory = Mockery::mock('alias:' . LoginHistory::class);
+        $loginHistory->shouldReceive('updateOrCreate')->once()->andReturnTrue();
+
+        $response = $this->withSession(['_token' => 'test-csrf-token'])->post('/login', [
+            '_token' => 'test-csrf-token',
+            'email' => 'admin@farm.com',
+            'password' => 'secret',
         ]);
 
-        $response = $this->post('/login', [
-            'email' => 'qa@farm.com',
-            'password' => 'secret123'
-        ]);
+        $response->assertRedirect(route('dashboard'));
+    }
 
-        $response->assertRedirect('/dashboard-not-implemented');
+    public function test_logout_membersihkan_session_dan_redirect_ke_login(): void
+    {
+        $authService = Mockery::mock(AuthService::class);
+        $authService->shouldReceive('clearSession')->once();
+        $this->app->instance(AuthService::class, $authService);
+
+        $historyQuery = Mockery::mock();
+        $historyQuery->shouldReceive('where')->andReturnSelf();
+        $historyQuery->shouldReceive('where')->andReturnSelf();
+        $historyQuery->shouldReceive('delete')->once()->andReturn(1);
+
+        $loginHistory = Mockery::mock('alias:' . LoginHistory::class);
+        $loginHistory->shouldReceive('where')->andReturn($historyQuery);
+
+        $response = $this->withSession([
+            '_token' => 'test-csrf-token',
+            'api_token' => 'token-123',
+            'user' => ['id' => 1, 'name' => 'QA Tester', 'email' => 'admin@farm.com'],
+        ])->post('/logout', [
+                    '_token' => 'test-csrf-token',
+                ]);
+
+        $response->assertRedirect(route('login'));
     }
 }

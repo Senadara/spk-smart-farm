@@ -2,18 +2,19 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use Tests\TestCase;
 
 class InventoryTest extends TestCase
 {
     public function test_halaman_dashboard_inventaris_ditampilkan_dengan_benar(): void
     {
-        $user = User::factory()->make(['id' => 1]);
-
-        $response = $this->actingAs($user)->get('/inventory');
+        $this->withSession([
+            'api_token' => 'fake-token',
+            'user' => ['id' => 1, 'name' => 'QA Tester', 'email' => 'qa@farm.com'],
+        ]);
+        $response = $this->get('/inventory');
 
         $response->assertStatus(200);
-        $response->assertViewHas('invalid_inventory_key');
+        $response->assertViewHasAll(['kpi', 'recommendedRestocks', 'inventoryItems', 'charts', 'movementLog']);
     }
 }

@@ -12,7 +12,8 @@ class WeatherServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        Cache::flush();
+        Cache::setDefaultDriver('array');
+        Cache::store('array')->flush();
     }
 
     public function test_penanganan_kegagalan_api_cuaca_mengembalikan_data_default(): void

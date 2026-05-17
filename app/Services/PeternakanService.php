@@ -29,7 +29,7 @@ class PeternakanService
             ->first();
 
         if (!$coop) {
-             return array_merge($barn, [
+            return array_merge($barn, [
                 'flockAge' => '-',
                 'totalBirds' => '-',
                 'capacity' => '-',
@@ -46,8 +46,8 @@ class PeternakanService
 
         return array_merge($barn, [
             'flockAge' => $weeks . ' Minggu',
-            'totalBirds' => number_format((float)($coop->jumlah ?? 0), 0, ',', '.'),
-            'capacity' => number_format((float)($coop->kapasitas ?? 0), 0, ',', '.'),
+            'totalBirds' => number_format((float) ($coop->jumlah ?? 0), 0, ',', '.'),
+            'capacity' => number_format((float) ($coop->kapasitas ?? 0), 0, ',', '.'),
             'breed' => $coop->breedName ?? '-',
             'startDate' => $createdAt->format('Y-m-d'),
             'location' => $coop->lokasi ?? '-',
@@ -128,10 +128,10 @@ class PeternakanService
             $ammonia = $this->interpolateArray($ammonia);
             $light = $this->interpolateArray($light);
         } else {
-             $temp = array_map(fn() => 0, $temp);
-             $hum = array_map(fn() => 0, $hum);
-             $ammonia = array_map(fn() => 0, $ammonia);
-             $light = array_map(fn() => 0, $light);
+            $temp = array_map(fn() => 0, $temp);
+            $hum = array_map(fn() => 0, $hum);
+            $ammonia = array_map(fn() => 0, $ammonia);
+            $light = array_map(fn() => 0, $light);
         }
 
         return ['labels' => $labels, 'temperature' => $temp, 'humidity' => $hum, 'ammonia' => $ammonia, 'light' => $light];
@@ -213,8 +213,8 @@ class PeternakanService
         $totalGradeC = $grades['Grade C'] ?? 0;
         $totalGrades = $totalGradeA + $totalGradeB + $totalGradeC;
 
-    	$gradeTelur = ['A' => 0, 'B' => 0, 'C' => 0];
-        if($totalGrades > 0) {
+        $gradeTelur = ['A' => 0, 'B' => 0, 'C' => 0];
+        if ($totalGrades > 0) {
             $gradeTelur = [
                 'A' => round(($totalGradeA / $totalGrades) * 100),
                 'B' => round(($totalGradeB / $totalGrades) * 100),
@@ -263,7 +263,7 @@ class PeternakanService
 
             $log[] = [
                 'date' => Carbon::parse($date)->format('d M Y'),
-                'eggs' => $telur > 0 ? number_format((float)$telur, 0, ',', '.') : '-',
+                'eggs' => $telur > 0 ? number_format((float) $telur, 0, ',', '.') : '-',
                 'rejects' => '-', // No reject count in schema
                 'feedKg' => $pakan > 0 ? round($pakan, 1) : '-',
                 'waterL' => '-', // No water count in schema
@@ -323,7 +323,7 @@ class PeternakanService
 
     public function getBarnSpkMessages(array $barn): array
     {
-        $barnId = is_numeric($barn['id']) ? (int)$barn['id'] : 0;
+        $barnId = is_numeric($barn['id']) ? (int) $barn['id'] : 0;
         $status = $barn['status'] ?? 'normal';
         return [
             ['mode' => 'Lingkungan', 'status' => $status === 'danger' ? 'danger' : ($status === 'warning' ? 'warning' : 'normal'), 'message' => $status === 'danger' ? 'Suhu dan amonia melebihi ambang batas! Aktifkan ventilasi darurat.' : ($status === 'warning' ? 'Parameter lingkungan mendekati batas atas. Periksa sirkulasi udara.' : 'Seluruh parameter lingkungan dalam kondisi ideal.')],
@@ -916,8 +916,8 @@ class PeternakanService
                 'date' => Carbon::parse($l->createdAt)->format('M d, Y'),
                 'barn' => $b->nama,
                 'flock_age' => $age,
-                'birds' => number_format((float)($b->jumlah ?? 0), 0, ',', '.'),
-                'eggs' => $l->tipe === 'Panen' ? number_format((float)($panen ?? 0), 0, ',', '.') : '-',
+                'birds' => number_format((float) ($b->jumlah ?? 0), 0, ',', '.'),
+                'eggs' => $l->tipe === 'Panen' ? number_format((float) ($panen ?? 0), 0, ',', '.') : '-',
                 'rejects' => $l->tipe === 'Kematian' ? $reject : '-',
                 'status' => $l->tipe === 'Panen' ? 'Optimal' : 'Attention'
             ];
