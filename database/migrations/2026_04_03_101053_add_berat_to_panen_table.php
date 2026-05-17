@@ -11,10 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('panen', function (Blueprint $table) {
-            $table->decimal('berat', 10, 2)->nullable()->after('jumlah')
-                  ->comment('Berat panen dalam kg (egg mass). Fallback = jumlah * 0.06');
-        });
+        if (!Schema::hasColumn('panen', 'berat')) {
+            Schema::table('panen', function (Blueprint $table) {
+                $table->decimal('berat', 10, 2)->nullable()->after('jumlah')
+                      ->comment('Berat panen dalam kg (egg mass). Fallback = jumlah * 0.06');
+            });
+        }
     }
 
     /**
