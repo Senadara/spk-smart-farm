@@ -16,11 +16,14 @@ class SpkDashboardController extends Controller
     /**
      * Tampilkan halaman utama SPK Analysis Dashboard.
      */
-    public function index(Request $request)
+    public function index(Request $request, \App\Services\PeternakanService $peternakanService)
     {
         $komoditas = $request->input('komoditas', 'petelur');
         $coopId    = $request->input('coop_id');   // null = global
         $historyId = $request->input('history_id');
+
+        $peternakanService->forKomoditas($komoditas);
+        $prodData = $peternakanService->getProduktivitasData($coopId);
 
         // ── Jalankan Fuzzy Engine untuk mendapat data terkini ────────
         $latestResult = $this->runFuzzyEngine($coopId);
@@ -34,7 +37,7 @@ class SpkDashboardController extends Controller
         $activeHistory = collect($spkHistory)->firstWhere('id', $historyId) ?? ($spkHistory[0] ?? $this->emptyHistory());
 
         // ── Fuzzy Status & Chart dari hasil engine ────────────────────
-        $fuzzyData  = $this->getFuzzyStatus($latestResult);
+        $fuzzyData  = $this->getFuzzyStatus($latestResult, $prodData);
         $chartData  = $this->getChartData();
 
         // ── Action Tickets (tetap mock sampai modul tersedia) ─────────
@@ -131,7 +134,7 @@ class SpkDashboardController extends Controller
     /**
      * Build fuzzyData untuk view dari hasil engine terkini.
      */
-    private function getFuzzyStatus(array $result): array
+    private function getFuzzyStatus(array $result, array $prodData): array
     {
         $lingkungan = $result['lingkungan'] ?? [];
         $kesehatan  = $result['kesehatan']  ?? [];
@@ -147,25 +150,18 @@ class SpkDashboardController extends Controller
 
         // Sensor bars dari fuzzified (Engine 1)
         $fuzzLingk = $lingkungan['fuzzified'] ?? [];
-        $fuzzKes   = $kesehatan['fuzzified']  ?? [];
 
         $suhuPct  = isset($inputs['suhu'])      ? min(($inputs['suhu'] / 50) * 100, 100) : 0;
         $humPct   = isset($inputs['kelembapan'])? min($inputs['kelembapan'], 100)         : 0;
         $ammoPct  = isset($inputs['amonia'])    ? min($inputs['amonia'] * 2, 100)         : 0;
-        $hdpPct   = isset($inputs['hdp'])       ? min($inputs['hdp'], 100)                : 0;
-        $pakanPct = isset($inputs['pakan'])     ? min(($inputs['pakan'] / 150) * 100,100) : 0;
-        $mortPct  = isset($inputs['mortalitas'])? min($inputs['mortalitas'] * 20, 100)    : 0;
 
         $suhu   = $inputs['suhu']       ?? 0;
         $humid  = $inputs['kelembapan'] ?? 0;
         $amonia = $inputs['amonia']     ?? 0;
-        $hdp    = $inputs['hdp']        ?? 0;
-        $pakan  = $inputs['pakan']      ?? 0;
-        $mort   = $inputs['mortalitas'] ?? 0;
 
         return [
             'confidence' => max($lingkScore, $kesehatScore),
-            'spider'     => [round($suhuPct), round($humPct), round($ammoPct), round($hdpPct), round($pakanPct), round(100 - $mortPct)],
+            'spider'     => $prodData['spider'] ?? ['labels' => [], 'values' => []],
             'color'      => $colorMap[$lingkLabel] ?? 'gray',
             'sensors'    => [
                 'lingkungan' => [
@@ -173,17 +169,9 @@ class SpkDashboardController extends Controller
                     ['label' => 'Kelembapan', 'percent' => round($humPct),   'status' => $humid > 80 ? 'warning' : 'normal', 'statusLabel' => round($humid, 1) . '% — ' . (isset($fuzzLingk['kelembapan']) && $fuzzLingk['kelembapan'] ? array_search(max($fuzzLingk['kelembapan']), $fuzzLingk['kelembapan']) : '-')],
                     ['label' => 'Amonia',     'percent' => round($ammoPct),  'status' => $amonia > 20 ? 'warning' : 'normal', 'statusLabel' => round($amonia, 1) . ' ppm — ' . (isset($fuzzLingk['amonia']) && $fuzzLingk['amonia'] ? array_search(max($fuzzLingk['amonia']), $fuzzLingk['amonia']) : '-')],
                 ],
-                'produktivitas' => [
-                    ['label' => 'HDP (Hen-Day)',  'percent' => round($hdpPct),   'status' => $hdp < 75 ? 'warning' : 'normal', 'statusLabel' => round($hdp, 1) . '% — ' . (isset($fuzzKes['hdp']) && $fuzzKes['hdp'] ? array_search(max($fuzzKes['hdp']), $fuzzKes['hdp']) : '-')],
-                    ['label' => 'Konsumsi Pakan', 'percent' => round($pakanPct), 'status' => 'normal', 'statusLabel' => round($pakan, 1) . ' g/ekor'],
-                    ['label' => 'Mortalitas',     'percent' => round(100 - $mortPct), 'status' => $mort > 1 ? 'warning' : 'normal', 'statusLabel' => round($mort, 2) . '%'],
-                ],
+                'produktivitas' => $prodData['productivitySensors'] ?? [],
             ],
-            'indicators' => [
-                ['label' => 'HDP Score',  'value' => round($hdp, 1) . '%',  'color' => $hdp >= 90 ? 'emerald' : ($hdp >= 75 ? 'blue' : 'amber')],
-                ['label' => 'FCR Score',  'value' => round($inputs['fcr'] ?? 0, 2),    'color' => ($inputs['fcr'] ?? 0) <= 1.8 ? 'emerald' : 'amber'],
-                ['label' => 'Livability', 'value' => round(100 - $mort, 2) . '%',      'color' => $mort < 0.5 ? 'emerald' : 'amber'],
-            ],
+            'indicators' => $prodData['indicators'] ?? [],
             'results' => [
                 'lingkungan' => [
                     'status'      => strtoupper($lingkLabel),

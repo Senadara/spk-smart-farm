@@ -4,6 +4,7 @@
     'spkResults',
     'hideBarnFilter' => false,
     'showEvaluateButton' => true,
+    'showReportButton' => true,
     'evaluationTime' => 'Auto Evaluated',
 ])
 
@@ -216,7 +217,9 @@
                         <span class="text-sm font-bold text-gray-900" x-text="activeSpkResults?.gabungan?.title ?? '{{ $res['title'] }}'">{{ $res['title'] }}</span>
                     </div>
                     <p class="text-xs text-gray-700 leading-relaxed font-medium" x-text="activeSpkResults?.gabungan?.description ?? @js($res['description'])">{{ $res['description'] }}</p>
+                    @if($showReportButton)
                     <a href="{{ $res['link'] }}" class="inline-block mt-3 px-4 py-2 text-xs font-bold text-white {{ $verdictStyles['btn'] }} rounded-lg transition w-full text-center hover:shadow-md" style="text-decoration: none;">Lihat Laporan Lengkap →</a>
+                    @endif
                 </div>
                 @endif
             </div>

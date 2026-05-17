@@ -237,21 +237,25 @@ class PeternakanController extends Controller
         $lingkLabel = $lingkungan['label'] ?? 'Tidak Diketahui';
         $kesehatLabel = $kesehatan['label'] ?? 'Tidak Diketahui';
 
-        $sensors = $barn['sensors'] ?? [];
+        $fuzzLingk = $lingkungan['fuzzified'] ?? [];
+        $suhuPct  = isset($inputs['suhu'])      ? min(($inputs['suhu'] / 50) * 100, 100) : 0;
+        $humPct   = isset($inputs['kelembapan'])? min($inputs['kelembapan'], 100)         : 0;
+        $ammoPct  = isset($inputs['amonia'])    ? min($inputs['amonia'] * 2, 100)         : 0;
+        $suhu   = $inputs['suhu']       ?? 0;
+        $humid  = $inputs['kelembapan'] ?? 0;
+        $amonia = $inputs['amonia']     ?? 0;
 
-        if (empty($sensors) && !empty($inputs)) {
-            $sensors = [
-                ['label' => 'Suhu (' . round($inputs['suhu'] ?? 0, 1) . '°C)', 'percent' => min(($inputs['suhu'] ?? 0) * 2, 100), 'status' => ($inputs['suhu'] ?? 0) > 28 ? 'warning' : 'normal', 'statusLabel' => $lingkLabel],
-                ['label' => 'Kelembapan (' . round($inputs['kelembapan'] ?? 0, 1) . '%)', 'percent' => min($inputs['kelembapan'] ?? 0, 100), 'status' => 'normal', 'statusLabel' => $lingkLabel],
-                ['label' => 'Amonia (' . round($inputs['amonia'] ?? 0, 1) . 'ppm)', 'percent' => min(($inputs['amonia'] ?? 0) * 2, 100), 'status' => ($inputs['amonia'] ?? 0) > 20 ? 'warning' : 'normal', 'statusLabel' => $lingkLabel],
-            ];
-        }
+        $envSensors = [
+            ['label' => 'Suhu Udara',  'percent' => round($suhuPct),  'status' => $suhu > 30 ? 'warning' : 'normal', 'statusLabel' => round($suhu, 1) . '°C — ' . (isset($fuzzLingk['suhu']) && $fuzzLingk['suhu'] ? array_search(max($fuzzLingk['suhu']), $fuzzLingk['suhu']) : '-')],
+            ['label' => 'Kelembapan', 'percent' => round($humPct),   'status' => $humid > 80 ? 'warning' : 'normal', 'statusLabel' => round($humid, 1) . '% — ' . (isset($fuzzLingk['kelembapan']) && $fuzzLingk['kelembapan'] ? array_search(max($fuzzLingk['kelembapan']), $fuzzLingk['kelembapan']) : '-')],
+            ['label' => 'Amonia',     'percent' => round($ammoPct),  'status' => $amonia > 20 ? 'warning' : 'normal', 'statusLabel' => round($amonia, 1) . ' ppm — ' . (isset($fuzzLingk['amonia']) && $fuzzLingk['amonia'] ? array_search(max($fuzzLingk['amonia']), $fuzzLingk['amonia']) : '-')],
+        ];
 
         $prodData = $this->peternakanService->getProduktivitasData($barn['id'] ?? null);
 
         return [
             'fuzzySensors' => [
-                'lingkungan' => $sensors,
+                'lingkungan' => $envSensors,
                 'produktivitas' => $prodData['productivitySensors'],
             ],
             'spkResults' => [
