@@ -48,6 +48,7 @@ Route::middleware('auth.api')->group(function () {
 
     // Peternakan
     Route::get('/peternakan', [PeternakanController::class, 'index'])->name('peternakan');
+    Route::post('/peternakan/evaluate-all', [PeternakanController::class, 'evaluateAll'])->name('peternakan.evaluate-all');
     Route::get('/peternakan/{id}', [PeternakanController::class, 'show'])->name('peternakan.show');
 
     // Analisa SPK

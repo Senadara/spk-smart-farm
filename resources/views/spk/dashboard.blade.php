@@ -43,6 +43,7 @@
             :indicators="$fuzzyData['indicators']" 
             :spkResults="$fuzzyData['results']"
             :hideBarnFilter="true"
+            :showEvaluateButton="false"
             :evaluationTime="$activeHistory['date'] . ', ' . $activeHistory['time'] . ' — Mode: ' . $activeHistory['mode']"
         />
 
@@ -314,6 +315,16 @@
                 fuzzySensors: {
                     lingkungan: @js($fuzzyData['sensors']['lingkungan']),
                     produktivitas: @js($fuzzyData['sensors']['produktivitas'])
+                },
+                activeIndicators: @js($fuzzyData['indicators']),
+                activeSpkResults: @js($fuzzyData['results']),
+                evaluationTimeLabel: @js($activeHistory['date'] . ', ' . $activeHistory['time']),
+                evaluating: false,
+                evalMessage: '',
+                evalSuccess: false,
+                onFuzzyBarnChange() {},
+                async runFullEvaluation() {
+                    window.location.href = @js(route('spk.dashboard')) + '?coop_id=' + (@js($coopId) ?? '');
                 },
                 _hdpChart: null,
                 _causalityChart: null,

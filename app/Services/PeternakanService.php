@@ -7,6 +7,146 @@ use Carbon\Carbon;
 
 class PeternakanService
 {
+    private ?string $activeKomoditasId = null;
+    private ?string $activeJenisBudidayaId = null;
+    private ?array $cachedBarnEnvironment = null;
+
+    public function forKomoditas(?string $komoditasId): self
+    {
+        $this->activeKomoditasId = $this->resolveKomoditasId($komoditasId);
+        $komod = $this->activeKomoditasId
+            ? DB::table('komoditas')->where('id', $this->activeKomoditasId)->where('isDeleted', 0)->first()
+            : null;
+
+        $this->activeJenisBudidayaId = $komod?->jenisBudidayaId
+            ?? DB::table('jenisBudidaya')->where('nama', 'like', '%Ayam Petelur%')->where('isDeleted', 0)->value('id');
+
+        $this->cachedBarnEnvironment = null;
+
+        return $this;
+    }
+
+    public function getActiveKomoditasId(): ?string
+    {
+        return $this->activeKomoditasId;
+    }
+
+    public function getActiveJenisBudidayaId(): ?string
+    {
+        return $this->activeJenisBudidayaId;
+    }
+
+    public function resolveKomoditasId(?string $requestedId): ?string
+    {
+        if ($requestedId) {
+            $exists = DB::table('komoditas')->where('id', $requestedId)->where('isDeleted', 0)->exists();
+            if ($exists) {
+                return $requestedId;
+            }
+        }
+
+        $layer = DB::table('komoditas')
+            ->where('isDeleted', 0)
+            ->whereRaw('LOWER(nama) LIKE ?', ['%layer%'])
+            ->value('id');
+
+        if ($layer) {
+            return $layer;
+        }
+
+        return DB::table('komoditas')->where('isDeleted', 0)->orderBy('nama')->value('id');
+    }
+
+    public function getActiveCoopIds(bool $activeOnly = true): array
+    {
+        if (!$this->activeJenisBudidayaId) {
+            return [];
+        }
+
+        $query = DB::table('unitBudidaya')
+            ->where('jenisBudidayaId', $this->activeJenisBudidayaId)
+            ->where('isDeleted', 0);
+
+        if ($activeOnly) {
+            $query->where('status', 1);
+        }
+
+        return $query->pluck('id')->toArray();
+    }
+
+    public function getCommodityThresholds(): array
+    {
+        $defaults = [
+            'TEMP'    => ['min' => 20, 'max' => 28],
+            'HUMID'   => ['min' => 50, 'max' => 70],
+            'AMMON'   => ['min' => 0,  'max' => 15],
+            'AMMONIA' => ['min' => 0,  'max' => 15],
+            'AMMA'    => ['min' => 0,  'max' => 15],
+            'LUX'     => ['min' => 15, 'max' => 50],
+            'LIGHT'   => ['min' => 15, 'max' => 50],
+        ];
+
+        if (!$this->activeKomoditasId) {
+            return $defaults;
+        }
+
+        $rows = DB::table('commodity_parameter')
+            ->join('iot_parameter', 'commodity_parameter.parameterId', '=', 'iot_parameter.id')
+            ->where('commodity_parameter.commodityId', $this->activeKomoditasId)
+            ->get(['iot_parameter.parameterCode', 'commodity_parameter.minValue', 'commodity_parameter.maxValue']);
+
+        foreach ($rows as $row) {
+            $defaults[$row->parameterCode] = [
+                'min' => (float) $row->minValue,
+                'max' => (float) $row->maxValue,
+            ];
+        }
+
+        return $defaults;
+    }
+
+    private function evaluateSensorStatus(float $value, ?float $min, ?float $max): string
+    {
+        if ($value <= 0) {
+            return 'normal';
+        }
+
+        if ($min !== null && $value < $min) {
+            $gap = ($min - $value) / max(abs($min), 1);
+            return $gap > 0.1 ? 'danger' : 'warning';
+        }
+
+        if ($max !== null && $value > $max) {
+            $gap = ($value - $max) / max(abs($max), 1);
+            return $gap > 0.1 ? 'danger' : 'warning';
+        }
+
+        return 'normal';
+    }
+
+    private function worstStatus(string ...$statuses): string
+    {
+        if (in_array('danger', $statuses, true)) {
+            return 'danger';
+        }
+        if (in_array('warning', $statuses, true)) {
+            return 'warning';
+        }
+
+        return 'normal';
+    }
+
+    private function thresholdFor(array $thresholds, string $code): array
+    {
+        foreach ([$code, 'AMMON', 'AMMONIA', 'AMMA', 'LIGHT', 'LUX'] as $key) {
+            if (isset($thresholds[$key])) {
+                return $thresholds[$key];
+            }
+        }
+
+        return ['min' => null, 'max' => null];
+    }
+
     public function getBarnDetail(array $barn): array
     {
         $coopId = $barn['id'] ?? null;
@@ -371,14 +511,7 @@ class PeternakanService
 
     public function getProductivityTrend(): array
     {
-        $jenisBudidaya = DB::table('jenisBudidaya')
-            ->where('nama', 'like', '%Ayam Petelur%')
-            ->where('isDeleted', 0)
-            ->first();
-
-        $activeCoopIds = DB::table('unitBudidaya')
-            ->where('jenisBudidayaId', $jenisBudidaya?->id)
-            ->pluck('id')->toArray();
+        $activeCoopIds = $this->getActiveCoopIds(false);
 
         $labels = [];
         $hdp = [];
@@ -502,26 +635,10 @@ class PeternakanService
         $lastMonthStart = now()->subMonth()->startOfMonth()->toDateString();
         $lastMonthEnd = now()->subMonth()->endOfMonth()->toDateString();
 
-        $jenisBudidaya = DB::table('jenisBudidaya')
-            ->where('nama', 'like', '%Ayam Petelur%')
-            ->where('isDeleted', 0)
-            ->first();
-
-        $jenisBudidayaId = $jenisBudidaya?->id;
-
-        $activeCoopIds = [];
-        $totalAyamHidup = 0;
-
-        if ($jenisBudidayaId) {
-            $activeCoops = DB::table('unitBudidaya')
-                ->where('jenisBudidayaId', $jenisBudidayaId)
-                ->where('status', 1)
-                ->where('isDeleted', 0)
-                ->get(['id', 'jumlah']);
-
-            $activeCoopIds = $activeCoops->pluck('id')->toArray();
-            $totalAyamHidup = $activeCoops->sum('jumlah');
-        }
+        $activeCoopIds = $this->getActiveCoopIds();
+        $totalAyamHidup = empty($activeCoopIds)
+            ? 0
+            : (float) DB::table('unitBudidaya')->whereIn('id', $activeCoopIds)->sum('jumlah');
 
         if (empty($activeCoopIds) || $totalAyamHidup <= 0) {
             return [
@@ -672,70 +789,105 @@ class PeternakanService
         ];
     }
 
-    public function getChartData(): array
+    public function getChartData(string $range = '30d'): array
     {
-        $jenisBudidaya = DB::table('jenisBudidaya')->where('nama', 'like', '%Ayam Petelur%')->where('isDeleted', 0)->first();
-        $activeCoops = DB::table('unitBudidaya')->where('jenisBudidayaId', $jenisBudidaya?->id)->pluck('id')->toArray();
-        $pop = DB::table('unitBudidaya')->where('jenisBudidayaId', $jenisBudidaya?->id)->sum('jumlah');
+        $activeCoops = $this->getActiveCoopIds(false);
+        $pop = empty($activeCoops)
+            ? 0
+            : (float) DB::table('unitBudidaya')->whereIn('id', $activeCoops)->sum('jumlah');
 
+        [$startDate, $labelFormat, $stepDays] = match ($range) {
+            '90d' => [now()->subDays(89)->toDateString(), 'd/m', 1],
+            'ytd' => [now()->startOfYear()->toDateString(), 'd/m', 1],
+            default => [now()->subDays(29)->toDateString(), 'd/m', 1],
+        };
+
+        $endDate = now()->toDateString();
         $labels = [];
         $hdpArr = [];
         $fcrArr = [];
 
-        for ($i = 7; $i >= 0; $i--) {
-            $start = now()->subWeeks($i)->startOfWeek();
-            $end = now()->subWeeks($i)->endOfWeek();
-
-            if (empty($activeCoops)) {
-                $labels[] = 'Mg ' . (8 - $i);
+        if (empty($activeCoops) || $pop <= 0) {
+            $days = max(1, Carbon::parse($startDate)->diffInDays($endDate) + 1);
+            for ($i = $days - 1; $i >= 0; $i -= $stepDays) {
+                $dt = Carbon::parse($endDate)->subDays($i);
+                $labels[] = $dt->format($labelFormat);
                 $hdpArr[] = 0;
                 $fcrArr[] = 0;
-                continue;
             }
 
-            $panen = DB::table('panen')->join('laporan', 'panen.laporanId', '=', 'laporan.id')
-                ->whereIn('laporan.unitBudidayaId', $activeCoops)
-                ->whereBetween('laporan.createdAt', [$start, $end])
-                ->selectRaw('SUM(panen.jumlah) as tTelur, SUM(COALESCE(panen.berat, panen.jumlah * 0.06)) as tMass')->first();
+            return ['labels' => $labels, 'hdp' => $hdpArr, 'fcr' => $fcrArr, 'range' => $range];
+        }
 
-            $pakan = DB::table('harianTernak')->join('laporan', 'harianTernak.laporanId', '=', 'laporan.id')
-                ->whereIn('laporan.unitBudidayaId', $activeCoops)
-                ->whereBetween('laporan.createdAt', [$start, $end])->sum('pakan');
+        $panens = DB::table('panen')->join('laporan', 'panen.laporanId', '=', 'laporan.id')
+            ->whereIn('laporan.unitBudidayaId', $activeCoops)
+            ->whereDate('laporan.createdAt', '>=', $startDate)
+            ->whereDate('laporan.createdAt', '<=', $endDate)
+            ->selectRaw('DATE(laporan.createdAt) as dt, SUM(panen.jumlah) as tTelur, SUM(COALESCE(panen.berat, panen.jumlah * 0.06)) as tMass')
+            ->groupBy('dt')
+            ->get()
+            ->keyBy('dt');
 
-            $labels[] = current(explode('-', $start->format('d/m-Y')));
-            $tTelur = (float) ($panen->tTelur ?? 0);
-            $tMass = (float) ($panen->tMass ?? 0);
+        $pakans = DB::table('harianTernak')->join('laporan', 'harianTernak.laporanId', '=', 'laporan.id')
+            ->whereIn('laporan.unitBudidayaId', $activeCoops)
+            ->whereDate('laporan.createdAt', '>=', $startDate)
+            ->whereDate('laporan.createdAt', '<=', $endDate)
+            ->selectRaw('DATE(laporan.createdAt) as dt, SUM(harianTernak.pakan) as totalPakan')
+            ->groupBy('dt')
+            ->get()
+            ->keyBy('dt');
 
-            $weekPop = $pop * 7;
+        $cursor = Carbon::parse($startDate);
+        $end = Carbon::parse($endDate);
 
-            $hdpArr[] = $weekPop > 0 ? round(($tTelur / $weekPop) * 100, 1) : 0;
-            $fcrArr[] = $tMass > 0 ? round($pakan / $tMass, 2) : 0;
+        while ($cursor->lte($end)) {
+            $dt = $cursor->toDateString();
+            $labels[] = $cursor->format($labelFormat);
+
+            $p = $panens[$dt] ?? null;
+            $pk = $pakans[$dt] ?? null;
+            $telur = $p ? (float) $p->tTelur : 0;
+            $mass = $p ? (float) $p->tMass : 0;
+            $pakan = $pk ? (float) $pk->totalPakan : 0;
+
+            $hdpArr[] = $pop > 0 ? round(($telur / $pop) * 100, 1) : 0;
+            $fcrArr[] = $mass > 0 ? round($pakan / $mass, 2) : 0;
+
+            $cursor->addDays($stepDays);
         }
 
         return [
             'labels' => $labels,
             'hdp' => $hdpArr,
             'fcr' => $fcrArr,
+            'range' => $range,
+        ];
+    }
+
+    public function getChartDataByRange(): array
+    {
+        return [
+            '30d' => $this->getChartData('30d'),
+            '90d' => $this->getChartData('90d'),
+            'ytd' => $this->getChartData('ytd'),
         ];
     }
 
     public function getBarnEnvironment(): array
     {
-        $jenisBudidaya = DB::table('jenisBudidaya')
-            ->where('nama', 'like', '%Ayam Petelur%')
-            ->where('isDeleted', 0)
-            ->first();
+        if ($this->cachedBarnEnvironment !== null) {
+            return $this->cachedBarnEnvironment;
+        }
 
-        $jenisBudidayaId = $jenisBudidaya?->id;
+        $thresholds = $this->getCommodityThresholds();
 
-        $activeCoops = collect();
-        if ($jenisBudidayaId) {
-            $activeCoops = DB::table('unitBudidaya')
-                ->where('jenisBudidayaId', $jenisBudidayaId)
+        $activeCoops = $this->activeJenisBudidayaId
+            ? DB::table('unitBudidaya')
+                ->where('jenisBudidayaId', $this->activeJenisBudidayaId)
                 ->where('status', 1)
                 ->where('isDeleted', 0)
-                ->get();
-        }
+                ->get()
+            : collect();
 
         $barns = [];
         foreach ($activeCoops as $coop) {
@@ -743,11 +895,10 @@ class PeternakanService
                 ->where('unitBudidayaId', $coop->id)
                 ->pluck('id')->toArray();
 
-            $temp = 0;
-            $hum = 0;
-            $ammo = 0;
-            $lux = 0;
-            $status = 'normal';
+            $temp = 0.0;
+            $hum = 0.0;
+            $ammo = 0.0;
+            $lux = 0.0;
 
             if (!empty($devices)) {
                 $latestLogs = DB::table('iot_sensor_data')
@@ -760,7 +911,7 @@ class PeternakanService
                 $mapped = [];
                 foreach ($latestLogs as $l) {
                     if (!isset($mapped[$l->parameterCode])) {
-                        $mapped[$l->parameterCode] = $l->value;
+                        $mapped[$l->parameterCode] = (float) $l->value;
                     }
                 }
 
@@ -768,33 +919,49 @@ class PeternakanService
                 $hum = $mapped['HUMID'] ?? 0;
                 $ammo = $mapped['AMMON'] ?? ($mapped['AMMA'] ?? ($mapped['AMMONIA'] ?? 0));
                 $lux = $mapped['LIGHT'] ?? ($mapped['LUX'] ?? 0);
-
-                if ($temp > 28)
-                    $status = 'danger';
-                elseif ($temp >= 26)
-                    $status = 'warning';
-                elseif ($temp > 0 && $temp < 20)
-                    $status = 'warning';
             }
+
+            $tempThr = $this->thresholdFor($thresholds, 'TEMP');
+            $humThr = $this->thresholdFor($thresholds, 'HUMID');
+            $ammoThr = $this->thresholdFor($thresholds, 'AMMON');
+            $luxThr = $this->thresholdFor($thresholds, 'LUX');
+
+            $tempStatus = $this->evaluateSensorStatus($temp, $tempThr['min'], $tempThr['max']);
+            $humStatus = $this->evaluateSensorStatus($hum, $humThr['min'], $humThr['max']);
+            $ammoStatus = $this->evaluateSensorStatus($ammo, $ammoThr['min'], $ammoThr['max']);
+            $luxStatus = $this->evaluateSensorStatus($lux, $luxThr['min'], $luxThr['max']);
+            $status = $this->worstStatus($tempStatus, $humStatus, $ammoStatus, $luxStatus);
+
+            $statusLabels = [
+                'normal' => 'Normal',
+                'warning' => 'Warning',
+                'danger' => 'Critical',
+            ];
+
+            $ammoMax = $ammoThr['max'] ?? 15;
 
             $barns[] = [
                 'id' => $coop->id,
                 'name' => $coop->nama,
-                'temp' => round((float) $temp, 1),
+                'temp' => round($temp, 1),
                 'status' => $status,
                 'sensors' => [
-                    ['label' => 'Temperature (' . $temp . '°C)', 'percent' => $temp > 0 ? min(($temp / 40) * 100, 100) : 0, 'status' => $temp > 28 ? 'danger' : 'normal', 'statusLabel' => $temp > 28 ? 'Hot' : 'Normal'],
-                    ['label' => 'Humidity (' . $hum . '%)', 'percent' => min($hum, 100), 'status' => 'normal', 'statusLabel' => 'Ideal'],
-                    ['label' => 'Ammonia (' . $ammo . 'ppm)', 'percent' => min($ammo * 2, 100), 'status' => $ammo > 20 ? 'warning' : 'normal', 'statusLabel' => $ammo > 20 ? 'Moderate' : 'Low'],
-                    ['label' => 'Light (' . $lux . ' xl)', 'percent' => min($lux, 100), 'status' => 'normal', 'statusLabel' => 'Normal'],
+                    ['label' => 'Temperature (' . round($temp, 1) . '°C)', 'percent' => $temp > 0 ? min(($temp / max($tempThr['max'] ?? 40, 1)) * 100, 100) : 0, 'status' => $tempStatus, 'statusLabel' => $statusLabels[$tempStatus]],
+                    ['label' => 'Humidity (' . round($hum, 1) . '%)', 'percent' => min($hum, 100), 'status' => $humStatus, 'statusLabel' => $statusLabels[$humStatus]],
+                    ['label' => 'Ammonia (' . round($ammo, 1) . 'ppm)', 'percent' => min($ammo * 2, 100), 'status' => $ammoStatus, 'statusLabel' => $statusLabels[$ammoStatus]],
+                    ['label' => 'Light (' . round($lux, 1) . ' lx)', 'percent' => min($lux, 100), 'status' => $luxStatus, 'statusLabel' => $statusLabels[$luxStatus]],
                 ],
                 'summary' => [
-                    'avg_temp' => $temp . '°C',
-                    'humidity' => $hum . '%',
-                    'ammonia' => $ammo . 'ppm',
-                    'ammonia_ok' => $ammo <= 20,
-                    'lux' => $lux . ' lx'
-                ]
+                    'avg_temp' => round($temp, 1) . '°C',
+                    'humidity' => round($hum, 1) . '%',
+                    'ammonia' => round($ammo, 1) . 'ppm',
+                    'ammonia_ok' => $ammoStatus === 'normal',
+                    'lux' => round($lux, 1) . ' lx',
+                    'temp_status' => $tempStatus,
+                    'humidity_status' => $humStatus,
+                    'ammonia_status' => $ammoStatus,
+                    'lux_status' => $luxStatus,
+                ],
             ];
         }
 
@@ -804,59 +971,150 @@ class PeternakanService
                 'name' => 'Belum ada Kandang',
                 'temp' => '-',
                 'status' => 'normal',
-                'summary' => ['avg_temp' => '-', 'humidity' => '-', 'ammonia' => '-', 'ammonia_ok' => true, 'lux' => '-']
+                'sensors' => [],
+                'summary' => ['avg_temp' => '-', 'humidity' => '-', 'ammonia' => '-', 'ammonia_ok' => true, 'lux' => '-'],
             ];
         }
 
-        return ['barns' => $barns];
+        $this->cachedBarnEnvironment = ['barns' => $barns];
+
+        return $this->cachedBarnEnvironment;
     }
 
-    public function getProduktivitasData(): array
+    public function getProduktivitasData(?string $coopId = null): array
     {
-        $jenisBudidaya = DB::table('jenisBudidaya')->where('nama', 'like', '%Ayam Petelur%')->where('isDeleted', 0)->first();
-        $coopSum = DB::table('unitBudidaya')->where('jenisBudidayaId', $jenisBudidaya?->id)->sum('jumlah');
+        $activeCoops = $coopId ? [$coopId] : $this->getActiveCoopIds(false);
+        $coopSum = empty($activeCoops)
+            ? 0
+            : (float) DB::table('unitBudidaya')->whereIn('id', $activeCoops)->sum('jumlah');
 
         if ($coopSum <= 0) {
-            return ['spider' => ['labels' => ['HDP', 'Feed Intake', 'FCR', 'Mortalitas', 'Umur Biologis'], 'values' => [0, 0, 0, 0, 0]], 'indicators' => [['label' => 'HDP', 'value' => '-', 'color' => 'neutral'], ['label' => 'Feed Intake', 'value' => '-', 'color' => 'neutral'], ['label' => 'FCR', 'value' => '-', 'color' => 'neutral'], ['label' => 'Mortalitas', 'value' => '-', 'color' => 'neutral'], ['label' => 'Umur Biologis', 'value' => '-', 'color' => 'neutral']]];
+            return [
+                'spider' => [
+                    'labels' => ['HDP', 'Umur Biologis', 'Feed Consumption', 'Mortalitas'],
+                    'values' => [0, 0, 0, 0],
+                ],
+                'indicators' => [
+                    ['label' => 'HDP', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
+                    ['label' => 'Umur Biologis', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
+                    ['label' => 'Feed Consumption', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
+                    ['label' => 'Mortalitas', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
+                ],
+                'productivitySensors' => [],
+            ];
         }
 
-        $panen = DB::table('panen')->join('laporan', 'panen.laporanId', '=', 'laporan.id')
-            ->join('unitBudidaya', 'laporan.unitBudidayaId', '=', 'unitBudidaya.id')
-            ->where('unitBudidaya.jenisBudidayaId', $jenisBudidaya?->id)
-            ->whereDate('laporan.createdAt', now()->toDateString())
-            ->selectRaw('SUM(panen.jumlah) as tTelur, SUM(COALESCE(panen.berat, panen.jumlah * 0.06)) as tMass')->first();
+        $panenQuery = DB::table('panen')->join('laporan', 'panen.laporanId', '=', 'laporan.id')
+            ->whereIn('laporan.unitBudidayaId', $activeCoops)
+            ->whereDate('laporan.createdAt', now()->toDateString());
+
+        $panen = $panenQuery->selectRaw('SUM(panen.jumlah) as tTelur, SUM(COALESCE(panen.berat, panen.jumlah * 0.06)) as tMass')->first();
 
         $hdp = $coopSum > 0 ? (float) ($panen->tTelur ?? 0) / $coopSum * 100 : 0;
 
         $pakan = DB::table('harianTernak')->join('laporan', 'harianTernak.laporanId', '=', 'laporan.id')
-            ->join('unitBudidaya', 'laporan.unitBudidayaId', '=', 'unitBudidaya.id')
-            ->where('unitBudidaya.jenisBudidayaId', $jenisBudidaya?->id)
+            ->whereIn('laporan.unitBudidayaId', $activeCoops)
             ->whereDate('laporan.createdAt', now()->toDateString())
             ->sum('harianTernak.pakan');
 
-        $fcr = (float) ($panen->tMass ?? 0) > 0 ? $pakan / $panen->tMass : 0;
         $fi = $coopSum > 0 ? ($pakan / $coopSum) * 1000 : 0;
 
         $mati = DB::table('kematian')->join('laporan', 'kematian.laporanId', '=', 'laporan.id')
-            ->join('unitBudidaya', 'laporan.unitBudidayaId', '=', 'unitBudidaya.id')
-            ->where('unitBudidaya.jenisBudidayaId', $jenisBudidaya?->id)
+            ->whereIn('laporan.unitBudidayaId', $activeCoops)
             ->whereDate('kematian.tanggal', '>=', now()->startOfMonth()->toDateString())
             ->count();
         $mortality = $coopSum > 0 ? ($mati / $coopSum) * 100 : 0;
 
+        $avgWeeks = 0;
+        if (!empty($activeCoops)) {
+            $coops = DB::table('unitBudidaya')->whereIn('id', $activeCoops)->get(['createdAt']);
+            $weeks = $coops->map(fn ($c) => Carbon::parse($c->createdAt)->diffInWeeks(now()));
+            $avgWeeks = $weeks->isEmpty() ? 0 : (int) round($weeks->avg());
+        }
+
+        $hdpScore = min(100, max(0, round($hdp)));
+        $ageScore = min(100, max(0, $avgWeeks * 2));
+        $feedScore = min(100, max(0, round($fi > 120 ? 100 : ($fi / 1.2))));
+        $mortScore = min(100, max(0, round(100 - ($mortality * 10))));
+
         return [
             'spider' => [
-                'labels' => ['HDP', 'Feed Intake', 'FCR', 'Mortalitas', 'Umur Biologis'],
-                'values' => [round($hdp), round($fi > 120 ? 100 : ($fi / 1.2)), round($fcr > 0 && $fcr < 5 ? (2 / $fcr) * 100 : 0), round(100 - $mortality), 72],
+                'labels' => ['HDP', 'Umur Biologis', 'Feed Consumption', 'Mortalitas'],
+                'values' => [$hdpScore, $ageScore, $feedScore, $mortScore],
             ],
             'indicators' => [
-                ['label' => 'HDP', 'value' => $hdp > 85 ? 'High' : ($hdp > 70 ? 'Avg' : 'Low'), 'color' => $hdp > 85 ? 'emerald' : 'amber'],
-                ['label' => 'Feed Intake', 'value' => $fi > 105 ? 'Good' : 'Low', 'color' => $fi > 105 ? 'emerald' : 'amber'],
-                ['label' => 'FCR', 'value' => $fcr > 0 && $fcr < 1.6 ? 'Good' : 'Avg', 'color' => $fcr > 0 && $fcr < 1.6 ? 'emerald' : 'amber'],
-                ['label' => 'Mortalitas', 'value' => $mortality < 1 ? 'Low' : 'High', 'color' => $mortality < 1 ? 'emerald' : 'red'],
-                ['label' => 'Umur Biologis', 'value' => 'Avg', 'color' => 'blue'],
+                ['label' => 'HDP', 'value' => round($hdp, 1) . '%', 'color' => $hdp > 85 ? 'emerald' : ($hdp > 70 ? 'amber' : 'red'), 'detail' => $hdp > 85 ? 'Optimal' : ($hdp > 70 ? 'Cukup' : 'Rendah'), 'score' => $hdpScore],
+                ['label' => 'Umur Biologis', 'value' => $avgWeeks > 0 ? $avgWeeks . ' mg' : '-', 'color' => 'blue', 'detail' => 'Rata-rata flock', 'score' => $ageScore],
+                ['label' => 'Feed Consumption', 'value' => round($fi, 0) . ' g', 'color' => $fi >= 100 && $fi <= 130 ? 'emerald' : 'amber', 'detail' => 'Per ekor/hari', 'score' => $feedScore],
+                ['label' => 'Mortalitas', 'value' => round($mortality, 2) . '%', 'color' => $mortality < 1 ? 'emerald' : ($mortality < 3 ? 'amber' : 'red'), 'detail' => 'Bulan ini', 'score' => $mortScore],
+            ],
+            'productivitySensors' => [
+                ['label' => 'HDP (Hen-Day)', 'percent' => $hdpScore, 'status' => $hdp >= 85 ? 'normal' : ($hdp >= 70 ? 'warning' : 'danger'), 'statusLabel' => round($hdp, 1) . '%'],
+                ['label' => 'Feed Consumption', 'percent' => $feedScore, 'status' => $fi >= 100 && $fi <= 130 ? 'normal' : 'warning', 'statusLabel' => round($fi, 0) . ' g/ekor'],
+                ['label' => 'Mortalitas', 'percent' => $mortScore, 'status' => $mortality < 1 ? 'normal' : ($mortality < 3 ? 'warning' : 'danger'), 'statusLabel' => round($mortality, 2) . '%'],
             ],
         ];
+    }
+
+    public function getListKandang(): array
+    {
+        if (!$this->activeJenisBudidayaId) {
+            return [];
+        }
+
+        $coops = DB::table('unitBudidaya')
+            ->where('jenisBudidayaId', $this->activeJenisBudidayaId)
+            ->where('status', 1)
+            ->where('isDeleted', 0)
+            ->orderBy('nama')
+            ->get(['id', 'nama', 'kapasitas', 'jumlah', 'lokasi', 'createdAt']);
+
+        $envById = collect($this->getBarnEnvironment()['barns'])->keyBy('id');
+        $today = now()->toDateString();
+
+        return $coops->map(function ($coop) use ($envById, $today) {
+            $env = $envById->get($coop->id);
+            $status = $env['status'] ?? 'normal';
+
+            $hdpToday = 0.0;
+            $pop = (float) ($coop->jumlah ?? 0);
+            if ($pop > 0) {
+                $telur = DB::table('panen')
+                    ->join('laporan', 'panen.laporanId', '=', 'laporan.id')
+                    ->where('laporan.unitBudidayaId', $coop->id)
+                    ->whereDate('laporan.createdAt', $today)
+                    ->sum('panen.jumlah');
+                $hdpToday = round(($telur / $pop) * 100, 1);
+            }
+
+            return [
+                'id' => $coop->id,
+                'nama' => $coop->nama,
+                'kapasitas' => $coop->kapasitas,
+                'jumlah' => $coop->jumlah,
+                'lokasi' => $coop->lokasi,
+                'status' => $status,
+                'temp' => $env['temp'] ?? '-',
+                'hdp' => $hdpToday,
+            ];
+        })->values()->all();
+    }
+
+    public function getLastFuzzyEvaluationAt(): ?Carbon
+    {
+        $coopIds = $this->getActiveCoopIds();
+
+        $query = DB::table('spk_fuzzy_logs')->orderByDesc('createdAt');
+
+        if (!empty($coopIds)) {
+            $query->where(function ($q) use ($coopIds) {
+                $q->whereIn('unit_budidaya_id', $coopIds)->orWhereNull('unit_budidaya_id');
+            });
+        }
+
+        $ts = $query->value('createdAt');
+
+        return $ts ? Carbon::parse($ts) : null;
     }
 
     public function getSpkResults(): array
@@ -889,8 +1147,9 @@ class PeternakanService
 
     public function getProductionLog(): array
     {
-        $jenisBudidaya = DB::table('jenisBudidaya')->where('nama', 'like', '%Ayam Petelur%')->where('isDeleted', 0)->first();
-        $coops = DB::table('unitBudidaya')->where('jenisBudidayaId', $jenisBudidaya?->id)->get()->keyBy('id');
+        $coops = $this->activeJenisBudidayaId
+            ? DB::table('unitBudidaya')->where('jenisBudidayaId', $this->activeJenisBudidayaId)->where('isDeleted', 0)->get()->keyBy('id')
+            : collect();
 
         if ($coops->isEmpty()) {
             return [['date' => '-', 'barn' => 'No Data', 'flock_age' => '-', 'birds' => '-', 'eggs' => '-', 'rejects' => '-', 'status' => '-']];
