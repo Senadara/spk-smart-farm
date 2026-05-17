@@ -46,6 +46,23 @@ class AyamPetelurSeeder extends Seeder
             $jenisBudidayaId = $jenisBudidaya->id;
         }
 
+        // 1.5 Ensure Komoditas Ayam Layer
+        $komoditas = DB::table('komoditas')->where('nama', 'Ayam Layer')->where('jenisBudidayaId', $jenisBudidayaId)->first();
+        if (!$komoditas) {
+            $satuanEkor = DB::table('satuan')->where('nama', 'Ekor')->first();
+            $satuanId = $satuanEkor ? $satuanEkor->id : null;
+            
+            DB::table('komoditas')->insert([
+                'id' => Str::uuid()->toString(),
+                'jenisBudidayaId' => $jenisBudidayaId,
+                'satuanId' => $satuanId ?? '55555555-5555-5555-5555-555555555555',
+                'nama' => 'Ayam Layer',
+                'createdAt' => now(),
+                'updatedAt' => now(),
+                'isDeleted' => 0,
+            ]);
+        }
+
         // 2. Ensure Grades
         $grades = ['Grade A', 'Grade B', 'Grade C', 'Grade AA', 'Afkir'];
         $gradeIds = [];

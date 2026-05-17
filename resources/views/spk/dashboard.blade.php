@@ -43,6 +43,7 @@
             :indicators="$fuzzyData['indicators']" 
             :spkResults="$fuzzyData['results']"
             :hideBarnFilter="true"
+            :showReportButton="false"
             :evaluationTime="$activeHistory['date'] . ', ' . $activeHistory['time'] . ' — Mode: ' . $activeHistory['mode']"
         />
 
@@ -99,22 +100,28 @@
         </div>
 
         {{-- ═══ 4. DATA MENTAH + GRAFIK ←→ RIWAYAT SPK (Side-by-Side) ═══ --}}
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:items-start">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
 
             {{-- LEFT: Data Mentah + Grafik + KPI (8/12) --}}
             <div class="lg:col-span-8 space-y-4 order-2 lg:order-1">
 
                 {{-- Raw Data Snapshot Card --}}
                 <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                    <div class="flex items-center justify-between mb-3">
-                        <h4 class="text-xs font-bold text-gray-700">Data Mentah (Snapshot {{ $activeHistory['id'] }})</h4>
-                        <span class="text-[9px] text-gray-400">{{ $activeHistory['date'] }}, {{ $activeHistory['time'] }}</span>
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h4 class="text-sm font-bold text-gray-800 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                Data Snapshot Parameter
+                            </h4>
+                            <p class="text-[11px] text-gray-400 mt-0.5">Nilai parameter yang digunakan pada analisa <span class="font-bold text-gray-600">#{{ $activeHistory['id'] }}</span></p>
+                        </div>
+                        <span class="text-[10px] font-medium bg-gray-50 px-2.5 py-1 rounded-md text-gray-500">{{ $activeHistory['date'] }}, {{ $activeHistory['time'] }}</span>
                     </div>
-                    <div class="grid grid-cols-3 sm:grid-cols-5 gap-3">
+                    <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
                         @foreach($activeHistory['raw'] as $key => $val)
-                            <div class="text-center p-2.5 rounded-lg {{ $val !== '-' ? 'bg-gray-50' : 'bg-gray-50/50' }}">
-                                <p class="text-[9px] uppercase font-semibold text-gray-400 mb-0.5">{{ $key }}</p>
-                                <p class="text-sm font-black {{ $val !== '-' ? 'text-gray-800' : 'text-gray-300' }}">{{ $val }}</p>
+                            <div class="text-center p-3 rounded-xl border {{ $val !== '-' ? 'border-emerald-100 bg-emerald-50/30' : 'border-gray-50 bg-gray-50/50' }} transition-all hover:shadow-md">
+                                <p class="text-[9px] uppercase font-bold tracking-wider text-gray-400 mb-1">{{ $key }}</p>
+                                <p class="text-base font-black {{ $val !== '-' ? 'text-gray-800' : 'text-gray-300' }}">{{ $val }}</p>
                             </div>
                         @endforeach
                     </div>
@@ -168,8 +175,8 @@
             </div>
 
             {{-- RIGHT: Riwayat Analisa SPK (4/12) --}}
-            <div class="lg:col-span-4 order-1 lg:order-2">
-                <div class="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden flex flex-col" style="max-height: 580px;">
+            <div class="lg:col-span-4 order-1 lg:order-2 relative h-[500px] lg:h-auto">
+                <div class="absolute inset-0 bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden flex flex-col">
                     {{-- Header --}}
                     <div class="px-4 pt-4 pb-3 border-b border-gray-100">
                         <div class="flex items-center justify-between mb-2">
@@ -315,6 +322,16 @@
                     lingkungan: @js($fuzzyData['sensors']['lingkungan']),
                     produktivitas: @js($fuzzyData['sensors']['produktivitas'])
                 },
+                activeIndicators: @js($fuzzyData['indicators']),
+                activeSpkResults: @js($fuzzyData['results']),
+                evaluationTimeLabel: @js($activeHistory['date'] . ', ' . $activeHistory['time']),
+                evaluating: false,
+                evalMessage: '',
+                evalSuccess: false,
+                onFuzzyBarnChange() {},
+                async runFullEvaluation() {
+                    window.location.href = @js(route('spk.dashboard')) + '?coop_id=' + (@js($coopId) ?? '');
+                },
                 _hdpChart: null,
                 _causalityChart: null,
                 _spiderChart: null,
@@ -336,7 +353,15 @@
                     if (!ctx || typeof Chart === 'undefined') return;
 
                     const activeSpkColor = '{{ $fuzzyData['color'] }}';
-                    const activeSpiderData = @js($fuzzyData['spider']);
+                    let activeSpiderData = @js($fuzzyData['spider']);
+                    
+                    // Fallback if data is unexpectedly a flat array of 6 variables from old cache
+                    if (Array.isArray(activeSpiderData)) {
+                        activeSpiderData = {
+                            labels: ['HDP', 'Umur Biologis', 'Feed Consumption', 'Mortalitas'],
+                            values: activeSpiderData.slice(0, 4)
+                        };
+                    }
                     
                     let strokeColor = '#10B981'; // emerald
                     let fillColor = 'rgba(16, 185, 129, 0.2)';
@@ -352,10 +377,10 @@
                     this._spiderChart = new Chart(ctx, {
                         type: 'radar',
                         data: {
-                            labels: ['Suhu', 'Kelembaban', 'Amonia', 'HDP', 'FCR', 'Mortalitas'],
+                            labels: activeSpiderData.labels ?? ['HDP', 'Umur Biologis', 'Feed Consumption', 'Mortalitas'],
                             datasets: [{
                                 label: 'Status (%)',
-                                data: activeSpiderData, // [Env x3, Prod x3]
+                                data: activeSpiderData.values ?? [0, 0, 0, 0],
                                 backgroundColor: fillColor,
                                 borderColor: strokeColor,
                                 pointBackgroundColor: strokeColor,

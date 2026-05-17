@@ -15,5 +15,8 @@ class Komoditas extends Model
     public $incrementing = false;
     protected $keyType = 'string';
 
-    // Model dasar hanya untuk menunjang relasi CommodityParameter
+    const CREATED_AT = 'createdAt';
+    const UPDATED_AT = 'updatedAt';
+
+    protected $fillable = ['nama', 'jenisBudidayaId', 'isDeleted'];
 }
