@@ -309,11 +309,24 @@ class SpkDashboardController extends Controller
 
     private function getActionTickets($historyId): array
     {
-        return [
-            ['id' => 'T-001', 'title' => 'Nyalakan Kipas Tambahan (Suhu Tinggi)', 'source' => "Analisa $historyId", 'priority' => 'High', 'status' => 'To Do', 'assignee' => 'Samsul'],
-            ['id' => 'T-002', 'title' => 'Cek Kualitas Pakan (FCR Naik)', 'source' => "Analisa $historyId", 'priority' => 'Medium', 'status' => 'In Progress', 'assignee' => 'Budi'],
-            ['id' => 'T-003', 'title' => 'Pesan Pakan Layer Grower', 'source' => "Analisa $historyId", 'priority' => 'Medium', 'status' => 'To Do', 'assignee' => 'Admin Rini'],
-            ['id' => 'T-004', 'title' => 'Vaksinasi ND-IB Rutin', 'source' => 'Schedule', 'priority' => 'Low', 'status' => 'Done', 'assignee' => 'Samsul'],
-        ];
+        if ($historyId === 'N/A') {
+            return [];
+        }
+
+        $tasks = \App\Models\SpkActionTask::with('assignee')
+            ->where('spk_fuzzy_log_id', $historyId)
+            ->orderBy('createdAt', 'desc')
+            ->get();
+
+        return $tasks->map(function ($task) {
+            return [
+                'id' => substr($task->id, 0, 8),
+                'title' => $task->title,
+                'source' => "Tugas Sistem",
+                'priority' => match($task->priority) { 'urgent' => 'Urgent', 'high' => 'High', 'medium' => 'Medium', 'low' => 'Low', default => 'Medium' },
+                'status' => match($task->status) { 'todo' => 'To Do', 'in_progress' => 'In Progress', 'done' => 'Done', 'cancelled' => 'Cancelled', default => 'To Do' },
+                'assignee' => $task->assignee->name ?? 'Belum Ditugaskan',
+            ];
+        })->toArray();
     }
 }

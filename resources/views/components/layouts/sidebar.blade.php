@@ -64,6 +64,12 @@
                         </x-sidebar.menu-item>
                     </li>
                     <li>
+                        <x-sidebar.menu-item :href="route('spk.tasks.index')" :active="request()->routeIs('spk.tasks.*')"
+                            icon="clipboard">
+                            Penugasan
+                        </x-sidebar.menu-item>
+                    </li>
+                    <li>
                         <x-sidebar.menu-item :href="route('spk.suppliers.index')" :active="request()->routeIs('spk.suppliers.*')"
                             icon="users">
                             Daftar Supplier

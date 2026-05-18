@@ -67,6 +67,17 @@ Route::middleware('auth.api')->group(function () {
     Route::get('/spk-suppliers/products', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'products'])->name('spk.suppliers.products');
     Route::get('/spk-suppliers/{id}', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'show'])->name('spk.suppliers.show');
 
+    // Penugasan & Laporan Tindakan SPK
+    Route::prefix('penugasan')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Spk\SpkTaskController::class, 'index'])->name('spk.tasks.index');
+        Route::post('/', [\App\Http\Controllers\Spk\SpkTaskController::class, 'store'])->name('spk.tasks.store');
+        Route::get('/{id}', [\App\Http\Controllers\Spk\SpkTaskController::class, 'show'])->name('spk.tasks.show');
+        Route::put('/{id}', [\App\Http\Controllers\Spk\SpkTaskController::class, 'update'])->name('spk.tasks.update');
+        Route::delete('/{id}', [\App\Http\Controllers\Spk\SpkTaskController::class, 'destroy'])->name('spk.tasks.destroy');
+        Route::patch('/{id}/status', [\App\Http\Controllers\Spk\SpkTaskController::class, 'updateStatus'])->name('spk.tasks.status');
+        Route::post('/{id}/report', [\App\Http\Controllers\Spk\SpkTaskController::class, 'submitReport'])->name('spk.tasks.report');
+    });
+
     // IoT Management
     Route::prefix('iot')->group(function () {
         Route::get('/', [IotController::class, 'dashboard'])->name('iot.dashboard');
