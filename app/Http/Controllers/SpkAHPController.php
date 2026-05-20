@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\SpkAhpPerbandingan;
 use App\Services\AHPService;
+use App\Support\SpkDssActorId;
 use Illuminate\Http\Request;
 
 class SpkAHPController extends Controller
@@ -24,7 +25,12 @@ class SpkAHPController extends Controller
             'perbandingans.*.nilai_skala' => 'required|numeric|min:0.1|max:9',
         ]);
 
-        $userId = $request->user() ? $request->user()->id : 1; 
+        $userId = SpkDssActorId::resolve($request);
+        if ($userId === null) {
+            return response()->json([
+                'message' => 'User tidak dikenali untuk DSS: tidak ada baris cocok di tabel users (id session tidak valid atau email tidak cocok).',
+            ], 422);
+        }
 
         foreach ($validated['perbandingans'] as $p) {
             SpkAhpPerbandingan::updateOrCreate(
@@ -43,8 +49,8 @@ class SpkAHPController extends Controller
 
         if ($result && !$result['is_valid']) {
             return response()->json([
-                'message' => 'Weights calculated but Consistency Ratio is invalid (> 0.1)',
-                'cr' => $result['cr']
+                'message' => 'Input penilaian mengandung inkonsistensi tinggi (CR > 0.1). Silakan tinjau ulang perbandingan berpasangan.',
+                'cr' => $result['cr'],
             ], 422);
         }
 

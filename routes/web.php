@@ -8,6 +8,7 @@ use App\Http\Controllers\Peternakan\PeternakanController;
 use App\Http\Controllers\Perkebunan\PerkebunanController;
 use App\Http\Controllers\DataMasterController;
 use App\Http\Controllers\Profile\ProfileController;
+use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -62,10 +63,30 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/config', [\App\Http\Controllers\Spk\FuzzyController::class, 'getConfig'])->name('spk.fuzzy.config');
     });
     
-    // SPK Supplier Recommendations
-    Route::get('/spk-suppliers', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'index'])->name('spk.suppliers.index');
-    Route::get('/spk-suppliers/products', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'products'])->name('spk.suppliers.products');
-    Route::get('/spk-suppliers/{id}', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'show'])->name('spk.suppliers.show');
+    // SPK Supplier Recommendations (AHP-SAW DSS)
+    Route::prefix('spk-suppliers')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'index'])->name('spk.suppliers.index');
+        Route::get('/products', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'products'])->name('spk.suppliers.products');
+        Route::get('/dss/config', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'config'])->name('spk.suppliers.dss.config');
+        Route::post('/dss/config', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'storePerbandingan'])->name('spk.suppliers.dss.config.store');
+        Route::get('/dss/dashboard', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'dashboard'])->name('spk.suppliers.dss.dashboard');
+        Route::get('/dss/api/evaluation/{produkId}', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiEvaluation'])->name('spk.suppliers.dss.api.evaluation');
+        Route::get('/dss/api/rankings/{produkId}', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiRankings'])->name('spk.suppliers.dss.api.rankings');
+        Route::get('/dss/api/weights', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiWeights'])->name('spk.suppliers.dss.api.weights');
+        Route::get('/dss/api/insights', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiInsights'])->name('spk.suppliers.dss.api.insights');
+        Route::get('/{id}', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'show'])->name('spk.suppliers.show')->whereNumber('id');
+    });
+
+    // Penugasan & Laporan Tindakan SPK
+    Route::prefix('penugasan')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Spk\SpkTaskController::class, 'index'])->name('spk.tasks.index');
+        Route::post('/', [\App\Http\Controllers\Spk\SpkTaskController::class, 'store'])->name('spk.tasks.store');
+        Route::get('/{id}', [\App\Http\Controllers\Spk\SpkTaskController::class, 'show'])->name('spk.tasks.show');
+        Route::put('/{id}', [\App\Http\Controllers\Spk\SpkTaskController::class, 'update'])->name('spk.tasks.update');
+        Route::delete('/{id}', [\App\Http\Controllers\Spk\SpkTaskController::class, 'destroy'])->name('spk.tasks.destroy');
+        Route::patch('/{id}/status', [\App\Http\Controllers\Spk\SpkTaskController::class, 'updateStatus'])->name('spk.tasks.status');
+        Route::post('/{id}/report', [\App\Http\Controllers\Spk\SpkTaskController::class, 'submitReport'])->name('spk.tasks.report');
+    });
 
     // IoT Management
     Route::prefix('iot')->group(function () {
@@ -116,8 +137,13 @@ Route::middleware('auth.api')->group(function () {
     // Pengaturan (Settings Hub)
     Route::get('/settings', [\App\Http\Controllers\Settings\SettingsController::class, 'index'])->name('settings.index');
 
+    // Manajemen Karyawan / Petugas (Khusus Owner)
+    Route::middleware('role:pjawab')->group(function () {
+        Route::resource('users', UserManagementController::class)->except(['create', 'show', 'edit']);
+    });
+
     // Konfigurasi Fuzzy Mamdani
-    Route::prefix('settings/fuzzy')->group(function () {
+    Route::middleware('role:pjawab')->prefix('settings/fuzzy')->group(function () {
         Route::get('/', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'index'])->name('settings.fuzzy.index');
         // CRUD Variables
         Route::post('/variables', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'storeVariable'])->name('settings.fuzzy.variables.store');
@@ -146,6 +172,7 @@ Route::middleware('auth.api')->group(function () {
         Route::post('parameters/assign', [\App\Http\Controllers\SpkParameterController::class, 'assignValue'])->name('spk.parameters.assign');
         Route::post('ahp/perbandingan', [\App\Http\Controllers\SpkAHPController::class, 'storePerbandingan'])->name('spk.ahp.perbandingan');
         Route::get('recommendation/{produkId}', [\App\Http\Controllers\RecommendationController::class, 'getRanking'])->name('spk.recommendation');
+        Route::get('evaluation/{produkId}', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiEvaluation'])->name('spk.suppliers.evaluation');
     });
 
     // Logout

@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class SpkParameter extends Model
 {
-    protected $fillable = ['nama_parameter', 'tipe'];
+    protected $fillable = ['nama_parameter', 'tipe', 'deskripsi'];
 
     public function supplierParameterValues()
     {

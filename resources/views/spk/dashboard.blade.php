@@ -57,9 +57,11 @@
                     </h3>
                     <p class="text-[11px] text-gray-400 mt-0.5">Daftar tugas rekomendasi yang belum dan sudah dikerjakan berdasarkan analisa ini.</p>
                 </div>
-                <button class="text-xs font-semibold text-purple-600 bg-purple-50 px-3 py-1.5 rounded-lg hover:bg-purple-100 transition whitespace-nowrap">
-                    + Buat Tiket Manual
-                </button>
+                @if(session('user') && isset(session('user')['role']) && session('user')['role'] === 'pjawab')
+                <a href="{{ route('spk.tasks.index', ['create_task' => 1, 'spk_id' => $activeHistory['id'], 'coop_id' => $coopId !== 'all' ? $coopId : '', 'desc' => $activeHistory['verdict']]) }}" class="text-xs font-semibold text-purple-600 bg-purple-50 px-3 py-1.5 rounded-lg hover:bg-purple-100 transition whitespace-nowrap">
+                    + Buat Tugas SPK
+                </a>
+                @endif
             </div>
 
             {{-- Kanban Mini Board --}}

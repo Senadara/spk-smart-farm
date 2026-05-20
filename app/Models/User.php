@@ -11,15 +11,26 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
+    protected $table = 'user';
+    protected $keyType = 'string';
+    public $incrementing = false;
+
+    const CREATED_AT = 'createdAt';
+    const UPDATED_AT = 'updatedAt';
+
     /**
      * The attributes that are mass assignable.
      *
      * @var array<int, string>
      */
     protected $fillable = [
+        'id',
         'name',
         'email',
         'password',
+        'role',
+        'owner_id',
+        'isActive',
     ];
 
     /**
@@ -43,5 +54,30 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function subordinates()
+    {
+        return $this->hasMany(User::class, 'owner_id');
+    }
+
+    public function superior()
+    {
+        return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function isOwner()
+    {
+        return $this->role === 'pjawab';
+    }
+
+    public function isPetugas()
+    {
+        return $this->role === 'petugas';
+    }
+
+    public function isSupplier()
+    {
+        return $this->role === 'supplier';
     }
 }

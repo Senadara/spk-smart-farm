@@ -64,6 +64,12 @@
                         </x-sidebar.menu-item>
                     </li>
                     <li>
+                        <x-sidebar.menu-item :href="route('spk.tasks.index')" :active="request()->routeIs('spk.tasks.*')"
+                            icon="clipboard">
+                            Penugasan
+                        </x-sidebar.menu-item>
+                    </li>
+                    <li>
                         <x-sidebar.menu-item :href="route('spk.suppliers.index')" :active="request()->routeIs('spk.suppliers.*')"
                             icon="users">
                             Daftar Supplier
@@ -88,6 +94,14 @@
         {{-- Section: Settings (Grounded at bottom of flex-1) --}}
         <div class="mt-auto pt-4 border-t border-[var(--color-gray-100)]">
             <ul class="space-y-1 list-none p-0 m-0">
+                @if(session('user') && isset(session('user')['role']) && session('user')['role'] === 'pjawab')
+                <li>
+                    <x-sidebar.menu-item :href="route('users.index')" :active="request()->routeIs('users.*')"
+                        icon="users">
+                        Manajemen Karyawan
+                    </x-sidebar.menu-item>
+                </li>
+                @endif
                 <li>
                     <x-sidebar.menu-item :href="route('settings.index')" :active="request()->routeIs('settings.*')"
                         icon="settings">

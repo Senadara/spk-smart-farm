@@ -78,7 +78,7 @@
                                 @endif
                                 
                                 <select name="sort" onchange="document.getElementById('filterTableForm').submit()" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-emerald-500 font-medium text-gray-600">
-                                    <option value="default" {{ $filterSort === 'default' ? 'selected' : '' }}>Urutan Standar</option>
+                                    <option value="saw" {{ ($filterSort ?? 'saw') === 'saw' ? 'selected' : '' }}>🏆 Ranking SAW (DSS)</option>
                                     <option value="cheapest" {{ $filterSort === 'cheapest' ? 'selected' : '' }}>⬇ Harga Termurah</option>
                                     <option value="closest" {{ $filterSort === 'closest' ? 'selected' : '' }}>📍 Jarak Terdekat</option>
                                 </select>
@@ -91,6 +91,18 @@
                         </div>
                     </div>
 
+                    @if(isset($dssActorResolved) && ! $dssActorResolved)
+                        <div class="mb-4 rounded-xl border border-red-100 bg-red-50 p-4 text-xs text-red-950">
+                            <span class="font-bold">Akun tidak terikat ke pengguna Laravel (`users.id`).</span>
+                            Ranking SAW memerlukan pemetaan ID valid. Pastikan response login menghasilkan <code class="rounded bg-white/80 px-1">users.id</code> yang sama, atau ada baris di tabel <code class="rounded bg-white/80 px-1">users</code> dengan email yang cocok sesi Anda.
+                            <a href="{{ route('spk.suppliers.dss.config') }}" class="font-bold underline block mt-2">Halaman DSS & panduan pemetaan</a>
+                        </div>
+                    @elseif(empty($ahpReady))
+                        <div class="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-100 text-xs text-amber-900">
+                            Ranking SAW belum aktif. <a href="{{ route('spk.suppliers.dss.config') }}" class="font-bold underline">Konfigurasi AHP</a> terlebih dahulu (CR ≤ 0.1).
+                        </div>
+                    @endif
+
                     @if(empty($comparison))
                         <div class="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-200">
                             <h3 class="text-sm font-semibold text-gray-600">Belum ada supplier yang menyediakan produk ini.</h3>
@@ -101,6 +113,10 @@
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Nama Supplier</th>
+                                        @if(!empty($ahpReady))
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Skor SAW</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Rank</th>
+                                        @endif
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Harga Satuan</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Stok</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Jarak / Kirim</th>
@@ -114,10 +130,20 @@
                                     @endphp
                                     
                                     @foreach($comparison as $c)
-                                        <tr class="hover:bg-gray-50 transition">
+                                        @php
+                                            $sawRow = ($sawRankings ?? collect())->firstWhere('supplier_id', $c['supplierId']);
+                                        @endphp
+                                        <tr class="hover:bg-gray-50 transition {{ ($sawRow?->ranking ?? 0) === 1 ? 'bg-emerald-50/40' : '' }}">
                                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 font-bold">
                                                 {{ $c['supplierName'] }}
+                                                @if(($sawRow?->ranking ?? 0) === 1)
+                                                <span class="ml-1 text-[10px] bg-emerald-500 text-white px-1.5 py-0.5 rounded font-bold">Rekomendasi DSS</span>
+                                                @endif
                                             </td>
+                                            @if(!empty($ahpReady))
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-purple-700">{{ $sawRow ? number_format($sawRow->final_score, 4) : '-' }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-black {{ ($sawRow?->ranking ?? 0) === 1 ? 'text-emerald-600' : 'text-gray-400' }}">#{{ $sawRow?->ranking ?? '-' }}</td>
+                                            @endif
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-bold">
                                                 Rp {{ number_format($c['price'], 0, ',', '.') }}
                                                 @if($c['price'] == $cheapest)

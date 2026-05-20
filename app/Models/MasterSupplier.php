@@ -6,7 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class MasterSupplier extends Model
 {
-    protected $fillable = ['nama', 'alamat', 'kontak'];
+    protected $fillable = [
+        'nama', 'alamat', 'kontak', 'deskripsi', 'kategori', 'rating', 'jarak_km', 'logo_url',
+    ];
 
     public function produks()
     {

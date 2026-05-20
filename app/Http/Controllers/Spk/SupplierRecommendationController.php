@@ -3,260 +3,224 @@
 namespace App\Http\Controllers\Spk;
 
 use App\Http\Controllers\Controller;
+use App\Models\MasterProduk;
+use App\Models\MasterSupplier;
+use App\Models\SpkParameter;
+use App\Models\SpkSupplierParameterValue;
+use App\Services\SAWRecommenderService;
+use App\Support\SpkDssActorId;
 use Illuminate\Http\Request;
 
 class SupplierRecommendationController extends Controller
 {
-    /**
-     * Halaman Dashboard Supplier (Katalog)
-     */
+    public function __construct(private SAWRecommenderService $sawService) {}
+
     public function index(Request $request)
     {
         $search = $request->input('search');
         $category = $request->input('category', 'all');
 
-        $suppliers = $this->getMockSuppliers();
+        $query = MasterSupplier::query();
 
-        // Simple filtering
         if ($category !== 'all') {
-            $suppliers = array_filter($suppliers, function($s) use ($category) {
-                return in_array($category, $s['categories_slug']);
-            });
+            $query->where('kategori', 'like', '%' . $category . '%');
         }
+
         if ($search) {
-            $suppliers = array_filter($suppliers, function($s) use ($search) {
-                $match = stripos($s['name'], $search) !== false || stripos($s['location'], $search) !== false;
-                
-                // Search descriptions and categories (to match products implicitly)
-                if (stripos($s['description'], $search) !== false) $match = true;
-                foreach ($s['categories'] as $cat) {
-                    if (stripos($cat, $search) !== false) $match = true;
-                }
-                
-                return $match;
+            $query->where(function ($q) use ($search) {
+                $q->where('nama', 'like', "%{$search}%")
+                    ->orWhere('alamat', 'like', "%{$search}%")
+                    ->orWhere('deskripsi', 'like', "%{$search}%");
             });
         }
+
+        $suppliers = $query->orderByDesc('rating')->get()->map(fn ($s) => $this->formatSupplierCard($s));
 
         return view('spk.suppliers.index', [
             'suppliers' => $suppliers,
             'category' => $category,
-            'search' => $search
+            'search' => $search,
         ]);
     }
 
-    /**
-     * Halaman Dashboard Komparasi Barang Khusus Supplier
-     */
     public function products(Request $request)
     {
         $search = $request->input('search');
-        $productId = $request->input('product_id', 'p-1');
-        $filterSort = $request->input('sort', 'default'); 
+        $productId = (int) $request->input('product_id', 0);
+        $filterSort = $request->input('sort', 'saw');
         $filterStock = $request->input('stock', 'all');
-        
-        $products = $this->getMockProducts();
-        
-        // Filter products by search
+
+        $productsQuery = MasterProduk::withCount('suppliers')->orderBy('nama');
         if ($search) {
-            $products = array_filter($products, function($p) use ($search) {
-                return stripos($p['name'], $search) !== false || stripos($p['category'], $search) !== false;
-            });
-            
-            // Re-assign active product if current is filtered out
-            if (!collect($products)->firstWhere('id', $productId) && count($products) > 0) {
-                $first = reset($products);
-                $productId = $first['id'];
-            }
+            $productsQuery->where('nama', 'like', "%{$search}%");
+        }
+        $products = $productsQuery->get();
+
+        if ($productId === 0 && $products->isNotEmpty()) {
+            $productId = $products->first()->id;
         }
 
-        $activeProduct = collect($products)->firstWhere('id', $productId);
-        
-        // Mock Comparison logic (Which supplier sells this?)
-        $comparison = [];
-        if ($activeProduct) {
-            $comparison = $this->getMockComparisonData($activeProduct['id']);
+        if ($search && !$products->contains('id', $productId) && $products->isNotEmpty()) {
+            $productId = $products->first()->id;
+        }
 
-            // Apply Filters & Sorting to Comparison Table
+        $activeProduct = $products->firstWhere('id', $productId);
+        $comparison = [];
+        $sawRankings = collect();
+        $ahpReady = false;
+
+        $dssActorId = SpkDssActorId::resolve($request);
+
+        if ($activeProduct) {
+            $hargaParam = SpkParameter::where('nama_parameter', 'like', '%Harga%')->first();
+            $kecepatanParam = SpkParameter::where('nama_parameter', 'like', '%Kecepatan%')->first();
+            $kualitasParam = SpkParameter::where('nama_parameter', 'like', '%Kualitas%')->first();
+
+            $supplierIds = $activeProduct->suppliers()->pluck('master_suppliers.id');
+            $paramValues = SpkSupplierParameterValue::where('produk_id', $activeProduct->id)
+                ->whereIn('supplier_id', $supplierIds)
+                ->with('supplier')
+                ->get();
+
+            foreach ($paramValues->groupBy('supplier_id') as $vals) {
+                $supplier = $vals->first()->supplier;
+                $price = $vals->firstWhere('parameter_id', $hargaParam?->id)?->value ?? 0;
+                $quality = $vals->firstWhere('parameter_id', $kualitasParam?->id)?->value ?? 0;
+                $speedScore = $vals->firstWhere('parameter_id', $kecepatanParam?->id)?->value ?? 0;
+                $days = $speedScore > 0 ? round(100 / $speedScore) : 0;
+
+                $comparison[] = [
+                    'supplierId' => $supplier->id,
+                    'supplierName' => $supplier->nama,
+                    'price' => $price,
+                    'quality' => $quality,
+                    'distance' => $supplier->jarak_km ?? 0,
+                    'stock' => (int) round($quality),
+                    'delivery' => $days <= 1 ? 'Dikirim hari yang sama' : "Estimasi {$days} hari",
+                ];
+            }
+
             if ($filterStock === 'instock') {
-                $comparison = array_filter($comparison, function($c) {
-                    return $c['stock'] > 0;
-                });
+                $comparison = array_values(array_filter($comparison, fn ($c) => $c['stock'] > 0));
             }
 
             if ($filterSort === 'cheapest') {
-                usort($comparison, function($a, $b) {
-                    return $a['price'] <=> $b['price'];
-                });
+                usort($comparison, fn ($a, $b) => $a['price'] <=> $b['price']);
             } elseif ($filterSort === 'closest') {
-                usort($comparison, function($a, $b) {
-                    return $a['distance'] <=> $b['distance'];
-                });
+                usort($comparison, fn ($a, $b) => $a['distance'] <=> $b['distance']);
+            }
+
+            if ($dssActorId !== null) {
+                $sawRankings = $this->sawService->getRecommendations($dssActorId, $activeProduct->id);
+                $sawRankings->load('supplier');
+                $ahpReady = $sawRankings->isNotEmpty();
+
+                if ($filterSort === 'saw' && $ahpReady) {
+                    $order = $sawRankings->pluck('supplier_id')->flip();
+                    usort($comparison, function ($a, $b) use ($order) {
+                        return ($order[$a['supplierId']] ?? 99) <=> ($order[$b['supplierId']] ?? 99);
+                    });
+                }
             }
         }
 
+        $productsForView = $products->map(fn ($p) => [
+            'id' => $p->id,
+            'name' => $p->nama,
+            'category' => $p->deskripsi ?? 'Umum',
+            'icon' => $this->productIcon($p->nama),
+        ]);
+
+        $activeForView = $activeProduct ? [
+            'id' => $activeProduct->id,
+            'name' => $activeProduct->nama,
+            'category' => $activeProduct->deskripsi ?? '',
+            'icon' => $this->productIcon($activeProduct->nama),
+        ] : null;
+
         return view('spk.suppliers.products', [
-            'products' => $products,
-            'activeProduct' => $activeProduct,
+            'products' => $productsForView,
+            'activeProduct' => $activeForView,
             'comparison' => $comparison,
+            'sawRankings' => $sawRankings,
+            'ahpReady' => $ahpReady,
             'search' => $search,
             'filterSort' => $filterSort,
-            'filterStock' => $filterStock
+            'filterStock' => $filterStock,
+            'dssActorResolved' => $dssActorId !== null,
         ]);
     }
 
-    /**
-     * Halaman Detail Supplier
-     */
     public function show($id)
     {
-        $supplier = collect($this->getMockSuppliers())->firstWhere('id', $id);
-        
-        if (!$supplier) {
-            abort(404);
+        $supplier = MasterSupplier::with('produks')->findOrFail($id);
+        $hargaParam = SpkParameter::where('nama_parameter', 'like', '%Harga%')->first();
+
+        $inventories = [];
+        foreach ($supplier->produks as $produk) {
+            $price = SpkSupplierParameterValue::where('supplier_id', $supplier->id)
+                ->where('produk_id', $produk->id)
+                ->when($hargaParam, fn ($q) => $q->where('parameter_id', $hargaParam->id))
+                ->value('value');
+
+            $inventories[] = [
+                'name' => $produk->nama,
+                'price' => $price ?? 0,
+                'stock' => 'Tersedia',
+                'type' => $produk->deskripsi ?? 'Produk',
+            ];
         }
 
-        $inventories = $this->getMockSupplierInventories($id);
-
         return view('spk.suppliers.show', [
-            'supplier' => $supplier,
-            'inventories' => $inventories
+            'supplier' => $this->formatSupplierCard($supplier),
+            'inventories' => $inventories,
         ]);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // MOCK DATA SOURCES
-    // ═══════════════════════════════════════════════════════════════
-
-    private function getMockSuppliers()
+    private function formatSupplierCard(MasterSupplier $s): array
     {
+        $categories = $s->kategori ? explode(',', $s->kategori) : [];
+        $slugMap = ['pakan' => 'pakan', 'obat' => 'obat', 'alat' => 'alat', 'vaksin' => 'obat'];
+
         return [
-            [
-                'id' => 'S-001',
-                'name' => 'PT Agrinusa Jaya',
-                'location' => 'Malang, Jawa Timur',
-                'distance' => '12 km',
-                'score' => 96,
-                'rating' => 4.8,
-                'reviews' => 124,
-                'price_tier' => 'Rp',
-                'categories' => ['Pakan', 'Vaksin'],
-                'categories_slug' => ['pakan', 'obat'],
-                'description' => 'Distributor utama pakan ayam petelur berkualitas tinggi dari produk unggulan Lohmann Brown, lengkap dengan vitamin rutin.',
-                'phone' => '+6281234567890',
-                'logo' => 'https://ui-avatars.com/api/?name=Agrinusa+Jaya&background=0D8ABC&color=fff&rounded=true'
-            ],
-            [
-                'id' => 'S-002',
-                'name' => 'CV Medion Farma Unggas',
-                'location' => 'Bandung, Jawa Barat',
-                'distance' => '320 km',
-                'score' => 92,
-                'rating' => 4.9,
-                'reviews' => 450,
-                'price_tier' => 'RpRp',
-                'categories' => ['Obat', 'Vaksin', 'Vitamin'],
-                'categories_slug' => ['obat'],
-                'description' => 'Spesialis obat-obatan ternak nomor 1 di Indonesia. Menjual vaksin ND, IB, dan Coryza untuk pencegahan kematian skala peternakan.',
-                'phone' => '+6289876543210',
-                'logo' => 'https://ui-avatars.com/api/?name=Medion&background=E53E3E&color=fff&rounded=true'
-            ],
-            [
-                'id' => 'S-003',
-                'name' => 'Makmur Poultry Supply',
-                'location' => 'Blitar, Jawa Timur',
-                'distance' => '45 km',
-                'score' => 88,
-                'rating' => 4.5,
-                'reviews' => 89,
-                'price_tier' => 'RpRpRp',
-                'categories' => ['Perlengkapan', 'Otomasi'],
-                'categories_slug' => ['alat'],
-                'description' => 'Menyediakan rak telur, kipas exhaust, cooling pad, dan peralatan otomatisasi iot untuk kandang sistem closed house.',
-                'phone' => '+628111222333',
-                'logo' => 'https://ui-avatars.com/api/?name=Makmur&background=F6E05E&color=000&rounded=true'
-            ],
-            [
-                'id' => 'S-004',
-                'name' => 'Jaya Pakan Nusantara',
-                'location' => 'Surabaya, Jawa Timur',
-                'distance' => '80 km',
-                'score' => 85,
-                'rating' => 4.2,
-                'reviews' => 56,
-                'price_tier' => 'Rp',
-                'categories' => ['Pakan', 'Suplemen'],
-                'categories_slug' => ['pakan'],
-                'description' => 'Supplier pakan komersil ekonomis dan campuran jagung murni untuk peternak layer fase grower maupun produksi.',
-                'phone' => '+628334455667',
-                'logo' => 'https://ui-avatars.com/api/?name=Jaya+Pakan&background=48BB78&color=fff&rounded=true'
-            ]
+            'id' => $s->id,
+            'name' => $s->nama,
+            'location' => $s->alamat ?? '-',
+            'distance' => ($s->jarak_km ?? 0) . ' km',
+            'score' => (int) round(($s->rating ?? 0) * 20),
+            'rating' => $s->rating ?? 0,
+            'reviews' => 0,
+            'price_tier' => 'Rp',
+            'categories' => array_map('ucfirst', $categories),
+            'categories_slug' => array_values(array_unique(array_filter(array_map(
+                fn ($c) => $slugMap[trim($c)] ?? trim($c),
+                $categories
+            )))),
+            'description' => $s->deskripsi ?? '',
+            'phone' => $s->kontak ?? '',
+            'logo' => $s->logo_url ?? 'https://ui-avatars.com/api/?name=' . urlencode($s->nama) . '&background=0D8ABC&color=fff&rounded=true',
         ];
     }
 
-    private function getMockSupplierInventories($supplierId)
+    private function productIcon(string $nama): string
     {
-        $mocks = [
-            'S-001' => [
-                ['name' => 'Pakan Layer K-36 (50kg)', 'price' => 380000, 'stock' => 'Tersedia Banyak', 'type' => 'Pakan'],
-                ['name' => 'Vaksin ND Clone', 'price' => 125000, 'stock' => 'Terbatas', 'type' => 'Obat'],
-                ['name' => 'Amino Egg Plus (1kg)', 'price' => 55000, 'stock' => 'Tersedia', 'type' => 'Suplemen'],
-            ],
-            'S-002' => [
-                ['name' => 'Vaksin ND-IB Live', 'price' => 150000, 'stock' => 'Tersedia Banyak', 'type' => 'Obat'],
-                ['name' => 'Vaksin Coryza Inaktif', 'price' => 210000, 'stock' => 'Tersedia Banyak', 'type' => 'Obat'],
-                ['name' => 'Vita Stress (1kg)', 'price' => 45000, 'stock' => 'Tersedia Banyak', 'type' => 'Vitamin'],
-                ['name' => 'Therapy Obat CRD', 'price' => 60000, 'stock' => 'Sedikit', 'type' => 'Obat'],
-            ],
-            'S-003' => [
-                ['name' => 'Exhaust Fan 50 inch', 'price' => 2500000, 'stock' => 'Pre-order', 'type' => 'Alat'],
-                ['name' => 'Cooling Pad Celdek', 'price' => 480000, 'stock' => 'Tersedia', 'type' => 'Alat'],
-                ['name' => 'Nipple Drinker Otomatis', 'price' => 8500, 'stock' => 'Tersedia Banyak', 'type' => 'Alat'],
-                ['name' => 'Tegg Tray Plastik (Kapasitas 30)', 'price' => 12000, 'stock' => 'Tersedia Banyak', 'type' => 'Alat'],
-            ],
-            'S-004' => [
-                ['name' => 'Pakan Layer K-36 (50kg)', 'price' => 355000, 'stock' => 'Tersedia', 'type' => 'Pakan'],
-                ['name' => 'Pakan Grower (50kg)', 'price' => 340000, 'stock' => 'Kosong', 'type' => 'Pakan'],
-                ['name' => 'Jagung Pipil Giling (50kg)', 'price' => 250000, 'stock' => 'Tersedia Banyak', 'type' => 'Bahan Baku'],
-            ]
-        ];
+        $lower = strtolower($nama);
+        if (str_contains($lower, 'pakan')) {
+            return '🌾';
+        }
+        if (str_contains($lower, 'vaksin')) {
+            return '💉';
+        }
+        if (str_contains($lower, 'vitamin')) {
+            return '🧪';
+        }
+        if (str_contains($lower, 'jagung')) {
+            return '🌽';
+        }
+        if (str_contains($lower, 'tray') || str_contains($lower, 'telur')) {
+            return '🥚';
+        }
 
-        return $mocks[$supplierId] ?? [];
-    }
-
-    private function getMockProducts()
-    {
-        return [
-            ['id' => 'p-1', 'name' => 'Pakan Layer Premium (50kg)', 'category' => 'Pakan Pokok', 'icon' => '🌾'],
-            ['id' => 'p-2', 'name' => 'Vaksin ND-IB (1000 dosis)', 'category' => 'Kesehatan', 'icon' => '💉'],
-            ['id' => 'p-3', 'name' => 'Vitamin Stress (1kg)', 'category' => 'Suplemen', 'icon' => '🧪'],
-            ['id' => 'p-4', 'name' => 'Jagung Giling (50kg)', 'category' => 'Bahan Campuran', 'icon' => '🌽'],
-            ['id' => 'p-5', 'name' => 'Egg Tray Plastik (30 Butir)', 'category' => 'Perlengkapan', 'icon' => '🥚'],
-        ];
-    }
-
-    private function getMockComparisonData($productId)
-    {
-        $mocks = [
-            'p-1' => [
-                ['supplierId' => 'S-001', 'supplierName' => 'PT Agrinusa Jaya', 'price' => 380000, 'distance' => 12, 'stock' => 150, 'delivery' => 'Dikirim hari yang sama'],
-                ['supplierId' => 'S-004', 'supplierName' => 'Jaya Pakan Nusantara', 'price' => 355000, 'distance' => 80, 'stock' => 50, 'delivery' => 'Estimasi 2 hari'],
-            ],
-            'p-2' => [
-                ['supplierId' => 'S-002', 'supplierName' => 'CV Medion Farma Unggas', 'price' => 150000, 'distance' => 320, 'stock' => 2000, 'delivery' => 'Estimasi 3 hari (Cold Chain)'],
-                ['supplierId' => 'S-001', 'supplierName' => 'PT Agrinusa Jaya', 'price' => 125000, 'distance' => 12, 'stock' => 20, 'delivery' => 'Dikirim hari yang sama'],
-            ],
-            'p-3' => [
-                ['supplierId' => 'S-002', 'supplierName' => 'CV Medion Farma Unggas', 'price' => 45000, 'distance' => 320, 'stock' => 500, 'delivery' => 'Estimasi 3 hari'],
-                ['supplierId' => 'S-001', 'supplierName' => 'PT Agrinusa Jaya', 'price' => 55000, 'distance' => 12, 'stock' => 100, 'delivery' => 'Dikirim hari yang sama'],
-            ],
-            'p-4' => [
-                ['supplierId' => 'S-004', 'supplierName' => 'Jaya Pakan Nusantara', 'price' => 250000, 'distance' => 80, 'stock' => 400, 'delivery' => 'Estimasi 1-2 hari'],
-            ],
-            'p-5' => [
-                ['supplierId' => 'S-003', 'supplierName' => 'Makmur Poultry Supply', 'price' => 12000, 'distance' => 45, 'stock' => 10000, 'delivery' => 'Estimasi 1 hari'],
-            ]
-        ];
-
-        return $mocks[$productId] ?? [];
+        return '📦';
     }
 }
