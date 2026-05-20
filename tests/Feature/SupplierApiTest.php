@@ -123,6 +123,13 @@ class SupplierApiTest extends TestCase
         ];
     }
 
+    /**
+     * Fitur: Supplier API - Daftar Supplier
+     * Skenario: Mengambil daftar supplier dalam format JSON
+     * Given terdapat data supplier di database
+     * When endpoint '/supplier-spk/suppliers' dipanggil
+     * Then respon JSON berisi daftar supplier dikembalikan dengan status 200
+     */
     public function test_daftar_supplier_mengembalikan_json(): void
     {
         MasterSupplier::create(['nama' => 'PT Agrinusa Jaya', 'alamat' => 'Jl. Raya 1', 'kontak' => '08123456789']);
@@ -133,6 +140,13 @@ class SupplierApiTest extends TestCase
         $response->assertJsonPath('0.nama', 'PT Agrinusa Jaya');
     }
 
+    /**
+     * Fitur: Supplier API - Detail Supplier
+     * Skenario: Mendapatkan detail supplier termasuk relasi produk
+     * Given sebuah supplier dengan produk terkait
+     * When endpoint '/supplier-spk/suppliers/{id}' dipanggil
+     * Then respon JSON berisi data supplier dan relasi produks dikembalikan
+     */
     public function test_detail_supplier_mengembalikan_json_dengan_relasi_produk(): void
     {
         $supplier = MasterSupplier::create(['nama' => 'PT Agrinusa Jaya', 'alamat' => 'Jl. Raya 1', 'kontak' => '08123456789']);
@@ -146,6 +160,13 @@ class SupplierApiTest extends TestCase
         $response->assertJsonPath('produks.0.nama', 'Pakan Layer');
     }
 
+    /**
+     * Fitur: Supplier API - Hapus Supplier
+     * Skenario: Menghapus supplier mengembalikan status 204
+     * Given sebuah supplier yang ada di database
+     * When request DELETE ke '/supplier-spk/suppliers/{id}' dikirim
+     * Then supplier dihapus dan respon status 204 dikembalikan
+     */
     public function test_hapus_supplier_mengembalikan_status_no_content(): void
     {
         $supplier = MasterSupplier::create(['nama' => 'PT Agrinusa Jaya', 'alamat' => 'Jl. Raya 1', 'kontak' => '08123456789']);
@@ -158,6 +179,13 @@ class SupplierApiTest extends TestCase
         $this->assertDatabaseMissing('master_suppliers', ['id' => $supplier->id]);
     }
 
+    /**
+     * Fitur: Supplier API - Daftar Parameter SPK
+     * Skenario: Mengambil daftar parameter SPK dalam format JSON
+     * Given satu atau lebih parameter SPK tersimpan
+     * When endpoint '/supplier-spk/parameters' dipanggil
+     * Then respon JSON berisi daftar parameter dikembalikan
+     */
     public function test_daftar_parameter_spk_mengembalikan_json(): void
     {
         SpkParameter::create(['nama_parameter' => 'Harga', 'tipe' => 'cost']);
@@ -168,6 +196,13 @@ class SupplierApiTest extends TestCase
         $response->assertJsonPath('0.nama_parameter', 'Harga');
     }
 
+    /**
+     * Fitur: Supplier API - Tambah Parameter SPK
+     * Skenario: Menambahkan parameter SPK baru mengembalikan status 201
+     * Given payload parameter valid
+     * When request POST ke '/supplier-spk/parameters' dikirim
+     * Then parameter baru tercipta dan respon status 201 dikembalikan
+     */
     public function test_tambah_parameter_spk_mengembalikan_status_created(): void
     {
         $response = $this->withSession(array_merge($this->authSession(), ['_token' => 'csrf-token']))->post('/supplier-spk/parameters', [
@@ -180,6 +215,13 @@ class SupplierApiTest extends TestCase
         $response->assertJsonPath('nama_parameter', 'Kualitas');
     }
 
+    /**
+     * Fitur: Supplier API - Assign Value Parameter
+     * Skenario: Menetapkan nilai parameter untuk supplier dan produk
+     * Given supplier, produk, dan parameter yang valid
+     * When request POST ke '/supplier-spk/parameters/assign' dikirim
+     * Then nilai tersimpan dan respon JSON berisi value dikembalikan
+     */
     public function test_assign_value_parameter_supplier_mengembalikan_json_value(): void
     {
         $supplier = MasterSupplier::create(['nama' => 'PT Agrinusa Jaya', 'alamat' => 'Jl. Raya 1', 'kontak' => '08123456789']);
@@ -204,6 +246,13 @@ class SupplierApiTest extends TestCase
         ]);
     }
 
+    /**
+     * Fitur: Supplier API - Simpan Perbandingan AHP
+     * Skenario: Menyimpan perbandingan AHP menghasilkan respon valid
+     * Given perbandingan AHP yang valid
+     * When endpoint '/supplier-spk/ahp/perbandingan' dipanggil
+     * Then AHP diproses dan respon sukses dikembalikan serta perbandingan tersimpan
+     */
     public function test_store_perbandingan_ahp_menghasilkan_respon_valid(): void
     {
         $parameter1 = SpkParameter::create(['nama_parameter' => 'Harga', 'tipe' => 'cost']);
@@ -239,6 +288,13 @@ class SupplierApiTest extends TestCase
         ]);
     }
 
+    /**
+     * Fitur: Supplier API - Simpan Perbandingan AHP
+     * Skenario: Menolak perbandingan jika CR tidak valid
+     * Given hasil AHP dengan CR > 0.1
+     * When penyimpanan perbandingan AHP diminta
+     * Then respon 422 dengan pesan bahwa CR tidak valid dikembalikan
+     */
     public function test_store_perbandingan_ahp_menolak_cr_tidak_valid(): void
     {
         $parameter1 = SpkParameter::create(['nama_parameter' => 'Harga', 'tipe' => 'cost']);
@@ -268,6 +324,13 @@ class SupplierApiTest extends TestCase
         $response->assertJsonPath('message', 'Weights calculated but Consistency Ratio is invalid (> 0.1)');
     }
 
+    /**
+     * Fitur: Supplier API - Rekomendasi Supplier
+     * Skenario: Mengembalikan 404 jika tidak ada ranking valid
+     * Given tidak ada ranking valid untuk produk
+     * When endpoint '/supplier-spk/recommendation/{productId}' dipanggil
+     * Then respon 404 dengan pesan yang sesuai dikembalikan
+     */
     public function test_get_ranking_supplier_mengembalikan_404_saat_tidak_ada_data(): void
     {
         $service = Mockery::mock(SAWRecommenderService::class);
@@ -280,6 +343,13 @@ class SupplierApiTest extends TestCase
         $response->assertJsonPath('message', 'No valid rankings available. Please ensure AHP weights are valid and product has suppliers.');
     }
 
+    /**
+     * Fitur: Supplier API - Rekomendasi Supplier
+     * Skenario: Mengembalikan rekomendasi saat ranking tersedia
+     * Given terdapat ranking valid untuk sebuah produk
+     * When endpoint '/supplier-spk/recommendation/{productId}' dipanggil
+     * Then respon JSON berisi daftar ranking dikembalikan
+     */
     public function test_get_ranking_supplier_mengembalikan_json_saat_data_ada(): void
     {
         $service = Mockery::mock(SAWRecommenderService::class);

@@ -2,149 +2,207 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
-use Mockery;
-use App\Services\PeternakanService;
 
 class DashboardKandangTest extends TestCase
 {
-    public function test_data_sensor_fuzzy_diteruskan_ke_view_dashboard_peternakan(): void
+    use DatabaseTransactions;
+
+    private function authSession(): array
     {
-        $mock = Mockery::mock(PeternakanService::class);
-        $mock->shouldReceive('getKpiMetrics')->andReturn([]);
-        $mock->shouldReceive('getChartData')->andReturn([
-            'labels' => ['Sen', 'Sel', 'Rab'],
-            'hdp' => [93, 94, 95],
-            'fcr' => [1.51, 1.48, 1.45],
-        ]);
-        $mock->shouldReceive('getBarnEnvironment')->andReturn([
-            'barns' => [
-                [
-                    'id' => 1,
-                    'name' => 'Barn A',
-                    'status' => 'normal',
-                    'temp' => 25,
-                    'sensors' => [
-                        ['label' => 'Suhu', 'percent' => 75, 'status' => 'normal', 'statusLabel' => 'Normal'],
-                        ['label' => 'Kelembapan', 'percent' => 60, 'status' => 'normal', 'statusLabel' => 'Normal'],
-                        ['label' => 'Amonia', 'percent' => 20, 'status' => 'warning', 'statusLabel' => 'Waspada'],
-                        ['label' => 'Cahaya', 'percent' => 80, 'status' => 'normal', 'statusLabel' => 'Normal'],
-                    ],
-                    'summary' => ['avg_temp' => '25°C', 'humidity' => '60%', 'ammonia' => '10ppm', 'ammonia_ok' => true, 'lux' => '100 lx']
-                ]
-            ]
-        ]);
-        $mock->shouldReceive('getProduktivitasData')->andReturn([
-            'indicators' => [
-                ['label' => 'HDP', 'value' => '94.5%', 'color' => 'emerald'],
-                ['label' => 'FCR', 'value' => '1.45', 'color' => 'amber'],
-                ['label' => 'Mortalitas', 'value' => '0.02%', 'color' => 'emerald'],
-            ],
-            'spider' => [
-                'labels' => ['HDP', 'FCR', 'Mortalitas'],
-                'values' => [94.5, 1.45, 0.02],
-            ],
-        ]);
-        $mock->shouldReceive('getSpkResults')->andReturn([
-            'lingkungan' => ['status' => 'Baik', 'title' => 'Lingkungan Stabil', 'description' => 'Kondisi kandang stabil', 'statusColor' => 'emerald'],
-            'produktivitas' => ['status' => 'Baik', 'title' => 'Produktivitas Stabil', 'description' => 'Performa produksi stabil', 'statusColor' => 'emerald'],
-            'gabungan' => ['status' => 'Optimal', 'title' => 'Evaluasi Baik', 'description' => 'Kombinasi data menunjukkan performa baik', 'statusColor' => 'emerald', 'link' => '#'],
-        ]);
-        $mock->shouldReceive('getProductionLog')->andReturn([]);
-        $this->app->instance(PeternakanService::class, $mock);
-
-        $this->withSession([
+        return [
             'api_token' => 'fake-token',
-            'user' => ['id' => 1, 'name' => 'QA Tester', 'email' => 'qa@farm.com'],
-        ]);
-        $response = $this->get('/peternakan');
-
-        $response->assertStatus(200);
-        $response->assertViewHasAll(['kpiMetrics', 'chartData', 'barnEnvironment', 'fuzzySensors', 'produktivitas', 'spkResults', 'productionLog']);
+            'user' => ['id' => 'admin-uuid-1', 'name' => 'QA Tester', 'email' => 'qa@farm.com', 'role' => 'admin'],
+        ];
     }
 
-    public function test_detail_kandang_menggunakan_barn_fallback_dan_tetap_merender_view(): void
+    /**
+     * Skenario: Menampilkan halaman utama peternakan
+     * 
+     * Given pengguna login sebagai admin
+     * When mengakses halaman '/peternakan'
+     * Then status adalah 200 OK dan me-load view 'peternakan.dashboard' 
+     */
+    public function test_halaman_index_peternakan_dimuat_dengan_benar(): void
     {
-        $this->withoutExceptionHandling();
-        $mock = Mockery::mock(PeternakanService::class);
-        $mock->shouldReceive('getBarnEnvironment')->andReturn([
-            'barns' => [
-                [
-                    'id' => 1,
-                    'name' => 'Barn A',
-                    'status' => 'normal',
-                    'temp' => 25,
-                    'sensors' => [['status' => 'normal'], ['status' => 'normal'], ['status' => 'normal'], ['status' => 'normal']],
-                    'summary' => ['avg_temp' => '25°C', 'humidity' => '60%', 'ammonia' => '10ppm', 'ammonia_ok' => true, 'lux' => '100 lx']
-                ]
-            ]
-        ]);
-        $mock->shouldReceive('getBarnIotDevices')->andReturn([['deviceCode' => 'D1', 'deviceName' => 'Sensor 1', 'status' => 'online']]);
-        $mock->shouldReceive('getBarnDetail')->andReturn([
-            'id' => 1,
-            'name' => 'Kandang Mock',
-            'status' => 'normal',
-            'temp' => 25,
-            'breed' => 'Layer',
-            'location' => 'Satu',
-            'flockAge' => 12,
-            'totalBirds' => 1200,
-            'capacity' => 2000,
-        ]);
-        $mock->shouldReceive('getBarnSensors')->andReturn([['label' => 'Suhu', 'value' => 25], ['label' => 'Kelembapan', 'value' => 60]]);
-        $mock->shouldReceive('getBarnSensorTrend')->andReturn(['labels' => ['Sen', 'Sel'], 'temperature' => [25, 26], 'humidity' => [60, 61], 'ammonia' => [10, 11], 'light' => [100, 120]]);
-        $mock->shouldReceive('getBarnKpi')->andReturn(['hdp' => 94.5, 'hhep' => 92.1, 'feedIntake' => 115, 'fcr' => 1.45, 'mortalitas' => 0.02, 'afkir' => 0.5]);
-        $mock->shouldReceive('getBarnProductionLog')->andReturn([]);
-        $mock->shouldReceive('getBarnSpkMessages')->andReturn([]);
-        $mock->shouldReceive('getBarnActivityLog')->andReturn([]);
-        $mock->shouldReceive('getProductivityTrend')->andReturn(['labels' => ['Sen', 'Sel'], 'hdp' => [94.5, 94.8], 'hhep' => [92.1, 92.4], 'fcr' => [1.45, 1.44], 'feedIntake' => [115, 117], 'mortality' => [0.02, 0.03]]);
-        $mock->shouldReceive('getEggQuality')->andReturn(['small' => 10, 'medium' => 40, 'large' => 35, 'xl' => 15, 'brokenStatus' => 'normal', 'brokenRate' => 1.2, 'dirtyStatus' => 'normal', 'dirtyRate' => 0.8]);
-        $this->app->instance(PeternakanService::class, $mock);
+        /* --- Act --- */
+        $response = $this->withSession($this->authSession())->get('/peternakan');
 
-        $this->withSession([
-            'api_token' => 'fake-token',
-            'user' => ['id' => 1, 'name' => 'QA Tester', 'email' => 'qa@farm.com'],
-        ]);
-        $response = $this->get('/peternakan/99999');
-
+        /* --- Assert --- */
         $response->assertStatus(200);
-        $response->assertViewHasAll(['barn', 'sensors', 'sensorTrend', 'kpi', 'productionLog', 'iotDevice', 'spkMessages', 'activityLog', 'productivityTrend', 'eggQuality']);
+        $response->assertViewIs('peternakan.dashboard');
+        $response->assertViewHasAll(['komoditas', 'barnEnvironment', 'spkResults', 'fuzzySensors']);
     }
 
+    /**
+     * Skenario: Halaman detail kandang dapat memuat ringkasan KPI dan list kandang saat data query tersedia
+     */
+    public function test_ringkasan_kandang_ditampilkan_saat_data_tersedia(): void
+    {
+        /* --- Arrange --- */
+        $jenisBudidayaId = (string) Str::uuid();
+        DB::table('jenisBudidaya')->insert([
+            'id' => $jenisBudidayaId,
+            'nama' => 'Ayam Petelur',
+            'latin' => 'Gallus gallus domesticus',
+            'status' => 1,
+            'detail' => 'Data QA',
+            'tipe' => 'hewan',
+            'gambar' => null,
+            'periodePanen' => null,
+            'isDeleted' => 0,
+            'createdAt' => now(),
+            'updatedAt' => now(),
+        ]);
+
+        $barnId = (string) Str::uuid();
+
+        DB::table('unitBudidaya')->insert([
+            'id' => $barnId,
+            'jenisBudidayaId' => $jenisBudidayaId,
+            'nama' => 'Kandang A',
+            'lokasi' => 'Blok A',
+            'tipe' => 'kolektif',
+            'jumlah' => 1000,
+            'status' => 1,
+            'isDeleted' => 0,
+            'createdAt' => now(),
+            'updatedAt' => now(),
+        ]);
+
+        $protocolId = (string) Str::uuid();
+        DB::table('iot_protocol')->insert([
+            'id' => $protocolId,
+            'protocolName' => 'API',
+            'description' => 'Protocol untuk QA test',
+            'createdAt' => now(),
+            'updatedAt' => now(),
+        ]);
+
+        $connectionConfigId = (string) Str::uuid();
+        DB::table('iot_connection_config')->insert([
+            'id' => $connectionConfigId,
+            'protocolId' => $protocolId,
+            'baseUrl' => 'http://localhost',
+            'endpointPath' => '/device',
+            'mqttBrokerUrl' => null,
+            'mqttTopic' => null,
+            'authType' => 'none',
+            'authKey' => null,
+            'headers' => null,
+            'createdAt' => now(),
+            'updatedAt' => now(),
+        ]);
+
+        /* --- Act --- */
+        $response = $this->withSession($this->authSession())->get('/peternakan/' . $barnId);
+
+        /* --- Assert --- */
+        $response->assertStatus(200);
+        $response->assertViewIs('peternakan.show');
+        $response->assertViewHasAll(['barn', 'sensors', 'kpi', 'iotDevice']);
+    }
+
+    /**
+     * Skenario: Kandang yang tidak ditemukan tetap memakai fallback yang aman dari controller
+     */
+    public function test_halaman_kandang_tidak_ditemukan_memakai_fallback_controller(): void
+    {
+        /* --- Arrange --- */
+        // Endpoint Peternakan menggunakan id yang tidak akan ditemukan dalam database
+        $invalidBarnId = 'fake-uuid-not-exists-999';
+
+        /* --- Act --- */
+        $response = $this->withSession($this->authSession())->get('/peternakan/' . $invalidBarnId);
+
+        /* --- Assert --- */
+        $response->assertStatus(200);
+        $response->assertViewIs('peternakan.show');
+        $response->assertViewHasAll(['barn', 'sensors', 'kpi', 'iotDevice']);
+    }
+
+    /**
+     * Skenario: Menampilkan data IOT jika ada relasi perangkat di unit budidaya
+     */
     public function test_data_perangkat_iot_diterjemahkan_dengan_benar_ke_view(): void
     {
-        $this->withoutExceptionHandling();
-        $mock = Mockery::mock(PeternakanService::class);
-        $mock->shouldReceive('getBarnEnvironment')->andReturn(['barns' => [['id' => 1, 'name' => 'Barn A', 'status' => 'normal', 'temp' => 25, 'sensors' => [], 'summary' => ['avg_temp' => '25°C', 'humidity' => '60%', 'ammonia' => '10ppm', 'ammonia_ok' => true, 'lux' => '100 lx']]]]);
-        $mock->shouldReceive('getBarnIotDevices')->andReturn([['deviceCode' => 'D1', 'deviceName' => 'Sensor1', 'status' => 'online']]);
-        $mock->shouldReceive('getBarnDetail')->andReturn([
-            'id' => 1,
-            'name' => 'Kandang Mock',
-            'status' => 'normal',
-            'temp' => 25,
-            'breed' => 'Layer',
-            'location' => 'Satu',
-            'flockAge' => 12,
-            'totalBirds' => 1200,
-            'capacity' => 2000,
+        /* --- Arrange --- */
+        $jenisBudidayaId = (string) Str::uuid();
+        DB::table('jenisBudidaya')->insert([
+            'id' => $jenisBudidayaId,
+            'nama' => 'Ayam Petelur',
+            'latin' => 'Gallus gallus domesticus',
+            'status' => 1,
+            'detail' => 'Data QA',
+            'tipe' => 'hewan',
+            'gambar' => null,
+            'periodePanen' => null,
+            'isDeleted' => 0,
+            'createdAt' => now(),
+            'updatedAt' => now(),
         ]);
-        $mock->shouldReceive('getBarnSensors')->andReturn([['label' => 'Suhu', 'value' => 25], ['label' => 'Kelembapan', 'value' => 60]]);
-        $mock->shouldReceive('getBarnSensorTrend')->andReturn(['labels' => ['Sen', 'Sel'], 'temperature' => [25, 26], 'humidity' => [60, 61], 'ammonia' => [10, 11], 'light' => [100, 120]]);
-        $mock->shouldReceive('getBarnKpi')->andReturn(['hdp' => 94.5, 'hhep' => 92.1, 'feedIntake' => 115, 'fcr' => 1.45, 'mortalitas' => 0.02, 'afkir' => 0.5]);
-        $mock->shouldReceive('getBarnProductionLog')->andReturn([]);
-        $mock->shouldReceive('getBarnSpkMessages')->andReturn([]);
-        $mock->shouldReceive('getBarnActivityLog')->andReturn([]);
-        $mock->shouldReceive('getProductivityTrend')->andReturn(['labels' => ['Sen', 'Sel'], 'hdp' => [94.5, 94.8], 'hhep' => [92.1, 92.4], 'fcr' => [1.45, 1.44], 'feedIntake' => [115, 117], 'mortality' => [0.02, 0.03]]);
-        $mock->shouldReceive('getEggQuality')->andReturn(['small' => 10, 'medium' => 40, 'large' => 35, 'xl' => 15, 'brokenStatus' => 'normal', 'brokenRate' => 1.2, 'dirtyStatus' => 'normal', 'dirtyRate' => 0.8]);
-        $this->app->instance(PeternakanService::class, $mock);
 
-        $this->withSession([
-            'api_token' => 'fake-token',
-            'user' => ['id' => 1, 'name' => 'QA Tester', 'email' => 'qa@farm.com'],
+        $barnId = (string) Str::uuid();
+
+        DB::table('unitBudidaya')->insert([
+            'id' => $barnId,
+            'jenisBudidayaId' => $jenisBudidayaId,
+            'nama' => 'Kandang A IOT',
+            'lokasi' => 'Blok B',
+            'tipe' => 'kolektif',
+            'jumlah' => 1000,
+            'status' => 1,
+            'isDeleted' => 0,
+            'createdAt' => now(),
+            'updatedAt' => now(),
         ]);
-        $response = $this->get('/peternakan/1');
 
+        $protocolId = (string) Str::uuid();
+        DB::table('iot_protocol')->insert([
+            'id' => $protocolId,
+            'protocolName' => 'API',
+            'description' => 'Protocol untuk QA test',
+            'createdAt' => now(),
+            'updatedAt' => now(),
+        ]);
+
+        $connectionConfigId = (string) Str::uuid();
+        DB::table('iot_connection_config')->insert([
+            'id' => $connectionConfigId,
+            'protocolId' => $protocolId,
+            'baseUrl' => 'http://localhost',
+            'endpointPath' => '/device',
+            'mqttBrokerUrl' => null,
+            'mqttTopic' => null,
+            'authType' => 'none',
+            'authKey' => null,
+            'headers' => null,
+            'createdAt' => now(),
+            'updatedAt' => now(),
+        ]);
+
+        DB::table('iot_device')->insert([
+            'id' => (string) Str::uuid(),
+            'unitBudidayaId' => $barnId,
+            'connectionConfigId' => $connectionConfigId,
+            'deviceCode' => 'DEV-QA-001',
+            'deviceName' => 'Sensor QA',
+            'pollingInterval' => 300,
+            'status' => 'active',
+            'installedAt' => now(),
+            'createdAt' => now(),
+            'updatedAt' => now(),
+        ]);
+
+        /* --- Act --- */
+        $response = $this->withSession($this->authSession())->get('/peternakan/' . $barnId);
+
+        /* --- Assert --- */
         $response->assertStatus(200);
+        $response->assertViewIs('peternakan.show');
         $response->assertViewHas('iotDevice');
     }
 }

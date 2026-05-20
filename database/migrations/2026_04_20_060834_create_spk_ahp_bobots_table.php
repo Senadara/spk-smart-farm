@@ -10,14 +10,17 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        Schema::create('spk_ahp_bobots', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
-            $table->foreignId('parameter_id')->constrained('spk_parameters')->onDelete('cascade');
-            $table->float('bobot');
-            $table->boolean('is_valid')->default(false);
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('spk_ahp_bobots')) {
+            Schema::create('spk_ahp_bobots', function (Blueprint $table) {
+                $table->id();
+                $table->char('user_id', 36);
+                $table->index('user_id');
+                $table->foreignId('parameter_id')->constrained('spk_parameters')->onDelete('cascade');
+                $table->float('bobot');
+                $table->boolean('is_valid')->default(false);
+                $table->timestamps();
+            });
+        }
     }
 
     /**

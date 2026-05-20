@@ -13,7 +13,7 @@ class PerkebunanTest extends TestCase
 
         $this->app['config']->set('session.driver', 'array');
         $this->app['config']->set('cache.default', 'array');
-        \Illuminate\Support\Facades\Cache::store('array')->flush();
+        \Illuminate\Support\Facades\Cache::flush();
     }
 
     public function test_halaman_dashboard_perkebunan_ditampilkan_dengan_benar(): void

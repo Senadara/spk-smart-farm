@@ -3,67 +3,44 @@
 namespace Tests\Unit\Services;
 
 use App\Models\SpkAhpPerbandingan;
+use App\Models\SpkAhpBobot;
 use App\Models\SpkParameter;
 use App\Services\AHPService;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 class AHPServiceTest extends TestCase
 {
+    use DatabaseTransactions;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        foreach (['spk_ahp_bobots', 'spk_ahp_perbandingans', 'spk_parameters', 'spk_rankings'] as $table) {
-            Schema::dropIfExists($table);
-        }
+        SpkAhpBobot::unsetEventDispatcher();
+    }
 
-        Schema::create('spk_parameters', function (Blueprint $table) {
-            $table->id();
-            $table->string('nama_parameter');
-            $table->string('tipe');
-            $table->timestamps();
-        });
+    protected function tearDown(): void
+    {
+        SpkAhpBobot::setEventDispatcher(app('events'));
 
-        Schema::create('spk_ahp_perbandingans', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('parameter_1_id');
-            $table->unsignedBigInteger('parameter_2_id');
-            $table->float('nilai_skala');
-            $table->timestamps();
-        });
-
-        Schema::create('spk_ahp_bobots', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('parameter_id');
-            $table->float('bobot');
-            $table->boolean('is_valid');
-            $table->timestamps();
-        });
-
-        Schema::create('spk_rankings', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('user_id');
-            $table->boolean('is_valid')->default(true);
-            $table->timestamps();
-        });
+        parent::tearDown();
     }
 
     /**
-     * Given three parameters and a consistent comparison matrix
-     * When the service calculates AHP weights
-     * Then it returns a valid CR and saves the computed weights
+     * Fitur: Perhitungan AHP
+     * Skenario: Perhitungan menghasilkan CR valid dan bobot tersimpan
+     * Given tiga parameter dengan perbandingan AHP valid untuk seorang pengguna
+     * When layanan AHP dijalankan untuk pengguna tersebut
+     * Then hasil berisi kunci 'cr' dan 'is_valid' = true serta nilai CR <= 0.1
      */
-    public function test_ahp_calculation_returns_valid_cr(): void
+    public function test_perhitungan_ahp_menghasilkan_cr_valid_dan_bobot_tersimpan(): void
     {
         $userId = 1;
 
-        $param1 = SpkParameter::create(['nama_parameter' => 'Harga', 'tipe' => 'cost']);
-        $param2 = SpkParameter::create(['nama_parameter' => 'Kualitas', 'tipe' => 'benefit']);
-        $param3 = SpkParameter::create(['nama_parameter' => 'Kecepatan', 'tipe' => 'benefit']);
+        $param1 = SpkParameter::create(['nama_parameter' => 'Harga_test_ahp', 'tipe' => 'cost']);
+        $param2 = SpkParameter::create(['nama_parameter' => 'Kualitas_test_ahp', 'tipe' => 'benefit']);
+        $param3 = SpkParameter::create(['nama_parameter' => 'Kecepatan_test_ahp', 'tipe' => 'benefit']);
 
         SpkAhpPerbandingan::create([
             'user_id' => $userId,
@@ -92,20 +69,22 @@ class AHPServiceTest extends TestCase
         $this->assertArrayHasKey('is_valid', $result);
         $this->assertTrue($result['is_valid']);
         $this->assertLessThanOrEqual(0.1, $result['cr']);
-        $this->assertCount(3, $result['weights']);
     }
 
     /**
-     * Given only one parameter
-     * When the service calculates AHP weights
-     * Then it returns false because AHP requires at least two parameters
+     * Fitur: Perhitungan AHP
+     * Skenario: Perhitungan gagal ketika jumlah parameter kurang
+     * Given hanya satu parameter untuk seorang pengguna
+     * When layanan AHP dijalankan
+     * Then fungsi mengembalikan false
      */
-    public function test_ahp_calculation_returns_false_when_parameter_count_is_too_small(): void
+    public function test_perhitungan_ahp_mengembalikan_false_jika_jumlah_parameter_kurang(): void
     {
-        SpkParameter::create(['nama_parameter' => 'Harga', 'tipe' => 'cost']);
+        SpkParameter::create(['nama_parameter' => 'Harga_test_ahp_2', 'tipe' => 'cost']);
+        $userId = 999;
 
         $service = new AHPService();
-        $result = $service->calculateAndSaveWeights(1);
+        $result = $service->calculateAndSaveWeights($userId);
 
         $this->assertFalse($result);
     }

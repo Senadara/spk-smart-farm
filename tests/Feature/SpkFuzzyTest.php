@@ -6,16 +6,15 @@ use App\Models\SpkFuzzyLog;
 use App\Services\Fuzzy\InputResolver;
 use App\Services\Fuzzy\MamdaniEngine;
 use App\Services\Fuzzy\NarrativeGenerator;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\WithoutMiddleware;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Schema;
 use Mockery;
 use Tests\TestCase;
 
 class SpkFuzzyTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions, WithoutMiddleware;
 
     protected function setUp(): void
     {
@@ -23,25 +22,7 @@ class SpkFuzzyTest extends TestCase
 
         $this->app['config']->set('session.driver', 'array');
         $this->app['config']->set('cache.default', 'array');
-        Cache::store('array')->flush();
-
-        Schema::dropIfExists('spk_fuzzy_logs');
-
-        Schema::create('spk_fuzzy_logs', function (Blueprint $table) {
-            $table->string('id')->primary();
-            $table->string('unit_budidaya_id')->nullable();
-            $table->json('input_json')->nullable();
-            $table->json('fuzzified_json')->nullable();
-            $table->json('rule_result_json')->nullable();
-            $table->string('status_lingkungan')->nullable();
-            $table->string('status_kesehatan')->nullable();
-            $table->string('diagnosis_kausalitas')->nullable();
-            $table->float('output_value')->nullable();
-            $table->string('output_label')->nullable();
-            $table->longText('narrative')->nullable();
-            $table->longText('recommendation')->nullable();
-            $table->timestamp('createdAt')->nullable()->useCurrent();
-        });
+        Cache::flush();
 
         $resolver = Mockery::mock(InputResolver::class);
         $resolver->shouldReceive('resolve')->andReturn([
@@ -98,11 +79,13 @@ class SpkFuzzyTest extends TestCase
     }
 
     /**
-     * Given mocked fuzzy services and an authenticated session
-     * When the global process endpoint is called
-     * Then it returns a successful response and stores a log record
+     * Fitur: Proses Fuzzy
+     * Skenario: Proses global menyimpan log dan mengembalikan respon sukses
+     * Given layanan fuzzy yang dimock dan session terautentikasi
+     * When endpoint proses global dipanggil
+     * Then respon sukses dikembalikan dan sebuah log disimpan
      */
-    public function test_fuzzy_process_returns_successful_response(): void
+    public function test_proses_fuzzy_mengembalikan_respon_sukses(): void
     {
         $this->withSession([
             'api_token' => 'fake-token',
@@ -141,11 +124,13 @@ class SpkFuzzyTest extends TestCase
     }
 
     /**
-     * Given an existing fuzzy log
-     * When the history endpoint is called
-     * Then it returns a formatted list item
+     * Fitur: Histori Fuzzy
+     * Skenario: Mendapatkan daftar histori fuzzy yang terformat
+     * Given sebuah log fuzzy yang sudah ada
+     * When endpoint histori dipanggil
+     * Then daftar histori terformat dikembalikan dengan status sukses
      */
-    public function test_fuzzy_history_returns_successful_response(): void
+    public function test_histori_fuzzy_mengembalikan_respon_sukses(): void
     {
         SpkFuzzyLog::create([
             'unit_budidaya_id' => null,
@@ -190,11 +175,13 @@ class SpkFuzzyTest extends TestCase
     }
 
     /**
-     * Given a missing fuzzy log identifier
-     * When the history detail endpoint is called
-     * Then it returns a 404 response with a not-found message
+     * Fitur: Detail Histori Fuzzy
+     * Skenario: Mendapatkan 404 ketika log tidak ditemukan
+     * Given identifier log yang tidak ada
+     * When endpoint detail histori dipanggil
+     * Then respon 404 dengan pesan 'Log tidak ditemukan' dikembalikan
      */
-    public function test_fuzzy_history_detail_returns_404_when_log_is_missing(): void
+    public function test_detail_histori_fuzzy_mengembalikan_404_ketika_log_tidak_ditemukan(): void
     {
         $this->withSession([
             'api_token' => 'fake-token',

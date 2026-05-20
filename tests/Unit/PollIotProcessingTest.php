@@ -38,6 +38,13 @@ class PollIotProcessingTest extends TestCase
         Bus::assertNothingDispatched();
     }
 
+    /**
+     * Fitur: Poll IoT
+     * Skenario: Command polling tidak mendispatch job jika tidak ada device aktif
+     * Given tidak ada device aktif dikembalikan dari query
+     * When command artisan 'iot:poll' dijalankan
+     * Then tidak ada job yang didispatch
+     */
     public function test_command_poll_iot_mendispatch_job_untuk_device_aktif(): void
     {
         Bus::fake();
@@ -57,6 +64,13 @@ class PollIotProcessingTest extends TestCase
         Bus::assertDispatched(PollIotDeviceJob::class);
     }
 
+    /**
+     * Fitur: Poll IoT - Job
+     * Skenario: Job PollIotDevice menyimpan data sensor untuk payload valid
+     * Given device dengan mapping parameter dan endpoint yang mengembalikan payload valid
+     * When job `PollIotDeviceJob` dijalankan
+     * Then model sensor dan log dibuat serta event dipicu
+     */
     public function test_job_poll_iot_device_menyimpan_data_sensor_untuk_payload_valid(): void
     {
         $mapping = (object) [

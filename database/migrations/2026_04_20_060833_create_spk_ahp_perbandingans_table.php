@@ -10,14 +10,17 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        Schema::create('spk_ahp_perbandingans', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
-            $table->foreignId('parameter_1_id')->constrained('spk_parameters')->onDelete('cascade');
-            $table->foreignId('parameter_2_id')->constrained('spk_parameters')->onDelete('cascade');
-            $table->float('nilai_skala');
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('spk_ahp_perbandingans')) {
+            Schema::create('spk_ahp_perbandingans', function (Blueprint $table) {
+                $table->id();
+                $table->uuid('user_id');
+                $table->foreign('user_id')->references('id')->on('user')->onDelete('cascade');
+                $table->foreignId('parameter_1_id')->constrained('spk_parameters')->onDelete('cascade');
+                $table->foreignId('parameter_2_id')->constrained('spk_parameters')->onDelete('cascade');
+                $table->float('nilai_skala');
+                $table->timestamps();
+            });
+        }
     }
 
     /**

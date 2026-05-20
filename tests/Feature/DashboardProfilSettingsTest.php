@@ -10,7 +10,7 @@ use Tests\TestCase;
  * @runInSeparateProcess
  * @preserveGlobalState disabled
  */
-class CorePagesTest extends TestCase
+class DashboardProfilSettingsTest extends TestCase
 {
     private function authSession(): array
     {
@@ -20,6 +20,13 @@ class CorePagesTest extends TestCase
         ];
     }
 
+    /**
+     * Feature: Halaman Dashboard
+     * Scenario: Menampilkan halaman dashboard dengan data pengguna
+     * Given pengguna login sebagai admin
+     * When halaman '/dashboard' diakses
+     * Then status 200 dan view dashboard menampilkan data user
+     */
     public function test_dashboard_halaman_utama_ditampilkan_dengan_data_user(): void
     {
         $response = $this->withSession($this->authSession())->get('/dashboard');
@@ -29,6 +36,13 @@ class CorePagesTest extends TestCase
         $response->assertViewHas('user');
     }
 
+    /**
+     * Feature: Halaman Profil
+     * Scenario: Menampilkan histori login pengguna
+     * Given data histori login tersedia untuk email pengguna
+     * When halaman '/profil' diakses
+     * Then status 200 dan view profil menampilkan histori login
+     */
     public function test_halaman_profil_menampilkan_histori_login_pengguna(): void
     {
         $historyQuery = Mockery::mock();
@@ -53,6 +67,13 @@ class CorePagesTest extends TestCase
         $response->assertViewHasAll(['user', 'loginHistories']);
     }
 
+    /**
+     * Feature: Halaman Settings
+     * Scenario: Menampilkan halaman pengaturan dengan benar
+     * Given pengguna login sebagai admin
+     * When halaman '/settings' diakses
+     * Then status 200 dan view settings ditampilkan
+     */
     public function test_halaman_settings_hub_ditampilkan_dengan_benar(): void
     {
         $response = $this->withSession($this->authSession())->get('/settings');

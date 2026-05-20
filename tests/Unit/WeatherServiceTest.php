@@ -13,9 +13,16 @@ class WeatherServiceTest extends TestCase
     {
         parent::setUp();
         Cache::setDefaultDriver('array');
-        Cache::store('array')->flush();
+        Cache::flush();
     }
 
+    /**
+     * Fitur: WeatherService
+     * Skenario: Menangani kegagalan API cuaca dan mengembalikan data default
+     * Given respons API eksternal gagal (500)
+     * When `getForecast()` dipanggil
+     * Then fungsi mengembalikan array dengan flag error dan lokasi default
+     */
     public function test_penanganan_kegagalan_api_cuaca_mengembalikan_data_default(): void
     {
         Http::fake([
@@ -30,6 +37,14 @@ class WeatherServiceTest extends TestCase
         $this->assertEquals('Sarirogo', $hasilAktual['location']);
     }
 
+
+    /**
+     * Fitur: WeatherService
+     * Skenario: Memvalidasi parsing respons API cuaca yang sukses
+     * Given respons API BMKG berisi data forecast
+     * When `getForecast()` dipanggil
+     * Then hasil mengandung kunci 'forecast' dan struktur data yang valid
+     */
     public function test_penguraian_respons_api_cuaca_memvalidasi_data_sukses(): void
     {
         $dataMock = [

@@ -18,6 +18,20 @@ use Tests\TestCase;
  */
 class ObserversTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        Mockery::close();
+
+        parent::tearDown();
+    }
+
+    /**
+     * Fitur: Observers
+     * Skenario: Observer `InventorySupplierProdukObserver` menonaktifkan ranking terkait saat saved/deleted
+     * Given mock `SpkRanking`
+     * When observer.saved dan observer.deleted dipanggil pada pivot inventory
+     * Then `is_valid` pada ranking terkait diupdate menjadi false
+     */
     public function test_observer_inventory_supplier_produk_menonaktifkan_ranking_terkait(): void
     {
         $rankingMock = Mockery::mock('alias:' . SpkRanking::class);
@@ -29,8 +43,17 @@ class ObserversTest extends TestCase
 
         $observer->saved($pivot);
         $observer->deleted($pivot);
+
+        $this->addToAssertionCount(1);
     }
 
+    /**
+     * Fitur: Observers
+     * Skenario: Observer `SpkSupplierParameterValueObserver` menonaktifkan ranking terkait saat saved/deleted
+     * Given mock `SpkRanking`
+     * When observer.saved dan observer.deleted dipanggil pada nilai parameter supplier
+     * Then `is_valid` pada ranking terkait diupdate menjadi false
+     */
     public function test_observer_spk_supplier_parameter_value_menonaktifkan_ranking_terkait(): void
     {
         $rankingMock = Mockery::mock('alias:' . SpkRanking::class);
@@ -42,8 +65,17 @@ class ObserversTest extends TestCase
 
         $observer->saved($value);
         $observer->deleted($value);
+
+        $this->addToAssertionCount(1);
     }
 
+    /**
+     * Fitur: Observers
+     * Skenario: Observer `SpkAhpBobotObserver` menonaktifkan ranking pengguna saat bobot disimpan/dihapus
+     * Given mock `SpkRanking`
+     * When observer.saved dan observer.deleted dipanggil pada model bobot AHP
+     * Then `is_valid` pada ranking pengguna terkait diupdate menjadi false
+     */
     public function test_observer_spk_ahp_bobot_menonaktifkan_ranking_pengguna(): void
     {
         $rankingMock = Mockery::mock('alias:' . SpkRanking::class);
@@ -55,5 +87,7 @@ class ObserversTest extends TestCase
 
         $observer->saved($bobot);
         $observer->deleted($bobot);
+
+        $this->addToAssertionCount(1);
     }
 }

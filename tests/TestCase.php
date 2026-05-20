@@ -37,4 +37,14 @@ abstract class TestCase extends BaseTestCase
         // Ensure an application key exists for encryption/session during tests
         $this->app['config']->set('app.key', 'base64:'.base64_encode(str_repeat("0", 32)));
     }
+
+    protected function tearDown(): void
+    {
+        // Ensure Mockery expectations are cleared between tests to avoid cross-test contamination
+        if (class_exists('\Mockery')) {
+            \Mockery::close();
+        }
+
+        parent::tearDown();
+    }
 }
