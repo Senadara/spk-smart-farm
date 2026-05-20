@@ -108,4 +108,18 @@ class SpkActionTask extends Model
             default  => $this->priority,
         };
     }
+
+    protected static function booted()
+    {
+        static::addGlobalScope('tenant_isolation', function (\Illuminate\Database\Eloquent\Builder $builder) {
+            $user = session('user');
+            if ($user && isset($user['role'])) {
+                if ($user['role'] === 'pjawab') {
+                    $builder->where('assigned_by', $user['id']);
+                } elseif ($user['role'] === 'petugas') {
+                    $builder->where('assigned_to', $user['id']);
+                }
+            }
+        });
+    }
 }

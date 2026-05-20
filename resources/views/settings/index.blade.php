@@ -53,6 +53,7 @@
         </a>
 
         {{-- Konfigurasi Fuzzy Mamdani --}}
+        @if(session('user') && isset(session('user')['role']) && session('user')['role'] === 'pjawab')
         <a href="{{ route('settings.fuzzy.index') }}" class="group block bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all">
             <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-amber-100 transition-colors">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -64,6 +65,34 @@
                 Kelola variabel, membership function, dan aturan inferensi fuzzy untuk analisis kondisi kandang.
             </p>
         </a>
+        @endif
+
+        {{-- DSS Supplier · AHP + SAW — layout lebar dua aksi utama --}}
+        <div class="md:col-span-2 lg:col-span-3 relative overflow-hidden rounded-2xl border border-indigo-800/70 bg-gradient-to-br from-indigo-950 via-emerald-950 to-slate-950 p-6 sm:p-8 shadow-xl shadow-black/25">
+            <div class="relative z-10 grid gap-8 lg:grid-cols-12 lg:items-center">
+                <div class="lg:col-span-7 space-y-2">
+                    <span class="inline-flex items-center rounded-full bg-emerald-500/20 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-300 ring-1 ring-emerald-400/35">Hybrid · Rekomendasi supplier</span>
+                    <h3 class="text-2xl font-black text-white leading-tight">AHP bobot · SAW peringkat</h3>
+                    <p class="text-sm leading-relaxed text-indigo-100/90 max-w-xl">
+                        <strong>Konfigurasi strategis</strong>: perbandingan berpasangan + validasi CR.<br class="hidden sm:block">
+                        <strong>Operasional harian</strong>: normalisasi &amp; skor gabungan supplier per barang dipilih.
+                    </p>
+                </div>
+                <div class="lg:col-span-5 flex flex-col sm:flex-row lg:flex-col gap-3 lg:items-stretch lg:justify-end">
+                    <a href="{{ route('spk.suppliers.dss.config') }}" class="inline-flex flex-1 items-center justify-center rounded-xl bg-emerald-400 px-5 py-4 text-sm font-black text-emerald-950 shadow-lg hover:bg-emerald-300 transition text-center shrink-0">
+                        Atur bobot · AHP
+                    </a>
+                    <div class="flex flex-1 flex-col gap-2 sm:flex-row lg:flex-row">
+                        <a href="{{ route('spk.suppliers.dss.dashboard') }}" class="inline-flex flex-1 items-center justify-center rounded-xl bg-white/12 px-4 py-3.5 text-sm font-bold text-white ring-1 ring-white/25 hover:bg-white/18 transition text-center">
+                            Dashboard SAW
+                        </a>
+                        <a href="{{ route('spk.suppliers.products') }}" class="inline-flex flex-1 items-center justify-center rounded-xl border border-white/20 bg-transparent px-4 py-3.5 text-sm font-semibold text-indigo-100 hover:bg-white/5 transition text-center">
+                            Komparasi produk
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
 
     </div>
 </div>

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\SpkParameter;
 use App\Models\SpkAhpPerbandingan;
 use App\Models\SpkAhpBobot;
+use App\Models\SpkAhpConfiguration;
 
 class AHPService
 {
@@ -64,15 +65,41 @@ class AHPService
         $cr = $ri == 0 ? 0 : $ci / $ri;
         $isValid = $cr <= 0.1;
 
-        // 4. Save to DB
+        // 4. Save weights to DB
+        $weightsSnapshot = [];
         foreach ($parameters as $index => $param) {
             SpkAhpBobot::updateOrCreate(
                 ['user_id' => $userId, 'parameter_id' => $param->id],
                 ['bobot' => $weights[$index], 'is_valid' => $isValid]
             );
+            $weightsSnapshot[] = [
+                'parameter_id' => $param->id,
+                'nama_parameter' => $param->nama_parameter,
+                'tipe' => $param->tipe,
+                'bobot' => round($weights[$index], 6),
+            ];
         }
 
-        return ['cr' => $cr, 'is_valid' => $isValid, 'weights' => $weights];
+        $lastVersion = SpkAhpConfiguration::where('user_id', $userId)->max('version') ?? 0;
+        if ($isValid) {
+            SpkAhpConfiguration::create([
+                'user_id' => $userId,
+                'cr' => $cr,
+                'is_valid' => true,
+                'version' => $lastVersion + 1,
+                'weights_snapshot' => $weightsSnapshot,
+            ]);
+        }
+
+        return [
+            'cr' => round($cr, 4),
+            'ci' => round($ci, 4),
+            'lambda_max' => round($lamdaMax, 4),
+            'is_valid' => $isValid,
+            'weights' => $weights,
+            'weights_detail' => $weightsSnapshot,
+            'n' => $n,
+        ];
     }
 
     private function buildComparisonMatrix($userId, $parameters)

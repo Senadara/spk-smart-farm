@@ -16,10 +16,12 @@
                 <p class="text-xs text-gray-400 mt-0.5">Kelola tugas tindakan dari hasil analisa SPK untuk petugas lapangan</p>
             </div>
             <div class="flex items-center gap-3">
+                @if(session('user') && isset(session('user')['role']) && session('user')['role'] === 'pjawab')
                 <button @click="showCreateModal = true" class="flex items-center gap-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg transition shadow-sm">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                     Buat Tugas
                 </button>
+                @endif
             </div>
         </div>
 
@@ -63,12 +65,14 @@
                 <h3 class="text-sm font-bold text-gray-800">Board Penugasan</h3>
                 <form method="GET" action="{{ route('spk.tasks.index') }}" class="flex items-center gap-2">
                     <input type="hidden" name="tab" value="active">
+                    @if(session('user') && isset(session('user')['role']) && session('user')['role'] === 'pjawab')
                     <select name="user_id" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-purple-400 cursor-pointer" onchange="this.form.submit()">
                         <option value="all">Semua Petugas</option>
                         @foreach($users as $user)
                             <option value="{{ $user->id }}" {{ $userFilter == $user->id ? 'selected' : '' }}>{{ $user->name }}</option>
                         @endforeach
                     </select>
+                    @endif
                     <select name="priority" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-purple-400 cursor-pointer" onchange="this.form.submit()">
                         <option value="all" {{ $priorityFilter === 'all' ? 'selected' : '' }}>Semua Prioritas</option>
                         <option value="urgent" {{ $priorityFilter === 'urgent' ? 'selected' : '' }}>Urgent</option>
@@ -128,12 +132,14 @@
                     <form method="GET" action="{{ route('spk.tasks.index') }}" class="flex flex-wrap items-center gap-2">
                         <input type="hidden" name="tab" value="history">
                         
+                        @if(session('user') && isset(session('user')['role']) && session('user')['role'] === 'pjawab')
                         <select name="user_id" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-purple-400" onchange="this.form.submit()">
                             <option value="all">Semua Petugas</option>
                             @foreach($users as $user)
                                 <option value="{{ $user->id }}" {{ $userFilter == $user->id ? 'selected' : '' }}>{{ $user->name }}</option>
                             @endforeach
                         </select>
+                        @endif
                         
                         <div class="flex items-center gap-1">
                             <input type="date" name="start_date" value="{{ $startDate }}" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-purple-400" onchange="this.form.submit()">

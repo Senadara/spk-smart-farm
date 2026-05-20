@@ -16,7 +16,7 @@
     @stack('styles')
 </head>
 
-<body class="h-full font-primary text-[var(--color-gray-900)]">
+<body class="h-full overflow-hidden font-primary text-[var(--color-gray-900)]">
     <div class="flex h-full">
         {{-- Sidebar Overlay (Mobile) --}}
         <div id="sidebarOverlay"
@@ -33,7 +33,7 @@
             <x-layouts.topbar />
 
             {{-- Main Content --}}
-            <main class="flex-1 p-4 md:p-6 bg-[var(--color-gray-50)] overflow-y-auto">
+            <main class="flex-1 min-h-0 p-4 md:p-6 bg-[var(--color-gray-50)] overflow-y-auto">
                 @yield('content')
             </main>
         </div>

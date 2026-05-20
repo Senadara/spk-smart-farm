@@ -16,4 +16,8 @@ class UnitBudidaya extends Model
     protected $keyType = 'string';
 
     // Model dasar hanya untuk menunjang relasi IotDevice
+    protected static function booted()
+    {
+        static::addGlobalScope(new \App\Models\Scopes\TenantScope);
+    }
 }

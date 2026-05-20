@@ -25,8 +25,15 @@ class SpkTaskController extends Controller
         $startDate      = $request->input('start_date', '');
         $endDate        = $request->input('end_date', '');
 
+        $currentUser = session('user');
+        $isPetugas = isset($currentUser['role']) && $currentUser['role'] === 'petugas';
+
+        if ($isPetugas) {
+            $userFilter = $currentUser['id'];
+        }
+
         // Petugas & Kandang options
-        $users = DB::table('users')->select('id', 'name', 'email')->get();
+        $users = DB::table('user')->select('id', 'name', 'email')->get();
         $jenis = DB::table('jenisBudidaya')->where('nama', 'like', '%Ayam Petelur%')->where('isDeleted', 0)->first();
         $barns = DB::table('unitBudidaya')
             ->where('jenisBudidayaId', $jenis?->id)
@@ -254,7 +261,7 @@ class SpkTaskController extends Controller
         $task = SpkActionTask::with(['assignee', 'assigner', 'unitBudidaya', 'fuzzyLog', 'reports.reporter'])
             ->findOrFail($id);
 
-        $users = DB::table('users')->select('id', 'name', 'email')->get();
+        $users = DB::table('user')->select('id', 'name', 'email')->get();
 
         $jenis = DB::table('jenisBudidaya')->where('nama', 'like', '%Ayam Petelur%')->where('isDeleted', 0)->first();
         $barns = DB::table('unitBudidaya')

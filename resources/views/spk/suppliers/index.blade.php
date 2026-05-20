@@ -40,6 +40,8 @@
 
             <div class="flex-grow"></div>
             
+            <a href="{{ route('spk.suppliers.dss.config') }}" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 transition border border-amber-100">⚖ Konfigurasi AHP</a>
+            <a href="{{ route('spk.suppliers.dss.dashboard') }}" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition border border-indigo-100">📊 Dashboard SAW</a>
             <a href="{{ route('spk.suppliers.products') }}" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-purple-50 text-purple-600 hover:bg-purple-100 transition border border-purple-100 flex items-center gap-1.5">
                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
                Mode Banding Barang
@@ -48,7 +50,7 @@
     </div>
 
     {{-- SUPPLIER GRID --}}
-    @if(empty($suppliers))
+    @if(count($suppliers) === 0)
     <div class="bg-white rounded-xl p-12 text-center shadow-sm border border-gray-50">
         <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
         <h3 class="text-lg font-bold text-gray-800">Tidak ada supplier ditemukan</h3>
