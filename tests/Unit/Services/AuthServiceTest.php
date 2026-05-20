@@ -8,7 +8,7 @@ use App\Services\ApiService;
 use App\Exceptions\ApiException;
 use Mockery;
 
-class AuthTest extends TestCase
+class AuthServiceTest extends TestCase
 {
     public function test_pastikan_class_auth_service_tersedia(): void
     {

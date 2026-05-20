@@ -4,6 +4,7 @@ namespace Tests\Unit\Services;
 
 use App\Models\SpkAhpPerbandingan;
 use App\Models\SpkAhpBobot;
+use App\Models\SpkAhpConfiguration;
 use App\Models\SpkParameter;
 use App\Services\AHPService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -18,6 +19,10 @@ class AHPServiceTest extends TestCase
         parent::setUp();
 
         SpkAhpBobot::unsetEventDispatcher();
+        SpkAhpPerbandingan::query()->delete();
+        SpkAhpBobot::query()->delete();
+        SpkAhpConfiguration::query()->delete();
+        SpkParameter::query()->delete();
     }
 
     protected function tearDown(): void
