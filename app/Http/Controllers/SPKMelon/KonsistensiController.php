@@ -57,8 +57,19 @@ class KonsistensiController extends Controller
         // Jalankan kalkulasi CR
         try {
             $result = $this->fuzzyAhpService->calculateConsistencyRatio($sesi, $kriteriaList);
+        } catch (\DomainException $e) {
+            Log::warning('[SPK-04 v1.1] Konfigurasi kriteria di luar range valid', [
+                'sesiId' => $sesi->id,
+                'n'      => count($kriteriaList),
+                'error'  => $e->getMessage(),
+            ]);
+
+            return redirect()
+                ->route('spk-melon.sesi-penilaian.show', $sesi->id)
+                ->with('error', 'Sistem hanya mendukung 5-9 kriteria per sesi (zona standar AHP). '
+                              . 'Sesi ini memiliki konfigurasi di luar range valid. Hubungi administrator untuk menyesuaikan kriteria.');
         } catch (\Throwable $e) {
-            Log::error('[SPK-04] Gagal menghitung Consistency Ratio', [
+            Log::error('[SPK-04 v1.1] Gagal menghitung Consistency Ratio', [
                 'sesiId' => $sesi->id,
                 'error'  => $e->getMessage(),
             ]);

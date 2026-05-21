@@ -43,6 +43,22 @@
     </div>
     @endif
 
+    @if(session('error'))
+    <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 6000)"
+        x-transition:enter="transition ease-out duration-300"
+        x-transition:enter-start="opacity-0 translate-y-[-8px]"
+        x-transition:enter-end="opacity-100 translate-y-0"
+        x-transition:leave="transition ease-in duration-200"
+        x-transition:leave-end="opacity-0"
+        class="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl shadow-sm">
+        <i data-lucide="alert-circle" class="w-5 h-5 text-red-500 shrink-0"></i>
+        <p class="text-sm font-medium text-red-800">{{ session('error') }}</p>
+        <button @click="show = false" class="ml-auto text-red-400 hover:text-red-600 transition-colors">
+            <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+    </div>
+    @endif
+
     {{-- ══════════════════════════════════════════════════════════════ --}}
     {{-- Toolbar: Filter Kategori                                       --}}
     {{-- ══════════════════════════════════════════════════════════════ --}}
@@ -81,6 +97,37 @@
             <span class="font-bold text-gray-900">{{ $daftarKriteria->count() }}</span>
             <span class="font-medium"> kriteria ditemukan</span>
         </div>
+    </div>
+
+    {{-- ══════════════════════════════════════════════════════════════ --}}
+    {{-- Info Card: Status Range Kriteria per Tipe Evaluasi              --}}
+    {{-- ══════════════════════════════════════════════════════════════ --}}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        @foreach([
+            ['tipe' => 'Produktivitas', 'total' => $totalProduktivitas],
+            ['tipe' => 'Kualitas',       'total' => $totalKualitas],
+        ] as $item)
+            @php
+                $isOk = $item['total'] >= $minKriteria && $item['total'] <= $maxKriteria;
+                $bg     = $isOk ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200';
+                $textCol = $isOk ? 'text-emerald-900' : 'text-amber-900';
+                $iconCol = $isOk ? 'text-emerald-600' : 'text-amber-600';
+                $icon    = $isOk ? 'check-circle' : 'alert-triangle';
+                $status  = match (true) {
+                    $item['total'] < $minKriteria => "Kurang ({$item['total']} < {$minKriteria})",
+                    $item['total'] > $maxKriteria => "Berlebih ({$item['total']} > {$maxKriteria})",
+                    default => "Cukup ({$item['total']} kriteria)",
+                };
+            @endphp
+            <div class="flex items-start gap-3 p-4 border rounded-xl {{ $bg }}">
+                <i data-lucide="{{ $icon }}" class="w-5 h-5 {{ $iconCol }} shrink-0 mt-0.5"></i>
+                <div>
+                    <p class="text-sm font-semibold {{ $textCol }}">Evaluasi {{ $item['tipe'] }}</p>
+                    <p class="text-xs {{ $textCol }} mt-0.5">Status: <em>{{ $status }}</em></p>
+                    <p class="text-xs text-gray-500 mt-1">Range valid: {{ $minKriteria }}-{{ $maxKriteria }} kriteria (<em>zona standar AHP</em>)</p>
+                </div>
+            </div>
+        @endforeach
     </div>
 
     {{-- ══════════════════════════════════════════════════════════════ --}}

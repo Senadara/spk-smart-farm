@@ -7,6 +7,7 @@ use App\Http\Requests\SPKMelon\StoreKriteriaRequest;
 use App\Http\Requests\SPKMelon\UpdateKriteriaRequest;
 use App\Models\SPKMelon\SpkMelonKriteria;
 use App\Services\SPKMelon\KriteriaService;
+use App\Services\SPKMelon\FuzzyAhpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -39,10 +40,25 @@ class KriteriaController extends Controller
 
         $daftarKriteria = $query->get();
 
+        // Hitung total kriteria per tipe evaluasi untuk info card status range
+        $totalProduktivitas = SpkMelonKriteria::where(function ($q) {
+            $q->where('kategori', 'produktivitas')
+              ->orWhere('kategori', 'lingkungan');
+        })->count();
+
+        $totalKualitas = SpkMelonKriteria::where(function ($q) {
+            $q->where('kategori', 'kualitas')
+              ->orWhere('kategori', 'lingkungan');
+        })->count();
+
         return view('spk-melon.kriteria.index', [
-            'daftarKriteria' => $daftarKriteria,
-            'filterKategori' => $filterKategori,
-            'nextKode'       => $this->service->generateNextKode(),
+            'daftarKriteria'      => $daftarKriteria,
+            'filterKategori'      => $filterKategori,
+            'nextKode'            => $this->service->generateNextKode(),
+            'totalProduktivitas'  => $totalProduktivitas,
+            'totalKualitas'       => $totalKualitas,
+            'minKriteria'         => FuzzyAhpService::MIN_KRITERIA,
+            'maxKriteria'         => FuzzyAhpService::MAX_KRITERIA,
         ]);
     }
 
@@ -52,7 +68,44 @@ class KriteriaController extends Controller
      */
     public function store(StoreKriteriaRequest $request): RedirectResponse
     {
-        $this->service->create($request->validated());
+        $validated = $request->validated();
+        $kategoriBaru = $validated['kategori'];
+
+        // Validasi range: cek apakah penambahan ini akan menyebabkan
+        // total kriteria untuk tipe evaluasi mana pun melebihi MAX_KRITERIA
+        $max = FuzzyAhpService::MAX_KRITERIA;
+
+        $cekProduktivitas = ($kategoriBaru === 'produktivitas' || $kategoriBaru === 'lingkungan');
+        $cekKualitas      = ($kategoriBaru === 'kualitas'      || $kategoriBaru === 'lingkungan');
+
+        if ($cekProduktivitas) {
+            $totalProduktivitas = SpkMelonKriteria::where(function ($q) {
+                $q->where('kategori', 'produktivitas')
+                  ->orWhere('kategori', 'lingkungan');
+            })->count();
+
+            if (($totalProduktivitas + 1) > $max) {
+                return redirect()
+                    ->route('spk-melon.kriteria.index')
+                    ->with('error', "Tidak dapat menambah kriteria: total kriteria untuk evaluasi Produktivitas akan melebihi batas maksimum {$max} (saat ini {$totalProduktivitas}, akan menjadi " . ($totalProduktivitas + 1) . "). Hapus kriteria existing terlebih dahulu sebelum menambah.");
+            }
+        }
+
+        if ($cekKualitas) {
+            $totalKualitas = SpkMelonKriteria::where(function ($q) {
+                $q->where('kategori', 'kualitas')
+                  ->orWhere('kategori', 'lingkungan');
+            })->count();
+
+            if (($totalKualitas + 1) > $max) {
+                return redirect()
+                    ->route('spk-melon.kriteria.index')
+                    ->with('error', "Tidak dapat menambah kriteria: total kriteria untuk evaluasi Kualitas akan melebihi batas maksimum {$max} (saat ini {$totalKualitas}, akan menjadi " . ($totalKualitas + 1) . "). Hapus kriteria existing terlebih dahulu sebelum menambah.");
+            }
+        }
+
+        // Lolos validasi, lanjut create
+        $this->service->create($validated);
 
         return redirect()
             ->route('spk-melon.kriteria.index')
@@ -78,6 +131,42 @@ class KriteriaController extends Controller
      */
     public function destroy(SpkMelonKriteria $kriteria): RedirectResponse
     {
+        $kategoriHapus = $kriteria->kategori;
+
+        // Validasi range: cek apakah penghapusan ini akan menyebabkan
+        // total kriteria untuk tipe evaluasi mana pun jatuh di bawah MIN_KRITERIA
+        $min = FuzzyAhpService::MIN_KRITERIA;
+
+        $cekProduktivitas = ($kategoriHapus === 'produktivitas' || $kategoriHapus === 'lingkungan');
+        $cekKualitas      = ($kategoriHapus === 'kualitas'      || $kategoriHapus === 'lingkungan');
+
+        if ($cekProduktivitas) {
+            $totalProduktivitas = SpkMelonKriteria::where(function ($q) {
+                $q->where('kategori', 'produktivitas')
+                  ->orWhere('kategori', 'lingkungan');
+            })->count();
+
+            if (($totalProduktivitas - 1) < $min) {
+                return redirect()
+                    ->route('spk-melon.kriteria.index')
+                    ->with('error', "Tidak dapat menghapus kriteria: total kriteria untuk evaluasi Produktivitas akan jatuh di bawah batas minimum {$min} (saat ini {$totalProduktivitas}, akan menjadi " . ($totalProduktivitas - 1) . "). Tambahkan kriteria pengganti terlebih dahulu sebelum menghapus.");
+            }
+        }
+
+        if ($cekKualitas) {
+            $totalKualitas = SpkMelonKriteria::where(function ($q) {
+                $q->where('kategori', 'kualitas')
+                  ->orWhere('kategori', 'lingkungan');
+            })->count();
+
+            if (($totalKualitas - 1) < $min) {
+                return redirect()
+                    ->route('spk-melon.kriteria.index')
+                    ->with('error', "Tidak dapat menghapus kriteria: total kriteria untuk evaluasi Kualitas akan jatuh di bawah batas minimum {$min} (saat ini {$totalKualitas}, akan menjadi " . ($totalKualitas - 1) . "). Tambahkan kriteria pengganti terlebih dahulu sebelum menghapus.");
+            }
+        }
+
+        // Lolos validasi, lanjut soft delete
         $this->service->softDelete($kriteria);
 
         return redirect()
@@ -131,10 +220,19 @@ class KriteriaController extends Controller
             'message' => "Berhasil memuat {$kriteria->count()} kriteria.",
             'data' => $kriteria,
             'meta' => [
-                'tipeEvaluasi' => $tipe,
-                'jumlah' => $kriteria->count(),
-                'cukupUntukSesi' => $kriteria->count() >= 2,
+                'tipeEvaluasi'   => $tipe,
+                'jumlah'         => $kriteria->count(),
+                'min'            => FuzzyAhpService::MIN_KRITERIA,
+                'max'            => FuzzyAhpService::MAX_KRITERIA,
+                'cukupUntukSesi' => $kriteria->count() >= FuzzyAhpService::MIN_KRITERIA
+                                    && $kriteria->count() <= FuzzyAhpService::MAX_KRITERIA,
+                'statusKriteria' => match (true) {
+                    $kriteria->count() < FuzzyAhpService::MIN_KRITERIA => 'kurang',
+                    $kriteria->count() > FuzzyAhpService::MAX_KRITERIA => 'berlebih',
+                    default => 'cukup',
+                },
             ],
         ]);
     }
 }
+

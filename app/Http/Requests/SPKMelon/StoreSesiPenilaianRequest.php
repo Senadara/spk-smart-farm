@@ -5,6 +5,7 @@ namespace App\Http\Requests\SPKMelon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use App\Models\SPKMelon\SpkMelonKriteria;
+use App\Services\SPKMelon\FuzzyAhpService;
 
 class StoreSesiPenilaianRequest extends FormRequest
 {
@@ -47,7 +48,7 @@ class StoreSesiPenilaianRequest extends FormRequest
     }
 
     /**
-     * Custom validation: pastikan minimum 2 kriteria yang sesuai tipe evaluasi.
+     * Custom validation: pastikan jumlah kriteria dalam range valid zona standar AHP (5-9).
      * Validasi dijalankan SETELAH validasi rules() di atas.
      */
     public function withValidator($validator): void
@@ -64,13 +65,28 @@ class StoreSesiPenilaianRequest extends FormRequest
                     ->orWhere('kategori', 'lingkungan');
             })->count();
 
-            if ($jumlahKriteria < 2) {
-                $namaTipe = $tipe === 'produktivitas' ? 'Produktivitas' : 'Kualitas';
+            $namaTipe = $tipe === 'produktivitas' ? 'Produktivitas' : 'Kualitas';
+            $min = FuzzyAhpService::MIN_KRITERIA;
+            $max = FuzzyAhpService::MAX_KRITERIA;
+
+            if ($jumlahKriteria < $min) {
                 $validator->errors()->add(
                     'tipeEvaluasi',
-                    "Tidak dapat membuat sesi: kriteria untuk evaluasi {$namaTipe} belum cukup (minimum 2 kriteria, saat ini {$jumlahKriteria}). Silakan tambahkan kriteria di menu Kriteria SPK terlebih dahulu."
+                    "Tidak dapat membuat sesi: kriteria untuk evaluasi {$namaTipe} belum cukup. "
+                    . "Sistem membutuhkan minimum {$min} kriteria (zona standar AHP), saat ini {$jumlahKriteria}. "
+                    . "Tambahkan kriteria di menu Kriteria SPK terlebih dahulu."
+                );
+            }
+
+            if ($jumlahKriteria > $max) {
+                $validator->errors()->add(
+                    'tipeEvaluasi',
+                    "Tidak dapat membuat sesi: kriteria untuk evaluasi {$namaTipe} melebihi batas. "
+                    . "Sistem hanya mengizinkan maksimum {$max} kriteria (zona standar AHP), saat ini {$jumlahKriteria}. "
+                    . "Kurangi/hapus kriteria di menu Kriteria SPK terlebih dahulu."
                 );
             }
         });
     }
 }
+

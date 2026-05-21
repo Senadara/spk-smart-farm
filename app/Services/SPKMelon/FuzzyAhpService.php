@@ -22,13 +22,29 @@ use Illuminate\Support\Str;
 class FuzzyAhpService
 {
     /**
+     * Batas bawah jumlah kriteria yang diizinkan (sesuai zona standar AHP).
+     * Saaty (1980) merekomendasikan n >= 5 untuk threshold CR < 0.10 standar.
+     * Untuk n = 3 atau 4 dibutuhkan threshold lebih ketat (0.05 atau 0.08)
+     * yang menambah kompleksitas implementasi. Sistem memilih range standar
+     * tanpa threshold adaptif untuk kesederhanaan UX.
+     */
+    public const MIN_KRITERIA = 5;
+
+    /**
+     * Batas atas jumlah kriteria yang diizinkan (sesuai zona standar AHP).
+     * Miller (1956) "magical number 7±2" — kapasitas memori kerja manusia
+     * untuk diskriminasi pairwise comparison. Di atas 9 kriteria, pakar
+     * mulai kesulitan menjaga konsistensi dan CR cenderung tinggi.
+     */
+    public const MAX_KRITERIA = 9;
+
+    /**
      * Tabel Random Index (RI) dari Saaty (1980).
-     * Indeks 1-2 bernilai 0 karena matriks dengan kurang dari 3 kriteria
-     * selalu konsisten secara matematis.
+     * Hanya menyimpan range valid sistem (5-9) sesuai zona standar AHP.
+     * Entry untuk n = 1, 2, 3, 4, 10+ dihapus karena tidak relevan pasca-v1.1.
      */
     private const RI_TABLE = [
-        1  => 0.00, 2  => 0.00, 3  => 0.58, 4  => 0.90, 5  => 1.12,
-        6  => 1.24, 7  => 1.32, 8  => 1.41, 9  => 1.45, 10 => 1.49,
+        5 => 1.12, 6 => 1.24, 7 => 1.32, 8 => 1.41, 9 => 1.45,
     ];
 
     private const CR_THRESHOLD = 0.10;
@@ -58,50 +74,22 @@ class FuzzyAhpService
      *   ci: float,
      *   ri: float,
      *   cr: float,
-     *   isConsistent: bool,
-     *   isShortCircuit: bool,
-     *   shortCircuitReason: ?string
+     *   isConsistent: bool
      * }
+     *
+     * @throws \DomainException jika jumlah kriteria di luar range valid (5-9)
      */
     public function calculateConsistencyRatio(SpkMelonSesiPenilaian $sesi, array $kriteriaList): array
     {
         $n = count($kriteriaList);
 
-        // ============================================================
-        // EDGE CASE: Matriks dengan kurang dari 3 kriteria.
-        // ============================================================
-        // Tabel Random Index (RI) Saaty mendefinisikan RI(1) = RI(2) = 0.
-        // Konsekuensi matematis: jika n < 3, formula CR = CI / RI menghasilkan
-        // pembagian dengan nol (undefined).
-        //
-        // Secara teori AHP, matriks berukuran 1x1 trivial konsisten, dan
-        // matriks 2x2 dengan pasangan resiprokal (a, 1/a) SELALU konsisten
-        // karena hanya ada satu derajat kebebasan dalam pengisian nilai.
-        //
-        // Maka untuk n < 3, sistem secara konvensional menetapkan CR = 0
-        // dan isConsistent = true, sambil menandai bahwa hasil ini berasal
-        // dari short-circuit (bukan perhitungan formula penuh) sehingga
-        // view dapat menampilkan informasi tambahan kepada user.
-        // ============================================================
-        if ($n < 3) {
-            return [
-                'n'                  => $n,
-                'kriteriaList'       => $kriteriaList,
-                'crispMatrix'        => $this->buildCrispMatrix($sesi, $kriteriaList),
-                'columnSums'         => [],
-                'normalizedMatrix'   => [],
-                'priorityVector'     => [],
-                'weightedSumVector'  => [],
-                'consistencyVector'  => [],
-                'lambdaMax'          => 0.0,
-                'ci'                 => 0.0,
-                'ri'                 => 0.0,
-                'cr'                 => 0.0,
-                'isConsistent'       => true,
-                'isShortCircuit'     => true,
-                'shortCircuitReason' => 'Matriks dengan kurang dari 3 kriteria (n = ' . $n . ') selalu konsisten secara matematis. '
-                                       . 'Nilai CR ditetapkan 0 karena RI(n < 3) = 0, sehingga formula CR = CI / RI tidak dapat dihitung (pembagian dengan nol).',
-            ];
+        // Guard: range valid zona standar AHP (5 ≤ n ≤ 9).
+        // Validasi seharusnya sudah dilakukan di SPK-01 dan SPK-02.
+        // Guard ini adalah defense in depth untuk bypass via direct DB manipulation.
+        if ($n < self::MIN_KRITERIA || $n > self::MAX_KRITERIA) {
+            throw new \DomainException(
+                "Jumlah kriteria di luar range valid (" . self::MIN_KRITERIA . "-" . self::MAX_KRITERIA . "). Saat ini n = {$n}."
+            );
         }
 
         // Langkah 1: Bangun crisp matrix A dari kolom tfnM
@@ -135,7 +123,8 @@ class FuzzyAhpService
         $ci = round(($lambdaMax - $n) / ($n - 1), 6);
 
         // Langkah 9: RI dari tabel Saaty
-        $ri = self::RI_TABLE[$n] ?? 1.49; // fallback ke RI(10) jika n > 10
+        // Sudah dijamin valid oleh guard di awal method (n ∈ [5, 9])
+        $ri = self::RI_TABLE[$n];
 
         // Langkah 10: CR = CI / RI
         $cr = ($ri > 0) ? round($ci / $ri, 6) : 0.0;
@@ -157,8 +146,6 @@ class FuzzyAhpService
             'ri'                 => $ri,
             'cr'                 => $cr,
             'isConsistent'       => $isConsistent,
-            'isShortCircuit'     => false,
-            'shortCircuitReason' => null,
         ];
     }
 
@@ -205,21 +192,12 @@ class FuzzyAhpService
     {
         $n = count($kriteriaList);
 
-        // Edge case: satu kriteria → bobot otomatis 100%
-        if ($n === 1) {
-            return [
-                'n'                 => 1,
-                'kriteriaList'      => $kriteriaList,
-                'fuzzyMatrix'       => [[[
-                    'l' => 1.0, 'm' => 1.0, 'u' => 1.0,
-                ]]],
-                'geometricMeans'    => [['l' => 1.0, 'm' => 1.0, 'u' => 1.0]],
-                'sumGeometricMean'  => ['l' => 1.0, 'm' => 1.0, 'u' => 1.0],
-                'fuzzyWeights'      => [['l' => 1.0, 'm' => 1.0, 'u' => 1.0]],
-                'crispWeights'      => [1.0],
-                'sumCrispWeights'   => 1.0,
-                'normalizedWeights' => [1.0],
-            ];
+        // Guard: range valid zona standar AHP (5 ≤ n ≤ 9).
+        // Sama dengan guard di calculateConsistencyRatio() — defense in depth.
+        if ($n < self::MIN_KRITERIA || $n > self::MAX_KRITERIA) {
+            throw new \DomainException(
+                "Jumlah kriteria di luar range valid (" . self::MIN_KRITERIA . "-" . self::MAX_KRITERIA . "). Saat ini n = {$n}."
+            );
         }
 
         // Langkah 1: Bangun fuzzy matrix n×n

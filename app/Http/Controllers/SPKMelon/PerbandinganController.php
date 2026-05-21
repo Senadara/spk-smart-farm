@@ -7,6 +7,7 @@ use App\Http\Requests\SPKMelon\StorePerbandinganRequest;
 use App\Models\SPKMelon\SpkMelonSesiPenilaian;
 use App\Services\SPKMelon\PerbandinganService;
 use App\Services\SPKMelon\TfnHelper;
+use App\Services\SPKMelon\FuzzyAhpService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
@@ -41,15 +42,20 @@ class PerbandinganController extends Controller
         $sesi = SpkMelonSesiPenilaian::findOrFail($id);
         $kriteriaList = $this->perbandinganService->getKriteriaForSesi($sesi);
 
-        // Validasi minimal jumlah kriteria
-        if ($kriteriaList->count() < 2) {
+        // Validasi range valid zona standar AHP (5-9)
+        $jumlahKriteria = $kriteriaList->count();
+        $min = FuzzyAhpService::MIN_KRITERIA;
+        $max = FuzzyAhpService::MAX_KRITERIA;
+
+        if ($jumlahKriteria < $min || $jumlahKriteria > $max) {
             return view('spk-melon.perbandingan.edit', [
                 'sesi'           => $sesi,
                 'kriteriaList'   => $kriteriaList,
                 'existingMatrix' => [],
                 'saatyOptions'   => $this->buildSaatyOptions(),
                 'isReadOnly'     => true,
-                'errorMessage'   => 'Sesi ini memiliki kurang dari 2 kriteria. Tambah kriteria di SPK-01 terlebih dahulu.',
+                'errorMessage'   => "Sesi ini memiliki {$jumlahKriteria} kriteria, di luar range valid {$min}-{$max} (zona standar AHP). "
+                                  . "Sesuaikan kriteria di menu Kriteria SPK untuk melanjutkan input perbandingan.",
             ]);
         }
 

@@ -14,7 +14,7 @@
     <div class="flex items-center gap-3 px-6 py-5 border-b border-[var(--color-gray-100)]">
         {{-- <div class="w-10 h-10 bg-[var(--color-primary)] rounded-xl flex items-center justify-center text-xl">🌾
         </div> --}}
-        <svg class="h-12 w-auto" viewBox="0 0 178 242" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+        <svg class="h-10 w-auto" viewBox="0 0 178 242" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
             <path d="M158.389 86.0734L11.3965 89.5865L15.0178 241.108L162.01 237.595L158.389 86.0734Z" fill="url(#pattern0_251_48948)"/>
             <rect x="23.4922" y="100.378" width="126.006" height="121.734" fill="url(#pattern1_251_48948)"/>
             <rect x="4.27138" y="4.27138" width="168.719" height="222.112" rx="84.3597" stroke="#00623A" stroke-width="8.54275"/>
@@ -121,7 +121,7 @@
                 {{-- Section: KONFIGURASI SPK (SPK-01) --}}
                 <li>
                     <x-sidebar.menu-item :href="route('spk-melon.kriteria.index')" :active="request()->routeIs('spk-melon.kriteria.*')" icon="list-checks">
-                        Konfigurasi Kriteria SPK
+                        Konfigurasi Kriteria
                     </x-sidebar.menu-item>
                 </li>
                 {{-- Section: EVALUASI SPK (SPK-02) --}}

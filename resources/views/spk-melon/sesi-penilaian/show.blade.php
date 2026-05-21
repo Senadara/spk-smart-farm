@@ -80,7 +80,7 @@
                             <i data-lucide="shield-check" class="w-4 h-4"></i>
                             Validasi Konsistensi
                         </a>
-                        @if($sesi->rasioKonsistensi !== null && ($sesi->rasioKonsistensi < 0.10 || count($sesi->kriteriaList ?? []) < 3))
+                        @if($sesi->rasioKonsistensi !== null && $sesi->rasioKonsistensi < 0.10)
                             @if(\App\Models\SPKMelon\SpkMelonBobot::where('sesiId', $sesi->id)->exists())
                                 <a href="{{ route('spk-melon.sesi-penilaian.bobot-kriteria.show', $sesi->id) }}"
                                    class="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl text-sm min-h-[44px] shadow-sm transition-all">

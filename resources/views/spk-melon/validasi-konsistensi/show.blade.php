@@ -57,29 +57,11 @@
         </a>
     </div>
 
-    {{-- Info Card: Short Circuit (n < 3) --}}
-    @if($result['isShortCircuit'])
-    <div class="flex items-start gap-4 p-5 bg-blue-50 border border-blue-200 rounded-xl">
-        <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
-            <i data-lucide="info" class="w-5 h-5 text-blue-600"></i>
-        </div>
-        <div>
-            <p class="font-semibold text-blue-900 mb-1">Konsistensi Otomatis</p>
-            <p class="text-sm text-blue-800">{{ $result['shortCircuitReason'] }}</p>
-        </div>
-    </div>
-    @endif
+
 
     {{-- Result Card --}}
     @php
-        if ($result['isShortCircuit']) {
-            $borderColor = 'border-blue-300';
-            $bgAccent    = 'bg-blue-50';
-            $crColor     = 'text-blue-700';
-            $badgeBg     = 'bg-blue-100 text-blue-700 border-blue-200';
-            $badgeIcon   = 'info';
-            $badgeLabel  = 'Konsisten Otomatis';
-        } elseif ($result['isConsistent']) {
+        if ($result['isConsistent']) {
             $borderColor = 'border-emerald-300';
             $bgAccent    = 'bg-emerald-50';
             $crColor     = 'text-emerald-700';
@@ -119,7 +101,7 @@
             </div>
         </div>
 
-        @if(! $result['isConsistent'] && ! $result['isShortCircuit'])
+        @if(! $result['isConsistent'])
         <div class="mt-4 pt-4 border-t border-red-100 flex items-start gap-2">
             <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-500 shrink-0 mt-0.5"></i>
             <p class="text-sm text-gray-600">
@@ -162,7 +144,6 @@
     @endif
 
     {{-- Breakdown Perhitungan (Collapsible) --}}
-    @if(! $result['isShortCircuit'])
     <details x-data="{ open: false }" :open="open" @toggle="open = $event.target.open"
              class="rounded-xl border border-gray-200 bg-white shadow-sm">
         <summary class="cursor-pointer px-5 py-4 text-sm font-semibold text-gray-900 flex items-center gap-2 list-none">
@@ -346,7 +327,6 @@
 
         </div>
     </details>
-    @endif
 
     {{-- Catatan Interpretasi --}}
     <div class="bg-gray-50 rounded-xl border border-gray-200 p-5">

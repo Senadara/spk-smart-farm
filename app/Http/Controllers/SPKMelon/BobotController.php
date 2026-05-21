@@ -7,6 +7,7 @@ use App\Services\SPKMelon\FuzzyAhpService;
 use App\Services\SPKMelon\PerbandinganService;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Controller untuk Kalkulasi Bobot Kriteria Fuzzy AHP (SPK-05).
@@ -54,24 +55,38 @@ class BobotController extends Controller
                 ->with('error', 'Data matriks perbandingan berpasangan belum tersedia. Lengkapi SPK-03 terlebih dahulu.');
         }
 
-        // Pre-condition 4: CR harus konsisten
+        // Pre-condition 4: CR harus konsisten + Weight calculation
+        // Wrapped in try-catch untuk menangkap \DomainException dari guard range 5-9
         $kriteriaList = $perbandinganService->getKriteriaForSesi($sesi);
         $kriteriaArray = $kriteriaList->values()->all();
-        $crResult = $fuzzyAhpService->calculateConsistencyRatio($sesi, $kriteriaArray);
 
-        if (! $crResult['isConsistent']) {
+        try {
+            $crResult = $fuzzyAhpService->calculateConsistencyRatio($sesi, $kriteriaArray);
+
+            if (! $crResult['isConsistent']) {
+                return redirect()
+                    ->route('spk-melon.sesi-penilaian.validasi-konsistensi.show', $sesi->id)
+                    ->with('error', 'Matriks perbandingan belum konsisten (CR = ' . number_format($crResult['cr'], 4) . '). Revisi perbandingan terlebih dahulu.');
+            }
+
+            // Hybrid mode: cek apakah bobot sudah ada di DB
+            $existingWeights = $fuzzyAhpService->getExistingWeights($sesi);
+
+            // SELALU jalankan calculateWeights() untuk mendapat data intermediate lengkap
+            // (fuzzyMatrix, geometricMeans) yang dibutuhkan breakdown Tahap 1 & 2 di view.
+            // Data ini TIDAK disimpan di DB, sehingga harus di-generate ulang dari matrix.
+            $result = $fuzzyAhpService->calculateWeights($sesi, $kriteriaArray);
+        } catch (\DomainException $e) {
+            Log::warning('[SPK-05 via SPK-04 v1.1] Konfigurasi kriteria di luar range valid', [
+                'sesiId' => $sesi->id,
+                'error'  => $e->getMessage(),
+            ]);
+
             return redirect()
-                ->route('spk-melon.sesi-penilaian.validasi-konsistensi.show', $sesi->id)
-                ->with('error', 'Matriks perbandingan belum konsisten (CR = ' . number_format($crResult['cr'], 4) . '). Revisi perbandingan terlebih dahulu.');
+                ->route('spk-melon.sesi-penilaian.show', $sesi->id)
+                ->with('error', 'Sistem hanya mendukung 5-9 kriteria per sesi (zona standar AHP). '
+                              . 'Sesi ini memiliki konfigurasi di luar range valid.');
         }
-
-        // Hybrid mode: cek apakah bobot sudah ada di DB
-        $existingWeights = $fuzzyAhpService->getExistingWeights($sesi);
-
-        // SELALU jalankan calculateWeights() untuk mendapat data intermediate lengkap
-        // (fuzzyMatrix, geometricMeans) yang dibutuhkan breakdown Tahap 1 & 2 di view.
-        // Data ini TIDAK disimpan di DB, sehingga harus di-generate ulang dari matrix.
-        $result = $fuzzyAhpService->calculateWeights($sesi, $kriteriaArray);
 
         if ($existingWeights) {
             // Data sudah ada di DB: override fuzzyWeights & normalizedWeights
@@ -160,28 +175,42 @@ class BobotController extends Controller
                 ->with('error', 'Data matriks perbandingan berpasangan belum tersedia.');
         }
 
-        // Pre-condition 4: CR harus konsisten
+        // Pre-condition 4: CR harus konsisten + Weight calculation
+        // Wrapped in try-catch untuk menangkap \DomainException dari guard range 5-9
         $kriteriaList = $perbandinganService->getKriteriaForSesi($sesi);
         $kriteriaArray = $kriteriaList->values()->all();
-        $crResult = $fuzzyAhpService->calculateConsistencyRatio($sesi, $kriteriaArray);
 
-        if (! $crResult['isConsistent']) {
+        try {
+            $crResult = $fuzzyAhpService->calculateConsistencyRatio($sesi, $kriteriaArray);
+
+            if (! $crResult['isConsistent']) {
+                return redirect()
+                    ->route('spk-melon.sesi-penilaian.validasi-konsistensi.show', $sesi->id)
+                    ->with('error', 'Matriks belum konsisten. CR = ' . number_format($crResult['cr'], 4));
+            }
+
+            // Pre-condition 5: Authorization (hanya inventor/admin)
+            $userRole = session('user')['role'] ?? '';
+            if (! in_array($userRole, ['inventor', 'admin'], true)) {
+                return redirect()
+                    ->route('spk-melon.sesi-penilaian.bobot-kriteria.show', $sesi->id)
+                    ->with('error', 'Anda tidak memiliki izin untuk melakukan kalkulasi ulang.');
+            }
+
+            // Execute: calculate + save (soft delete old + insert new)
+            $result = $fuzzyAhpService->calculateWeights($sesi, $kriteriaArray);
+            $fuzzyAhpService->saveWeights($sesi, $kriteriaArray, $result);
+        } catch (\DomainException $e) {
+            Log::warning('[SPK-05 via SPK-04 v1.1] Konfigurasi kriteria di luar range valid (recalculate)', [
+                'sesiId' => $sesi->id,
+                'error'  => $e->getMessage(),
+            ]);
+
             return redirect()
-                ->route('spk-melon.sesi-penilaian.validasi-konsistensi.show', $sesi->id)
-                ->with('error', 'Matriks belum konsisten. CR = ' . number_format($crResult['cr'], 4));
+                ->route('spk-melon.sesi-penilaian.show', $sesi->id)
+                ->with('error', 'Sistem hanya mendukung 5-9 kriteria per sesi (zona standar AHP). '
+                              . 'Sesi ini memiliki konfigurasi di luar range valid.');
         }
-
-        // Pre-condition 5: Authorization (hanya inventor/admin)
-        $userRole = session('user')['role'] ?? '';
-        if (! in_array($userRole, ['inventor', 'admin'], true)) {
-            return redirect()
-                ->route('spk-melon.sesi-penilaian.bobot-kriteria.show', $sesi->id)
-                ->with('error', 'Anda tidak memiliki izin untuk melakukan kalkulasi ulang.');
-        }
-
-        // Execute: calculate + save (soft delete old + insert new)
-        $result = $fuzzyAhpService->calculateWeights($sesi, $kriteriaArray);
-        $fuzzyAhpService->saveWeights($sesi, $kriteriaArray, $result);
 
         return redirect()
             ->route('spk-melon.sesi-penilaian.bobot-kriteria.show', $sesi->id)
