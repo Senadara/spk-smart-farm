@@ -72,7 +72,7 @@ export class InventoryPage {
         this.inventoryTableHeading = page.locator('h3').filter({ hasText: /Detail Inventaris/i });
         this.inventoryTable = page.locator('table').filter({ hasText: /Item & Kategori|Stok|Est\. Habis|Status/i });
         // Rows are in tbody with class "divide-y divide-gray-50"
-        this.inventoryRows = this.inventoryTable.locator('tbody.divide-y > tr').filter({ hasText: /INV-/ });
+        this.inventoryRows = this.inventoryTable.locator('tbody.divide-y > tr:visible');
 
         // ─── Filters & Search ──────────────────────────────────
         // Top level filters: Barn, Category

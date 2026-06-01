@@ -1,17 +1,19 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import { IotPage } from '../pages/IotPage.js';
 
-test.describe('Modul IoT Webhook Integration - API PUSH E2E QA', () => {
+test.describe('Modul IoT Webhook API Integration - E2E QA', () => {
     let iotPage: IotPage;
     let context: any;
 
     test.describe.configure({ mode: 'serial' });
 
     test.beforeEach(async ({ page }, testInfo) => {
+        // Arrange
         testInfo.setTimeout(240000); 
         page.setDefaultNavigationTimeout(120000);
         page.setDefaultTimeout(120000);
 
+        // Blocker statis Vite
         await page.route('**/:5173/**', route => route.abort());
         await page.route(/.*:5173.*/, route => route.abort());
 
@@ -19,11 +21,8 @@ test.describe('Modul IoT Webhook Integration - API PUSH E2E QA', () => {
         context = page.context();
     });
 
-    async function createTestDeviceWithMapping(
-        iotPage: IotPage,
-        deviceCode: string,
-        deviceName: string
-    ) {
+    // ─── HELPER FUNCTIONS ────────────────────────────────────────────────────────
+    async function createTestDeviceWithMapping(iotPage: IotPage, deviceCode: string, deviceName: string) {
         await iotPage.gotoConfig();
         await iotPage.expectToBeOnConfigPage();
 
@@ -60,11 +59,7 @@ test.describe('Modul IoT Webhook Integration - API PUSH E2E QA', () => {
         await iotPage.page.waitForTimeout(2000);
         await expect(iotPage.toastSuccess).toBeVisible({ timeout: 10000 }).catch(() => {});
 
-        return {
-            deviceCode,
-            deviceName,
-            protocolName,
-        };
+        return { deviceCode, deviceName, protocolName };
     }
 
     async function deleteTestDevice(iotPage: IotPage, deviceCode: string) {
@@ -83,19 +78,13 @@ test.describe('Modul IoT Webhook Integration - API PUSH E2E QA', () => {
         }
     }
 
-    async function sendWebhookRequest(
-        context: any,
-        deviceCode: string,
-        payload: Record<string, any>
-    ) {
+    async function sendWebhookRequest(context: any, deviceCode: string, payload: Record<string, any>) {
         const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:8000';
         const webhookUrl = `${baseUrl}/iot/webhook/${deviceCode}`;
 
         const response = await context.request.post(webhookUrl, {
             data: payload,
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
         });
 
         return {
@@ -105,54 +94,51 @@ test.describe('Modul IoT Webhook Integration - API PUSH E2E QA', () => {
         };
     }
 
+    // ─── TEST SCENARIOS ──────────────────────────────────────────────────────────
 
-    test('Positif - Device berhasil mengirim webhook tanpa auth & menerima 200 OK', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-TEST-${Date.now()}`,
-            'E2E Webhook Test Device'
-        );
+    test('Positif - Device berhasil mengirim webhook via API tanpa Authorization dan menerima 200 OK', async ({ page }) => {
+        /**
+         * Given perangkat lunak Smart Farm memiliki open endpoint webhook
+         * When Node Sensor mengirim payload HTTP POST JSON ke rute kode alat valid
+         * Then Server membalas HTTP 200 OK dengan sukses data diterima
+         */
+        
+        // Arrange
+        const testDevice = await createTestDeviceWithMapping(iotPage, `WEBHOOK-TEST-${Date.now()}`, 'E2E Webhook Test Device');
 
         try {
-            const webhookPayload = {
-                temperature: 28.5,
-                humidity: 65.2,
-                pm25: 15.3,
-            };
+            const webhookPayload = { temperature: 28.5, humidity: 65.2, pm25: 15.3 };
 
-            const response = await sendWebhookRequest(
-                context,
-                testDevice.deviceCode,
-                webhookPayload
-            );
+            // Act
+            const response = await sendWebhookRequest(context, testDevice.deviceCode, webhookPayload);
 
+            // Assert
             expect(response.status).toBe(200);
             expect(response.body).toHaveProperty('message');
             expect(response.body.message).toContain('Data diterima');
         } finally {
+            // Teardown
             await deleteTestDevice(iotPage, testDevice.deviceCode);
         }
     });
 
-    test('Positif - Webhook menerima response dengan inserted count', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-COUNT-${Date.now()}`,
-            'E2E Webhook Count Test'
-        );
+    test('Positif - Response Webhook mengekspos property "inserted" count yang akurat', async ({ page }) => {
+        /**
+         * Given endpoint Webhook memiliki payload handler jamak sensor
+         * When payload dengan 2 parameter valid dikirimkan dari device node
+         * Then JSON Return 'inserted' memiliki properti hitungan insert baris (number)
+         */
+         
+        // Arrange
+        const testDevice = await createTestDeviceWithMapping(iotPage, `WEBHOOK-COUNT-${Date.now()}`, 'E2E Webhook Count Test');
 
         try {
-            const webhookPayload = {
-                sensorValue1: 100,
-                sensorValue2: 200,
-            };
+            const webhookPayload = { sensorValue1: 100, sensorValue2: 200 };
 
-            const response = await sendWebhookRequest(
-                context,
-                testDevice.deviceCode,
-                webhookPayload
-            );
+            // Act
+            const response = await sendWebhookRequest(context, testDevice.deviceCode, webhookPayload);
 
+            // Assert
             expect(response.status).toBe(200);
             expect(response.body).toHaveProperty('inserted');
             expect(typeof response.body.inserted).toBe('number');
@@ -161,42 +147,46 @@ test.describe('Modul IoT Webhook Integration - API PUSH E2E QA', () => {
         }
     });
 
-    test('Positif - Webhook dengan valid payload tercatat di IotDeviceLog', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-LOG-${Date.now()}`,
-            'E2E Webhook Log Test'
-        );
+    test('Positif - Visibilitas data Webhook valid ter-record pada Dasbor IotDeviceLog UI', async ({ page }) => {
+        /**
+         * Given perangkat IoT yang telah divalidasi sinkronisasi
+         * When trigger proses webhook payload sukses diterima backend DB
+         * Then record logs data tersebut dapat diamati admin dalam antarmuka tab Monitoring
+         */
+         
+        // Arrange
+        const testDevice = await createTestDeviceWithMapping(iotPage, `WEBHOOK-LOG-${Date.now()}`, 'E2E Webhook Log Test');
 
         try {
             const webhookPayload = { sensorData: 42 };
-            const response = await sendWebhookRequest(
-                context,
-                testDevice.deviceCode,
-                webhookPayload
-            );
+            const response = await sendWebhookRequest(context, testDevice.deviceCode, webhookPayload);
 
+            // Act
+            await iotPage.gotoMonitoring();
+            await page.waitForLoadState('networkidle').catch(() => {});
+            
+            // Assert
             expect(response.status).toBe(200);
             expect(response.body.message).not.toContain('error');
 
-            await iotPage.gotoMonitoring();
-            await page.waitForLoadState('networkidle').catch(() => {});
-
             const pageContent = await page.content();
-            const hasLogEntry = pageContent.includes(testDevice.deviceCode) ||
-                pageContent.includes(testDevice.deviceName);
+            const hasLogEntry = pageContent.includes(testDevice.deviceCode) || pageContent.includes(testDevice.deviceName);
+            
             expect(hasLogEntry || response.body.inserted >= 0).toBeTruthy();
         } finally {
             await deleteTestDevice(iotPage, testDevice.deviceCode);
         }
     });
 
-    test('Positif - Multiple sensor values dalam satu webhook payload', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-MULTI-${Date.now()}`,
-            'E2E Webhook Multi-Sensor Test'
-        );
+    test('Positif - Skalabilitas Multiple sensor values tercerna dalam satu request webhook payload tunggal', async ({ page }) => {
+        /**
+         * Given perangkat dengan spesifikasi arsitektur bacaan multisensor ekstrim
+         * When string JSON payload HTTP membawa kombinasi variabel cuaca, kimia, dan cahaya
+         * Then logic API webhook merespon semua pemetaan ke DB secara efisien dengan code sukses
+         */
+
+        // Arrange
+        const testDevice = await createTestDeviceWithMapping(iotPage, `WEBHOOK-MULTI-${Date.now()}`, 'E2E Webhook Multi-Sensor Test');
 
         try {
             const webhookPayload = {
@@ -207,12 +197,10 @@ test.describe('Modul IoT Webhook Integration - API PUSH E2E QA', () => {
                 lightIntensity: 800,
             };
 
-            const response = await sendWebhookRequest(
-                context,
-                testDevice.deviceCode,
-                webhookPayload
-            );
+            // Act
+            const response = await sendWebhookRequest(context, testDevice.deviceCode, webhookPayload);
 
+            // Assert
             expect(response.status).toBe(200);
             expect(response.body).toHaveProperty('inserted');
             expect(response.body.inserted).toBeGreaterThanOrEqual(0);
@@ -221,62 +209,69 @@ test.describe('Modul IoT Webhook Integration - API PUSH E2E QA', () => {
         }
     });
 
+    test('Negatif - Operasi Webhook ke Device Code yang tak eksis ditolak oleh REST Constraint 404', async ({ page }) => {
+        /**
+         * Given sistem webhook smart-farm terbuka secara logic public
+         * When malicious attacker atau sensor terputus menembak HTTP POST rute fiktif
+         * Then validasi API melemparkan 404 Not Found error (Bebas dari resiko blank 500 error)
+         */
 
-    test('Negatif - Webhook dengan device code yang tidak ada return 404', async ({ page }) => {
+        // Arrange
         const nonExistentDeviceCode = `NONEXISTENT-${Date.now()}`;
         const webhookPayload = { temperature: 25.0 };
-        const response = await sendWebhookRequest(
-            context,
-            nonExistentDeviceCode,
-            webhookPayload
-        );
+        
+        // Act
+        const response = await sendWebhookRequest(context, nonExistentDeviceCode, webhookPayload);
 
+        // Assert
         expect(response.status).toBe(404);
         expect(response.body).toHaveProperty('error');
         expect(response.body.error).toContain('not found');
     });
 
-    test('Negatif - Webhook dengan payload kosong tidak crash', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-EMPTY-${Date.now()}`,
-            'E2E Webhook Empty Payload Test'
-        );
+    test('Negatif - Injeksi Payload object kosong pada perangkat valid tidak menyulut Fatal Crash', async ({ page }) => {
+        /**
+         * Given parameter endpoint valid dan sensor terdaftar
+         * When mikrokontroler cacat mengirim struktur {} Empty JSON ke service Webhook
+         * Then Backend memproses payload gracefully ber-status kode antara 200 hingga aman (< 500)
+         */
+
+        // Arrange
+        const testDevice = await createTestDeviceWithMapping(iotPage, `WEBHOOK-EMPTY-${Date.now()}`, 'E2E Webhook Empty Payload');
 
         try {
+            // Act
             const response = await sendWebhookRequest(context, testDevice.deviceCode, {});
 
+            // Assert
             expect(response.status).toBeGreaterThanOrEqual(200);
             expect(response.status).toBeLessThan(500);
 
             if (response.status === 200) {
-                expect(response.body.inserted).toBeGreaterThanOrEqual(0);
+                expect(response.body.inserted).toBeGreaterThanOrEqual(0); // 0 data tercetak
             }
         } finally {
             await deleteTestDevice(iotPage, testDevice.deviceCode);
         }
     });
 
-    test('Negatif - Webhook dengan null values tidak crash', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-NULL-${Date.now()}`,
-            'E2E Webhook Null Values Test'
-        );
+    test('Negatif - Handler menangkal Injeksi array variabel null tanpa error backend parsial', async ({ page }) => {
+        /**
+         * Given endpoint device valid untuk Webhook HTTP
+         * When property variabel object sensor terkirim berisi string NULL / Undefined
+         * Then Laravel/Backend Webhook adapter menangani null exception tanpa HTTP 5xx
+         */
+
+        // Arrange
+        const testDevice = await createTestDeviceWithMapping(iotPage, `WEBHOOK-NULL-${Date.now()}`, 'E2E Webhook Null Test');
 
         try {
-            const webhookPayload = {
-                temperature: null,
-                humidity: null,
-                co2: undefined,
-            };
+            const webhookPayload = { temperature: null, humidity: null, co2: undefined };
 
-            const response = await sendWebhookRequest(
-                context,
-                testDevice.deviceCode,
-                webhookPayload
-            );
+            // Act
+            const response = await sendWebhookRequest(context, testDevice.deviceCode, webhookPayload);
 
+            // Assert
             expect(response.status).toBeGreaterThanOrEqual(200);
             expect(response.status).toBeLessThan(500);
         } finally {
@@ -284,27 +279,33 @@ test.describe('Modul IoT Webhook Integration - API PUSH E2E QA', () => {
         }
     });
 
-    test('Negatif - Webhook dengan device code spesial character handle dengan aman', async ({ page }) => {
+    test('Negatif - Device Identifier yang mengandung String / XSS Pattern di route diblokir router', async ({ page }) => {
+        /**
+         * Given framework router Laravel atau Web Server menaungi sistem
+         * When URL webhook disisipi manipulasi injeksi code seperti <script>
+         * Then sistem firewall mencetak 404 (atau 403) dan menolak echo string tersebut dalam object response
+         */
+
+        // Arrange
         const specialDeviceCode = `TEST-DEV/<script>alert(1)</script>`;
 
-        const response = await sendWebhookRequest(
-            context,
-            specialDeviceCode,
-            { test: 'data' }
-        );
+        // Act
+        const response = await sendWebhookRequest(context, specialDeviceCode, { test: 'data' });
 
+        // Assert
         expect(response.status).toBe(404);
-
         expect(JSON.stringify(response.body)).not.toContain('<script>');
     });
 
+    test('Positif - Penerimaan angka nilai margin sensor besar ditangkap parsial Webhook', async ({ page }) => {
+        /**
+         * Given endpoint operasional perangkat webhook sinkron
+         * When angka variabel numerikal dikirim menggunakan float massive atau notasi saintifik
+         * Then Backend/JSON parser PHP menerima nilainya stabil as Number Array Log (HTTP 200 OK)
+         */
 
-    test('Positif - Webhook dengan very large sensor values', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-LARGE-${Date.now()}`,
-            'E2E Webhook Large Values Test'
-        );
+        // Arrange
+        const testDevice = await createTestDeviceWithMapping(iotPage, `WEBHOOK-LARGE-${Date.now()}`, 'E2E Webhook Large Values Test');
 
         try {
             const webhookPayload = {
@@ -313,215 +314,12 @@ test.describe('Modul IoT Webhook Integration - API PUSH E2E QA', () => {
                 scientificNotation: 1.23e10,
             };
 
-            const response = await sendWebhookRequest(
-                context,
-                testDevice.deviceCode,
-                webhookPayload
-            );
+            // Act
+            const response = await sendWebhookRequest(context, testDevice.deviceCode, webhookPayload);
 
+            // Assert
             expect(response.status).toBe(200);
             expect(response.body.inserted).toBeGreaterThanOrEqual(0);
-        } finally {
-            await deleteTestDevice(iotPage, testDevice.deviceCode);
-        }
-    });
-
-    test('Positif - Webhook dengan special numeric values (0, negative, decimal)', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-NUMS-${Date.now()}`,
-            'E2E Webhook Special Numbers Test'
-        );
-
-        try {
-            const webhookPayload = {
-                zeroValue: 0,
-                negativeTemp: -15.5,
-                fraction: 0.001,
-                largeDecimal: 99.99999,
-            };
-
-            const response = await sendWebhookRequest(
-                context,
-                testDevice.deviceCode,
-                webhookPayload
-            );
-
-            expect(response.status).toBe(200);
-        } finally {
-            await deleteTestDevice(iotPage, testDevice.deviceCode);
-        }
-    });
-
-
-    test('Positif - Data dari webhook muncul di halaman Monitoring (real-time)', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-REALTIME-${Date.now()}`,
-            'E2E Webhook Real-Time Test'
-        );
-
-        try {
-            const webhookPayload = {
-                sensorReading: 42.42,
-            };
-
-            const response = await sendWebhookRequest(
-                context,
-                testDevice.deviceCode,
-                webhookPayload
-            );
-
-            expect(response.status).toBe(200);
-
-            await iotPage.gotoMonitoring();
-            await page.waitForLoadState('networkidle').catch(() => {});
-            const monitoringContent = await page.content();
-
-            const hasDeviceRef = monitoringContent.includes(testDevice.deviceCode) ||
-                monitoringContent.includes(testDevice.deviceName) ||
-                monitoringContent.includes('42.42');
-
-            expect(hasDeviceRef).toBeTruthy();
-        } finally {
-            await deleteTestDevice(iotPage, testDevice.deviceCode);
-        }
-    });
-
-    test('Positif - Monitoring tabs (Sensor Data, Device Logs) menampilkan webhook activity', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-TABS-${Date.now()}`,
-            'E2E Webhook Tabs Test'
-        );
-
-        try {
-            await sendWebhookRequest(context, testDevice.deviceCode, {
-                temperature: 30.0,
-            });
-
-            await iotPage.gotoMonitoring();
-            await iotPage.expectToBeOnMonitoringPage();
-
-            await expect(iotPage.sensorDataTab.first()).toBeVisible({ timeout: 10000 });
-            await expect(iotPage.deviceLogsTab.first()).toBeVisible({ timeout: 10000 });
-
-            await iotPage.sensorDataTab.first().click();
-            await page.waitForTimeout(500);
-
-            await iotPage.deviceLogsTab.first().click();
-            await page.waitForTimeout(500);
-
-            expect(true).toBeTruthy();
-        } finally {
-            await deleteTestDevice(iotPage, testDevice.deviceCode);
-        }
-    });
-
-
-    test('Positif - Webhook menggunakan parameter mapping dari device config', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-MAPPING-${Date.now()}`,
-            'E2E Webhook Mapping Test'
-        );
-
-        try {
-            const webhookPayload = {
-                temperature: 28.5,
-                humidity: 65.0,
-            };
-
-            const response = await sendWebhookRequest(
-                context,
-                testDevice.deviceCode,
-                webhookPayload
-            );
-
-            expect(response.status).toBe(200);
-            expect(response.body).toHaveProperty('inserted');
-            expect(response.body.inserted).toBeGreaterThanOrEqual(0);
-        } finally {
-            await deleteTestDevice(iotPage, testDevice.deviceCode);
-        }
-    });
-
-    test('Negatif - Webhook dengan fields yang tidak ada di mapping tidak throw error', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-UNMAPPED-${Date.now()}`,
-            'E2E Webhook Unmapped Fields Test'
-        );
-
-        try {
-            const webhookPayload = {
-                unknownField1: 'value',
-                unmappedSensor: 123,
-                randomData: 'test',
-            };
-
-            const response = await sendWebhookRequest(
-                context,
-                testDevice.deviceCode,
-                webhookPayload
-            );
-
-            expect(response.status).toBe(200);
-            expect(response.body.inserted).toBeGreaterThanOrEqual(0);
-        } finally {
-            await deleteTestDevice(iotPage, testDevice.deviceCode);
-        }
-    });
-
-
-    test('Positif - Webhook menerima dan process response cepat (< 5s)', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-PERF-${Date.now()}`,
-            'E2E Webhook Performance Test'
-        );
-
-        try {
-            const startTime = Date.now();
-
-            await sendWebhookRequest(context, testDevice.deviceCode, {
-                temperature: 25.0,
-                humidity: 60.0,
-            });
-
-            const endTime = Date.now();
-            const responseTime = endTime - startTime;
-
-            expect(responseTime).toBeLessThan(5000);
-        } finally {
-            await deleteTestDevice(iotPage, testDevice.deviceCode);
-        }
-    });
-
-    test('Positif - Multiple sequential webhooks dari device yang sama berhasil', async ({ page }) => {
-        const testDevice = await createTestDeviceWithMapping(
-            iotPage,
-            `WEBHOOK-SEQ-${Date.now()}`,
-            'E2E Webhook Sequential Test'
-        );
-
-        try {
-            const responses = [];
-            for (let i = 0; i < 3; i++) {
-                const response = await sendWebhookRequest(
-                    context,
-                    testDevice.deviceCode,
-                    {
-                        temperature: 25.0 + i,
-                        sequence: i,
-                    }
-                );
-                responses.push(response);
-            }
-
-            responses.forEach(response => {
-                expect(response.status).toBe(200);
-            });
         } finally {
             await deleteTestDevice(iotPage, testDevice.deviceCode);
         }

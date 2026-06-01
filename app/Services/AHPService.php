@@ -11,18 +11,31 @@ class AHPService
 {
     // Random Index (RI) table for AHP (up to 10 parameters)
     private $riTable = [
-        1 => 0.00, 2 => 0.00, 3 => 0.58, 4 => 0.90, 5 => 1.12,
-        6 => 1.24, 7 => 1.32, 8 => 1.41, 9 => 1.45, 10 => 1.49
+        1 => 0.00,
+        2 => 0.00,
+        3 => 0.58,
+        4 => 0.90,
+        5 => 1.12,
+        6 => 1.24,
+        7 => 1.32,
+        8 => 1.41,
+        9 => 1.45,
+        10 => 1.49
     ];
 
-    public function calculateAndSaveWeights($userId)
+    /**
+     * @param int $userId
+     * @return array|false
+     */
+    public function calculateAndSaveWeights($userId): array|bool
     {
         $parameters = SpkParameter::all();
         $n = $parameters->count();
-        if ($n < 2) return false;
+        if ($n < 2)
+            return false;
 
         $matrix = $this->buildComparisonMatrix($userId, $parameters);
-        
+
         // 1. Column sums
         $colSums = array_fill(0, $n, 0);
         for ($i = 0; $i < $n; $i++) {
@@ -61,7 +74,7 @@ class AHPService
 
         $ci = ($lamdaMax - $n) / ($n - 1);
         $ri = $this->riTable[$n] ?? 1.49;
-        
+
         $cr = $ri == 0 ? 0 : $ci / $ri;
         $isValid = $cr <= 0.1;
 
@@ -106,7 +119,7 @@ class AHPService
     {
         $n = $parameters->count();
         $matrix = array_fill(0, $n, array_fill(0, $n, 1));
-        
+
         $paramIds = $parameters->pluck('id')->toArray();
         $paramIndexMap = array_flip($paramIds);
 
@@ -116,7 +129,7 @@ class AHPService
             if (isset($paramIndexMap[$p->parameter_1_id]) && isset($paramIndexMap[$p->parameter_2_id])) {
                 $i = $paramIndexMap[$p->parameter_1_id];
                 $j = $paramIndexMap[$p->parameter_2_id];
-                
+
                 $matrix[$i][$j] = $p->nilai_skala;
                 if ($p->nilai_skala > 0) {
                     $matrix[$j][$i] = 1 / $p->nilai_skala;

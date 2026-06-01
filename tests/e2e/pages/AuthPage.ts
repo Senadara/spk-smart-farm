@@ -39,6 +39,17 @@ export class AuthPage {
     }
 
     async loginAndWaitForDashboard(email: string, password: string) {
+        // clear cookies to ensure a clean login attempt when needed
+        await this.page.context().clearCookies();
+        await this.gotoLogin();
+
+        // If the app redirected to dashboard (already authenticated via storageState), skip login
+        const currentUrl = this.page.url();
+        if (/dashboard/.test(currentUrl)) {
+            return;
+        }
+
+        // Otherwise wait for the email input and perform login
         await this.emailInput.waitFor({ state: 'visible', timeout: 30000 });
         await this.emailInput.fill(email);
         await this.passwordInput.fill(password);

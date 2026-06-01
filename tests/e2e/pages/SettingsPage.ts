@@ -6,6 +6,7 @@ export class SettingsPage {
     readonly dataMasterCard: Locator;
     readonly iotDevicesCard: Locator;
     readonly iotConfigCard: Locator;
+    readonly fuzzyCard: Locator;
 
     constructor(page: Page) {
         this.page = page;
@@ -13,6 +14,7 @@ export class SettingsPage {
         this.dataMasterCard = page.locator('a').filter({ hasText: 'Data Master' });
         this.iotDevicesCard = page.locator('a').filter({ hasText: 'Perangkat IoT' });
         this.iotConfigCard = page.locator('a').filter({ hasText: 'Konfigurasi IoT' });
+        this.fuzzyCard = page.locator('a').filter({ hasText: 'Fuzzy Mamdani' });
     }
 
     async goto() {
@@ -30,6 +32,10 @@ export class SettingsPage {
         await expect(this.iotConfigCard).toBeVisible();
     }
 
+    async expectFuzzyCardVisible() {
+        await expect(this.fuzzyCard).toBeVisible();
+    }
+
     async clickDataMasterCard() {
         await this.dataMasterCard.click();
     }
@@ -40,5 +46,9 @@ export class SettingsPage {
 
     async clickIotConfigCard() {
         await this.iotConfigCard.click();
+    }
+
+    async clickFuzzyCard() {
+        await this.fuzzyCard.click();
     }
 }

@@ -50,17 +50,17 @@ export class IotPage {
         this.configHeading = page.locator('h1').filter({ hasText: /Konfigurasi IoT/i });
         this.protocolsTab = page.getByRole('button', { name: 'Protokol' });
         this.connectionsTab = page.getByRole('button', { name: 'Koneksi' });
-        this.protocolNameInput = page.locator('input[name="protocolName"]');
+        this.protocolNameInput = page.locator('input[name="protocolName"]').first();
         this.protocolDescriptionInput = page.locator('textarea[name="description"]').first();
-        this.connectionProtocolSelect = page.locator('select[name="protocolId"]');
-        this.baseUrlInput = page.locator('input[name="baseUrl"]');
-        this.endpointPathInput = page.locator('input[name="endpointPath"]');
-        this.mqttBrokerUrlInput = page.locator('input[name="mqttBrokerUrl"]');
-        this.mqttTopicInput = page.locator('input[name="mqttTopic"]');
-        this.authTypeSelect = page.locator('select[name="authType"]');
-        this.authKeyInput = page.locator('input[name="authKey"]');
-        this.protocolSubmitBtn = page.getByRole('button', { name: 'Simpan Protokol' });
-        this.connectionSubmitBtn = page.getByRole('button', { name: 'Simpan Koneksi' });
+        this.connectionProtocolSelect = page.locator('select[name="protocolId"]').first();
+        this.baseUrlInput = page.locator('input[name="baseUrl"]').first();
+        this.endpointPathInput = page.locator('input[name="endpointPath"]').first();
+        this.mqttBrokerUrlInput = page.locator('input[name="mqttBrokerUrl"]').first();
+        this.mqttTopicInput = page.locator('input[name="mqttTopic"]').first();
+        this.authTypeSelect = page.locator('select[name="authType"]').first();
+        this.authKeyInput = page.locator('input[name="authKey"]').first();
+        this.protocolSubmitBtn = page.getByRole('button', { name: 'Simpan Protokol' }).first();
+        this.connectionSubmitBtn = page.getByRole('button', { name: 'Simpan Koneksi' }).first();
 
         this.deviceManagementHeading = page.locator('h1').filter({ hasText: /Device Management/i });
         this.addDeviceBtn = page.locator('button').filter({ hasText: /Tambah Device/i });
