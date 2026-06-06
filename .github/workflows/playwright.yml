@@ -52,9 +52,10 @@ jobs:
         run: php artisan key:generate
 
       # Create minimal user table for Playwright test
-      - name: Create User Table (SQL)
+      - name: Create Required Tables (SQL)
         run: |
           mysql -h 127.0.0.1 -u root -proot smartfarm_test << 'EOF'
+          -- User table (required for authentication)
           CREATE TABLE IF NOT EXISTS user (
             id VARCHAR(36) PRIMARY KEY,
             email VARCHAR(255) UNIQUE NOT NULL,
@@ -70,6 +71,32 @@ jobs:
             updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
           
+          -- Sessions table (Laravel requirement)
+          CREATE TABLE IF NOT EXISTS sessions (
+            id VARCHAR(255) PRIMARY KEY,
+            user_id VARCHAR(36),
+            ip_address VARCHAR(45),
+            user_agent TEXT,
+            payload LONGTEXT NOT NULL,
+            last_activity INT NOT NULL,
+            INDEX sessions_user_id_index (user_id),
+            INDEX sessions_last_activity_index (last_activity)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+          
+          -- Cache table (Laravel requirement)
+          CREATE TABLE IF NOT EXISTS cache (
+            `key` VARCHAR(255) PRIMARY KEY,
+            value MEDIUMTEXT NOT NULL,
+            expiration INT NOT NULL
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+          
+          CREATE TABLE IF NOT EXISTS cache_locks (
+            `key` VARCHAR(255) PRIMARY KEY,
+            owner VARCHAR(255) NOT NULL,
+            expiration INT NOT NULL
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+          
+          -- Insert test user for Playwright
           INSERT INTO user (id, email, password, name, role, createdAt, updatedAt) 
           VALUES (
             UUID(),
@@ -82,24 +109,13 @@ jobs:
           ) ON DUPLICATE KEY UPDATE email=email;
           EOF
 
-      - name: Run Laravel Migrations
-        run: php artisan migrate --force
-        env:
-          DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_DATABASE: smartfarm_test
-          DB_USERNAME: root
-          DB_PASSWORD: root
+      # Skip Laravel migrations (they depend on Node.js API tables)
+      # - name: Run Laravel Migrations
+      #   run: php artisan migrate --force
 
-      - name: Seed Laravel Data
-        run: php artisan db:seed --class=DatabaseSeeder --force
-        env:
-          DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1
-          DB_DATABASE: smartfarm_test
-          DB_USERNAME: root
-          DB_PASSWORD: root
+      # Skip Laravel seeders (not needed for basic Playwright test)
+      # - name: Seed Laravel Data
+      #   run: php artisan db:seed --class=DatabaseSeeder --force
 
       # Build Frontend Assets
       - name: Setup Node.js
