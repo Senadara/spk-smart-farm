@@ -51,8 +51,19 @@ jobs:
       - name: Install Composer Dependencies
         run: composer install --prefer-dist --no-progress --no-interaction --no-dev
 
+      - name: Install NPM Dependencies
+        run: npm ci
+
+      - name: Build Frontend Assets
+        run: |
+          if [ -f "vite.config.js" ] || [ -f "vite.config.ts" ]; then
+            npm run build
+          else
+            echo "No Vite config found, skipping build"
+          fi
+
       - name: Run Database Migrations
-        run: php artisan migrate:fresh --seed --force
+        run: php artisan migrate:fresh --force
         env:
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
@@ -61,39 +72,44 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: root
 
-      # Build Assets
-      - name: Install NPM Dependencies
-        run: npm ci
-
-      - name: Build Frontend Assets
-        run: |
-          if [ -f "vite.config.js" ] || [ -f "vite.config.ts" ]; then
-            npm run build
-          fi
+      - name: Seed Test Data
+        run: php artisan db:seed --class=DatabaseSeeder --force || echo "Seeding skipped"
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_DATABASE: smartfarm_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
 
       # Start Laravel Server
       - name: Start Laravel Development Server
         run: |
           php artisan serve --host=127.0.0.1 --port=8000 > server.log 2>&1 &
+          echo $! > server.pid
           sleep 5
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: mysql
+          DB_DATABASE: smartfarm_test
 
       - name: Wait for Laravel Server
         run: |
           for i in {1..30}; do
-            if curl -s http://127.0.0.1:8000 | grep -q "Laravel\|<!DOCTYPE"; then
-              echo "Server is ready"
+            if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000 | grep -q "200\|302"; then
+              echo "✅ Server is ready!"
+              curl -I http://127.0.0.1:8000
               exit 0
             fi
+            echo "Waiting for server... ($i/30)"
             sleep 2
           done
-          echo "Server failed to start"
+          echo "❌ Server failed to start after 60s"
           cat server.log
           exit 1
 
-      # Setup Node.js for Playwright
-      - uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
+      # Setup Node.js for Playwright (already installed, just verify)
+      - name: Verify Node.js
+        run: node --version && npm --version
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
@@ -103,6 +119,16 @@ jobs:
         env:
           BASE_URL: http://127.0.0.1:8000
           CI: true
+          TEST_USER_EMAIL: admin@farm.com
+          TEST_USER_PASSWORD: password
+
+      - name: Stop Laravel Server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+            rm server.pid
+          fi
 
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
@@ -117,4 +143,12 @@ jobs:
         with:
           name: test-results
           path: test-results/
+          retention-days: 7
+
+      - name: Upload Server Logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: server-logs
+          path: server.log
           retention-days: 7
