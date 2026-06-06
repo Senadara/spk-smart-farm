@@ -10,6 +10,15 @@ use Illuminate\Support\Collection;
 use Mockery;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * CATATAN QA:
+ * Test ini menggunakan @runTestsInSeparateProcesses untuk menghindari Mockery alias conflict.
+ * Mockery alias mock di test pertama akan conflict dengan test kedua jika dijalankan dalam
+ * process yang sama.
+ * 
+ * @runTestsInSeparateProcesses
+ * @preserveGlobalState disabled
+ */
 class SAWRecommenderServiceTest extends TestCase
 {
     protected function tearDown(): void

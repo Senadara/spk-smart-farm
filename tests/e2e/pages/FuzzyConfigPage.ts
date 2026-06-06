@@ -53,14 +53,29 @@ export class FuzzyConfigPage {
 
     async createVariable(params: { name: string; group: string; type: string; unit: string; description: string; }) {
         await this.addVariableButton.click();
-        const modal = this.modalByHeading('Tambah Variabel');
 
-        await modal.locator('input[name="name"]').fill(params.name);
+        // Wait for modal to be fully visible
+        const modal = this.modalByHeading('Tambah Variabel');
+        await expect(modal).toBeVisible({ timeout: 10000 });
+
+        // Fill form fields with explicit waits
+        const nameInput = modal.locator('input[name="name"]');
+        await expect(nameInput).toBeVisible();
+        await nameInput.fill(params.name);
+
         await modal.locator('select[name="group"]').selectOption(params.group);
         await modal.locator('select[name="type"]').selectOption(params.type);
         await modal.locator('input[name="unit"]').fill(params.unit);
         await modal.locator('input[name="description"]').fill(params.description);
-        await modal.getByRole('button', { name: /Simpan/i }).click();
+
+        // Click submit button and wait for modal to close
+        const submitButton = modal.getByRole('button', { name: /Simpan/i });
+        await expect(submitButton).toBeVisible();
+        await expect(submitButton).toBeEnabled();
+        await submitButton.click();
+
+        // Wait for modal to disappear (form submitted)
+        await expect(modal).toBeHidden({ timeout: 15000 });
     }
 
     async expandVariable(variableName: string) {
@@ -70,7 +85,10 @@ export class FuzzyConfigPage {
     async createSetForVariable(variableName: string, params: { name: string; shape: 'triangle' | 'trapezoid'; a: string; b: string; c: string; d?: string; }) {
         const section = this.variableSection(variableName);
         await section.getByRole('button', { name: /\+ Tambah Set/i }).click();
+
+        // Wait for modal to be fully visible
         const modal = this.modalByHeading('Tambah Membership Function');
+        await expect(modal).toBeVisible({ timeout: 10000 });
 
         await modal.locator('input[name="name"]').fill(params.name);
         await modal.locator('select[name="shape"]').selectOption(params.shape);
@@ -80,7 +98,15 @@ export class FuzzyConfigPage {
         if (params.d) {
             await modal.locator('input[name="d"]').fill(params.d);
         }
-        await modal.getByRole('button', { name: /Simpan/i }).click();
+
+        // Click submit button and wait for modal to close
+        const submitButton = modal.getByRole('button', { name: /Simpan/i });
+        await expect(submitButton).toBeVisible();
+        await expect(submitButton).toBeEnabled();
+        await submitButton.click();
+
+        // Wait for modal to disappear (form submitted)
+        await expect(modal).toBeHidden({ timeout: 15000 });
     }
 
     async deleteVariable(variableName: string) {

@@ -1,5 +1,6 @@
 ﻿import { test, expect } from '@playwright/test';
 import { SettingsPage } from '../pages/SettingsPage.js';
+import { AuthPage } from '../pages/AuthPage.js';
 
 test.describe('Modul Halaman Pengaturan (Setting) - E2E QA', () => {
     let settingsPage: SettingsPage;
@@ -11,7 +12,7 @@ test.describe('Modul Halaman Pengaturan (Setting) - E2E QA', () => {
         await page.route(/.*:5173.*/, route => route.abort());
 
         settingsPage = new SettingsPage(page);
-        
+
         // Act
         await settingsPage.goto();
     });
@@ -37,7 +38,7 @@ test.describe('Modul Halaman Pengaturan (Setting) - E2E QA', () => {
          */
 
         // Arrange & Act
-        
+
         // Assert
         await settingsPage.expectAllCardsVisible();
     });
@@ -48,13 +49,13 @@ test.describe('Modul Halaman Pengaturan (Setting) - E2E QA', () => {
          * When pengguna execute event onClick pada entitas visual card tersebut
          * Then route push Next/Livewire merubah location window ke root /data-master
          */
-         
+
         // Arrange
         const expectedURLRef = /.*\/data-master/;
 
         // Act
         await settingsPage.clickDataMasterCard();
-        
+
         // Assert
         await expect(page).toHaveURL(expectedURLRef, { timeout: 15000 });
     });
@@ -71,7 +72,7 @@ test.describe('Modul Halaman Pengaturan (Setting) - E2E QA', () => {
 
         // Act
         await settingsPage.clickIotDevicesCard();
-        
+
         // Assert
         await expect(page).toHaveURL(stringRouteDevices, { timeout: 15000 });
     });
@@ -88,8 +89,158 @@ test.describe('Modul Halaman Pengaturan (Setting) - E2E QA', () => {
 
         // Act
         await settingsPage.clickIotConfigCard();
-        
+
         // Assert
         await expect(page).toHaveURL(configPathRegex, { timeout: 15000 });
+    });
+
+    test('Positif - Halaman Settings dapat diakses setelah refresh browser', async ({ page }) => {
+        /**
+         * Given user berada di halaman settings
+         * When user melakukan refresh halaman
+         * Then halaman settings tetap dapat diakses dan semua card terlihat
+         */
+
+        // Arrange & Act
+        await page.reload({ waitUntil: 'domcontentloaded' });
+
+        // Assert
+        await settingsPage.expectPageTitleVisible();
+        await settingsPage.expectAllCardsVisible();
+    });
+
+    test('Positif - Semua card navigasi memiliki visual yang konsisten', async ({ page }) => {
+        /**
+         * Given user melihat halaman settings
+         * When memeriksa semua card menu
+         * Then setiap card harus visible dan memiliki struktur yang konsisten
+         */
+
+        // Arrange & Act
+        const dataMasterCard = settingsPage.dataMasterCard;
+        const iotDevicesCard = settingsPage.iotDevicesCard;
+        const iotConfigCard = settingsPage.iotConfigCard;
+
+        // Assert
+        await expect(dataMasterCard).toBeVisible();
+        await expect(iotDevicesCard).toBeVisible();
+        await expect(iotConfigCard).toBeVisible();
+
+        // Verifikasi bahwa card adalah link yang dapat diklik
+        await expect(dataMasterCard).toHaveAttribute('href');
+        await expect(iotDevicesCard).toHaveAttribute('href');
+        await expect(iotConfigCard).toHaveAttribute('href');
+    });
+
+    test('Negatif - Navigasi ke route settings yang tidak valid menampilkan error 404', async ({ page }) => {
+        /**
+         * Given user mencoba mengakses sub-route settings yang tidak ada
+         * When navigasi ke /settings/invalid-route
+         * Then sistem harus menampilkan halaman 404 atau redirect ke settings utama
+         */
+
+        // Arrange
+        const invalidRoute = '/settings/invalid-route-xyz-123';
+
+        // Act
+        await page.goto(invalidRoute, { waitUntil: 'domcontentloaded' });
+
+        // Assert
+        // Bisa jadi 404 atau redirect ke settings utama
+        const currentUrl = page.url();
+        const is404 = await page.locator('text=/404|not found/i').isVisible({ timeout: 5000 }).catch(() => false);
+        const isRedirectedToSettings = /\/settings\/?$/.test(currentUrl);
+
+        expect(is404 || isRedirectedToSettings).toBeTruthy();
+    });
+
+    test('Negatif - Akses halaman settings tanpa autentikasi harus redirect ke login', async ({ page, context }) => {
+        /**
+         * Given user belum login (tidak ada session)
+         * When mencoba mengakses halaman /settings
+         * Then sistem harus redirect ke halaman login
+         */
+
+        // Arrange: Clear cookies untuk simulasi user tanpa session
+        await context.clearCookies();
+
+        // Act
+        await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+
+        // Assert
+        await expect(page).toHaveURL(/.*login/, { timeout: 15000 });
+    });
+
+    test('Negatif - Card yang tidak ada tidak menyebabkan crash aplikasi', async ({ page }) => {
+        /**
+         * Given user berada di halaman settings
+         * When mencoba mengakses card yang mungkin tidak ada untuk role tertentu
+         * Then aplikasi tidak crash dan tetap menampilkan card yang tersedia
+         */
+
+        // Arrange & Act
+        const bodyContent = await page.locator('body').textContent();
+
+        // Assert
+        expect(bodyContent).not.toMatch(/Fatal render error|undefined|null/i);
+        await settingsPage.expectPageTitleVisible();
+    });
+
+    test('Edge Case - Navigasi cepat antar card tidak menyebabkan race condition', async ({ page }) => {
+        /**
+         * Given user berada di halaman settings
+         * When user melakukan klik cepat berturut-turut pada berbagai card
+         * Then sistem harus handle navigasi dengan baik tanpa error
+         */
+
+        // Arrange
+        await settingsPage.expectAllCardsVisible();
+
+        // Act: Klik Data Master
+        await settingsPage.clickDataMasterCard();
+        await expect(page).toHaveURL(/.*\/data-master/, { timeout: 10000 });
+
+        // Kembali ke settings
+        await page.goBack();
+        await settingsPage.expectPageTitleVisible();
+
+        // Klik IoT Devices
+        await settingsPage.clickIotDevicesCard();
+        await expect(page).toHaveURL(/.*\/iot\/devices/, { timeout: 10000 });
+
+        // Kembali ke settings
+        await page.goBack();
+        await settingsPage.expectPageTitleVisible();
+
+        // Klik IoT Config
+        await settingsPage.clickIotConfigCard();
+        await expect(page).toHaveURL(/.*\/iot\/config/, { timeout: 10000 });
+
+        // Assert: Tidak ada error JavaScript
+        const bodyContent = await page.locator('body').textContent();
+        expect(bodyContent).not.toMatch(/error|crash/i);
+    });
+
+    test('Edge Case - Halaman settings dapat diakses dari berbagai entry point', async ({ page }) => {
+        /**
+         * Given user berada di berbagai halaman aplikasi
+         * When user mengakses settings dari berbagai route
+         * Then halaman settings selalu dapat dimuat dengan benar
+         */
+
+        // Arrange & Act 1: Dari dashboard
+        await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+        await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+
+        // Assert 1
+        await settingsPage.expectPageTitleVisible();
+
+        // Act 2: Dari data-master
+        await page.goto('/data-master', { waitUntil: 'domcontentloaded' });
+        await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+
+        // Assert 2
+        await settingsPage.expectPageTitleVisible();
+        await settingsPage.expectAllCardsVisible();
     });
 });

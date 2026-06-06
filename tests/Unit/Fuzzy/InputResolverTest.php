@@ -95,9 +95,14 @@ class InputResolverTest extends TestCase
         $spkVar->shouldReceive('where')->with('type', 'input')->andReturnSelf();
         $spkVar->shouldReceive('get')->andReturn(collect([$var]));
 
-        // Define dummy service class used by InputResolver
+        // Define dummy service class used by InputResolver (without eval)
         if (!class_exists('Tests\\Unit\\Fuzzy\\Fixtures\\DummyHdpService')) {
-            eval ('namespace Tests\\Unit\\Fuzzy\\Fixtures; class DummyHdpService { public function handle(?string $coopId = null): float { return 77.3; } }');
+            $dummy = new class {
+                public function handle(?string $coopId = null): float {
+                    return 77.3;
+                }
+            };
+            class_alias(get_class($dummy), 'Tests\\Unit\\Fuzzy\\Fixtures\\DummyHdpService');
         }
 
         $resolver = new InputResolver();

@@ -9,6 +9,15 @@ use Illuminate\Support\Facades\Facade;
 use Mockery;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * CATATAN QA:
+ * Test ini menggunakan @runTestsInSeparateProcesses untuk menghindari Mockery alias conflict.
+ * Mockery alias mock untuk SpkSupplierParameterValue akan conflict dengan test lain
+ * (SAWRecommenderServiceTest) jika dijalankan dalam process yang sama.
+ * 
+ * @runTestsInSeparateProcesses
+ * @preserveGlobalState disabled
+ */
 class SupplierInsightServiceTest extends TestCase
 {
     protected function setUp(): void
