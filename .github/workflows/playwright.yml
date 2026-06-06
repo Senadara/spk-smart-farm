@@ -37,6 +37,9 @@ jobs:
           coverage: none
 
       # Setup Laravel
+      - name: Install Composer Dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction --no-dev
+
       - name: Copy Environment File
         run: |
           if [ -f .env.ci ]; then
@@ -47,9 +50,6 @@ jobs:
 
       - name: Generate Application Key
         run: php artisan key:generate
-
-      - name: Install Composer Dependencies
-        run: composer install --prefer-dist --no-progress --no-interaction --no-dev
 
       - name: Install NPM Dependencies
         run: npm ci
