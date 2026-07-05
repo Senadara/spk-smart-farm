@@ -11,6 +11,7 @@ use App\Services\Fuzzy\NarrativeGenerator;
 use App\Services\PeternakanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class PeternakanController extends Controller
@@ -145,7 +146,7 @@ class PeternakanController extends Controller
             }
 
             try {
-                $result = $this->runFuzzyEngine($barn['id']);
+                $result = $this->cachedFuzzyResult($barn['id']);
                 $payload[$barn['id']] = $this->mapFuzzyToView($result, $barn);
             } catch (\Throwable $e) {
                 \Log::warning('[Peternakan] Fuzzy per barn failed: ' . $e->getMessage(), ['barn' => $barn['id']]);
@@ -154,7 +155,7 @@ class PeternakanController extends Controller
         }
 
         try {
-            $global = $this->runFuzzyEngine(null);
+            $global = $this->cachedFuzzyResult(null);
             $payload['all'] = $this->mapFuzzyToView($global, null);
         } catch (\Throwable $e) {
             $payload['all'] = $this->emptyFuzzyPayload();
@@ -171,7 +172,7 @@ class PeternakanController extends Controller
             if (($barn['id'] ?? null) === 'no-data') {
                 continue;
             }
-            $data = $this->peternakanService->getProduktivitasData($barn['id']);
+            $data = $this->cachedProduktivitasData($barn['id']);
             $map[$barn['id']] = [
                 'indicators' => $data['indicators'],
                 'spider' => $data['spider'],
@@ -179,7 +180,7 @@ class PeternakanController extends Controller
             ];
         }
 
-        $global = $this->peternakanService->getProduktivitasData();
+        $global = $this->cachedProduktivitasData(null);
         $map['all'] = [
             'indicators' => $global['indicators'],
             'spider' => $global['spider'],
@@ -203,6 +204,7 @@ class PeternakanController extends Controller
     {
         $result = $this->runFuzzyEngine($coopId);
         $barnName = $coopId ? DB::table('unitBudidaya')->where('id', $coopId)->value('nama') : null;
+        Cache::forget($this->cacheKey('fuzzy', $coopId));
 
         return SpkFuzzyLog::create([
             'unit_budidaya_id' => $coopId,
@@ -251,7 +253,7 @@ class PeternakanController extends Controller
             ['label' => 'Amonia',     'percent' => round($ammoPct),  'status' => $amonia > 20 ? 'warning' : 'normal', 'statusLabel' => round($amonia, 1) . ' ppm — ' . (isset($fuzzLingk['amonia']) && $fuzzLingk['amonia'] ? array_search(max($fuzzLingk['amonia']), $fuzzLingk['amonia']) : '-')],
         ];
 
-        $prodData = $this->peternakanService->getProduktivitasData($barn['id'] ?? null);
+        $prodData = $this->cachedProduktivitasData($barn['id'] ?? null);
 
         return [
             'fuzzySensors' => [
@@ -290,7 +292,7 @@ class PeternakanController extends Controller
     private function emptyFuzzyPayload(?array $barn = null): array
     {
         $fallback = $this->peternakanService->getSpkResults();
-        $prod = $this->peternakanService->getProduktivitasData($barn['id'] ?? null);
+        $prod = $this->cachedProduktivitasData($barn['id'] ?? null);
 
         return [
             'fuzzySensors' => [
@@ -301,5 +303,31 @@ class PeternakanController extends Controller
             'spider' => $prod['spider'],
             'indicators' => $prod['indicators'],
         ];
+    }
+
+    private function cachedFuzzyResult(?string $coopId): array
+    {
+        return Cache::remember(
+            $this->cacheKey('fuzzy', $coopId),
+            60,
+            fn () => $this->runFuzzyEngine($coopId)
+        );
+    }
+
+    private function cachedProduktivitasData(?string $coopId): array
+    {
+        return Cache::remember(
+            $this->cacheKey('produktivitas', $coopId),
+            60,
+            fn () => $this->peternakanService->getProduktivitasData($coopId)
+        );
+    }
+
+    private function cacheKey(string $segment, ?string $coopId): string
+    {
+        $komoditas = $this->peternakanService->getActiveKomoditasId() ?? 'default';
+        $scope = $coopId ?: 'all';
+
+        return "peternakan:{$komoditas}:{$segment}:{$scope}";
     }
 }

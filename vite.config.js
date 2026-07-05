@@ -17,5 +17,13 @@ export default defineConfig({
             host: 'localhost',
         },
         allowedHosts: ['vite-dev', 'localhost'],
+        watch: {
+            ignored: [
+                '**/vendor/**',
+                '**/node_modules/**',
+                '**/storage/**',
+                '**/bootstrap/cache/**',
+            ],
+        },
     },
 });
