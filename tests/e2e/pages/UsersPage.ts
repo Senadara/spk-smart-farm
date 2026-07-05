@@ -62,24 +62,47 @@ export class UsersPage {
     async editUser(currentName: string, params: { name: string; email: string; password?: string; }) {
         const row = this.rowByText(currentName);
         await row.hover();
-        await row.locator('button[title="Edit"]').click();
 
+        // Wait for buttons to appear (opacity transition)
+        await this.page.waitForTimeout(300);
+
+        // Click edit button (blue edit icon)
+        const editBtn = row.locator('button[title="Edit"]');
+        await editBtn.click();
+
+        // Wait for modal
         const modal = this.modalByHeading('Edit Profil Petugas');
+        await modal.waitFor({ state: 'visible', timeout: 5000 });
+
+        // Fill form
         await modal.locator('input[name="name"]').fill(params.name);
         await modal.locator('input[name="email"]').fill(params.email);
+
         const passwordInput = modal.locator('input[name="password"]');
         if (params.password) {
             await passwordInput.fill(params.password);
         } else {
-            await passwordInput.fill('');
+            // Clear password field (kosongkan = tidak diubah)
+            await passwordInput.clear();
         }
+
         await modal.getByRole('button', { name: /Simpan Perubahan/i }).click();
     }
 
     async deleteUser(name: string) {
         const row = this.rowByText(name);
         await row.hover();
-        await row.locator('button[title="Hapus"]').click();
+
+        // Wait for buttons to appear
+        await this.page.waitForTimeout(300);
+
+        // Click delete button - it's inside a form with onsubmit confirm
+        const deleteBtn = row.locator('button[title="Hapus"]');
+
+        // Handle the JavaScript confirm dialog
+        this.page.once('dialog', dialog => dialog.accept());
+
+        await deleteBtn.click();
     }
 
     async expectRowVisible(name: string) {

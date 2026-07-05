@@ -9,6 +9,19 @@ export class PenugasanPage {
     readonly boardHeading: Locator;
     readonly historyHeading: Locator;
 
+    // Stats locators
+    readonly statTotal: Locator;
+    readonly statTodo: Locator;
+    readonly statInProgress: Locator;
+    readonly statDone: Locator;
+    readonly statOverdue: Locator;
+
+    // Filter locators
+    readonly userFilter: Locator;
+    readonly priorityFilter: Locator;
+    readonly statusFilter: Locator;
+    readonly searchInput: Locator;
+
     constructor(page: Page) {
         this.page = page;
         this.pageTitle = page.getByRole('heading', { level: 1, name: /Penugasan & Laporan Tindakan/i });
@@ -17,6 +30,19 @@ export class PenugasanPage {
         this.historyTab = page.getByRole('link', { name: /Arsip & Histori Selesai/i });
         this.boardHeading = page.getByRole('heading', { name: /Board Penugasan/i });
         this.historyHeading = page.getByRole('heading', { name: /Histori & Arsip Tugas/i });
+
+        // Stats
+        this.statTotal = page.locator('text=Total Tugas').locator('xpath=following::span[1]');
+        this.statTodo = page.locator('text=To Do').locator('xpath=following::span[1]');
+        this.statInProgress = page.locator('text=Dikerjakan').locator('xpath=following::span[1]');
+        this.statDone = page.locator('text=Selesai').locator('xpath=following::span[1]');
+        this.statOverdue = page.locator('text=Terlambat').locator('xpath=following::span[1]');
+
+        // Filters
+        this.userFilter = page.locator('select[name="user_id"]').first();
+        this.priorityFilter = page.locator('select[name="priority"]').first();
+        this.statusFilter = page.locator('select[name="status"]');
+        this.searchInput = page.locator('input[name="search"]').first();
     }
 
     private modalByHeading(title: string): Locator {

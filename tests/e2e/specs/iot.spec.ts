@@ -20,7 +20,7 @@ async function seedIoTConnectionConfig(iotPage: IotPage) {
     };
 }
 
-test.describe('Modul IoT dan Monitoring - E2E QA', () => {
+test.describe('Modul IoT dan Monitoring - E2E Smoke Tests', () => {
     let iotPage: IotPage;
 
     test.setTimeout(90000);
@@ -48,11 +48,11 @@ test.describe('Modul IoT dan Monitoring - E2E QA', () => {
         await expect(iotPage.registerDeviceBtn.first()).toBeVisible();
     });
 
-    test('Positif - Tab halaman Konfigurasi IoT (Protocols dan Connections) aktif', async ({ page }) => {
+    test('Positif - Tab halaman Konfigurasi IoT (4 tabs) aktif', async ({ page }) => {
         /**
          * Given user merupakan network admin
          * When navigasi ke parameter konfigurasi /iot/config
-         * Then sistem render dua panel config utama: Protokol & Koneksi IoT
+         * Then sistem render 4 panel config: Protokol, Koneksi, Parameter Sensor, Komoditas Parameter
          */
 
         // Arrange & Act
@@ -62,6 +62,8 @@ test.describe('Modul IoT dan Monitoring - E2E QA', () => {
         await iotPage.expectToBeOnConfigPage();
         await expect(iotPage.protocolsTab).toBeVisible();
         await expect(iotPage.connectionsTab).toBeVisible();
+        await expect(iotPage.parametersTab).toBeVisible();
+        await expect(iotPage.commodityParamsTab).toBeVisible();
     });
 
     test('Negatif - Simpan Pendaftaran IoT tanpa Code memicu alert validasi mandatory', async ({ page }) => {
@@ -82,7 +84,7 @@ test.describe('Modul IoT dan Monitoring - E2E QA', () => {
         // Assert
         const codeInput = iotPage.deviceCodeInput.first();
         const isInvalidInput = await codeInput.evaluate((node: HTMLInputElement) => !node.checkValidity());
-        
+
         expect(isInvalidInput).toBeTruthy(); // Flag boolean validitas element merah (negatif state)
     });
 
@@ -110,7 +112,7 @@ test.describe('Modul IoT dan Monitoring - E2E QA', () => {
         await iotPage.unitBudidayaSelect.first().selectOption({ index: 1 });
         await iotPage.connectionConfigSelect.first().selectOption({ label: connectionLabel });
         await iotPage.statusSelect.first().selectOption('active');
-        
+
         await iotPage.deviceSubmitBtn.click();
 
         // Assert
@@ -120,7 +122,7 @@ test.describe('Modul IoT dan Monitoring - E2E QA', () => {
         // Act Cleanup (Optional but good for E2E consistency)
         const row = iotPage.page.locator('tr').filter({ hasText: mockCode });
         const deleteBtn = row.locator('form').filter({ hasText: /hapus|delete/i }).locator('button');
-        
+
         if (await deleteBtn.count() > 0) {
             page.once('dialog', dialog => dialog.accept());
             await deleteBtn.first().click();
