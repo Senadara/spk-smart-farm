@@ -307,6 +307,7 @@ class PeternakanService
         $mati = DB::table('kematian')
             ->join('laporan', 'laporan.id', '=', 'kematian.laporanId')
             ->where('laporan.unitBudidayaId', $coopId)
+            ->where('laporan.isDeleted', 0)
             ->where('kematian.isDeleted', 0)
             ->count();
 
@@ -319,6 +320,8 @@ class PeternakanService
         $panenToday = DB::table('panen')
             ->join('laporan', 'panen.laporanId', '=', 'laporan.id')
             ->where('laporan.unitBudidayaId', $coopId)
+            ->where('laporan.isDeleted', 0)
+            ->where('panen.isDeleted', 0)
             ->whereDate('laporan.createdAt', $today)
             ->selectRaw('COALESCE(SUM(panen.jumlah), 0) as totalTelur, COALESCE(SUM(COALESCE(panen.berat, panen.jumlah * 0.06)), 0) as totalEggMass')
             ->first();
@@ -329,6 +332,8 @@ class PeternakanService
         $pakanToday = DB::table('harianTernak')
             ->join('laporan', 'harianTernak.laporanId', '=', 'laporan.id')
             ->where('laporan.unitBudidayaId', $coopId)
+            ->where('laporan.isDeleted', 0)
+            ->where('harianTernak.isDeleted', 0)
             ->whereDate('laporan.createdAt', $today)
             ->sum('harianTernak.pakan');
 
@@ -344,6 +349,9 @@ class PeternakanService
             ->join('grade', 'panenRincianGrade.gradeId', '=', 'grade.id')
             ->where('laporan.unitBudidayaId', $coopId)
             ->where('laporan.isDeleted', 0)
+            ->where('panen.isDeleted', 0)
+            ->where('panenRincianGrade.isDeleted', 0)
+            ->where('grade.isDeleted', 0)
             ->selectRaw('grade.nama as grade_name, SUM(panenRincianGrade.jumlah) as total')
             ->groupBy('grade.nama')
             ->pluck('total', 'grade_name')->toArray();
@@ -381,6 +389,9 @@ class PeternakanService
         if (!$coopId || $coopId === 'no-data')
             return [];
 
+        $coop = DB::table('unitBudidaya')->where('id', $coopId)->first(['jumlah']);
+        $populasi = $coop ? (float)$coop->jumlah : 0;
+
         $log = [];
         // Populate exactly 7 days
         for ($i = 0; $i < 7; $i++) {
@@ -389,17 +400,25 @@ class PeternakanService
             $telur = DB::table('panen')
                 ->join('laporan', 'panen.laporanId', '=', 'laporan.id')
                 ->where('laporan.unitBudidayaId', $coopId)->whereDate('laporan.createdAt', $date)
+                ->where('laporan.isDeleted', 0)
+                ->where('panen.isDeleted', 0)
                 ->sum('panen.jumlah');
 
             $pakan = DB::table('harianTernak')
                 ->join('laporan', 'harianTernak.laporanId', '=', 'laporan.id')
                 ->where('laporan.unitBudidayaId', $coopId)->whereDate('laporan.createdAt', $date)
+                ->where('laporan.isDeleted', 0)
+                ->where('harianTernak.isDeleted', 0)
                 ->sum('harianTernak.pakan');
 
             $mati = DB::table('kematian')
                 ->join('laporan', 'kematian.laporanId', '=', 'laporan.id')
                 ->where('laporan.unitBudidayaId', $coopId)->whereDate('kematian.tanggal', $date)
+                ->where('laporan.isDeleted', 0)
+                ->where('kematian.isDeleted', 0)
                 ->count();
+
+            $hdp = $populasi > 0 && $telur > 0 ? round(($telur / $populasi) * 100, 1) . '%' : '-';
 
             $log[] = [
                 'date' => Carbon::parse($date)->format('d M Y'),
@@ -408,7 +427,7 @@ class PeternakanService
                 'feedKg' => $pakan > 0 ? round($pakan, 1) : '-',
                 'waterL' => '-', // No water count in schema
                 'mortality' => $mati > 0 ? $mati : '-',
-                'hdp' => '-', // We only summarize HDP at KPI level
+                'hdp' => $hdp,
             ];
         }
         return $log;
@@ -509,9 +528,11 @@ class PeternakanService
         return $logs;
     }
 
-    public function getProductivityTrend(): array
+    public function getProductivityTrend(?string $coopId = null): array
     {
-        $activeCoopIds = $this->getActiveCoopIds(false);
+        $activeCoopIds = $coopId && $coopId !== 'no-data'
+            ? [$coopId]
+            : $this->getActiveCoopIds(false);
 
         $labels = [];
         $hdp = [];
@@ -537,18 +558,24 @@ class PeternakanService
 
         $panens = DB::table('panen')->join('laporan', 'panen.laporanId', '=', 'laporan.id')
             ->whereIn('laporan.unitBudidayaId', $activeCoopIds)
+            ->where('laporan.isDeleted', 0)
+            ->where('panen.isDeleted', 0)
             ->whereDate('laporan.createdAt', '>=', $startDate)->whereDate('laporan.createdAt', '<=', $endDate)
             ->selectRaw('DATE(laporan.createdAt) as dt, SUM(panen.jumlah) as totalTelur, SUM(COALESCE(panen.berat, panen.jumlah * 0.06)) as totalMass')
             ->groupBy('dt')->get()->keyBy('dt')->toArray();
 
         $pakans = DB::table('harianTernak')->join('laporan', 'harianTernak.laporanId', '=', 'laporan.id')
             ->whereIn('laporan.unitBudidayaId', $activeCoopIds)
+            ->where('laporan.isDeleted', 0)
+            ->where('harianTernak.isDeleted', 0)
             ->whereDate('laporan.createdAt', '>=', $startDate)->whereDate('laporan.createdAt', '<=', $endDate)
             ->selectRaw('DATE(laporan.createdAt) as dt, SUM(harianTernak.pakan) as totalPakan')
             ->groupBy('dt')->get()->keyBy('dt')->toArray();
 
         $matis = DB::table('kematian')->join('laporan', 'kematian.laporanId', '=', 'laporan.id')
             ->whereIn('laporan.unitBudidayaId', $activeCoopIds)
+            ->where('laporan.isDeleted', 0)
+            ->where('kematian.isDeleted', 0)
             ->whereDate('kematian.tanggal', '>=', $startDate)->whereDate('kematian.tanggal', '<=', $endDate)
             ->selectRaw('DATE(kematian.tanggal) as dt, count(kematian.id) as totalMati')
             ->groupBy('dt')->get()->keyBy('dt')->toArray();
@@ -602,6 +629,9 @@ class PeternakanService
             ->join('grade', 'panenRincianGrade.gradeId', '=', 'grade.id')
             ->where('laporan.unitBudidayaId', $coopId)
             ->where('laporan.isDeleted', 0)
+            ->where('panen.isDeleted', 0)
+            ->where('panenRincianGrade.isDeleted', 0)
+            ->where('grade.isDeleted', 0)
             ->selectRaw('grade.nama as grade_name, SUM(panenRincianGrade.jumlah) as total')
             ->groupBy('grade.nama')
             ->pluck('total', 'grade_name')->toArray();
@@ -644,6 +674,7 @@ class PeternakanService
             return [
                 ['label' => 'HDP %', 'value' => '0%', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
                 ['label' => 'FCR', 'value' => '0', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
+                ['label' => 'Umur Biologis', 'value' => '0', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
                 ['label' => 'Feed Intake', 'value' => '0g', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
                 ['label' => 'Egg Mass', 'value' => '0kg', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
                 ['label' => 'Mortality', 'value' => '0%', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
@@ -719,6 +750,12 @@ class PeternakanService
         $populasiAwal = $totalAyamHidup + $mortalityThisMonth;
         $mortalityPct = $populasiAwal > 0 ? round(($mortalityThisMonth / $populasiAwal) * 100, 2) : 0;
 
+        $oldestCoop = DB::table('unitBudidaya')
+            ->whereIn('id', $activeCoopIds)
+            ->orderBy('createdAt', 'asc')
+            ->first();
+        $umurBiologis = $oldestCoop ? Carbon::parse($oldestCoop->createdAt)->diffInWeeks(now()) . ' Mgg' : '0 Mgg';
+
         return [
             [
                 'label' => 'HDP %',
@@ -729,6 +766,11 @@ class PeternakanService
                 'label' => 'FCR',
                 'value' => $fcrToday > 0 ? (string) $fcrToday : '0',
                 'trend' => $this->calcTrend($fcrToday, $fcrYesterday, 'lower_is_better'),
+            ],
+            [
+                'label' => 'Umur Biologis',
+                'value' => $umurBiologis,
+                'trend' => ['direction' => 'stable', 'value' => 'Fase Produksi', 'status' => 'neutral'],
             ],
             [
                 'label' => 'Feed Intake',
@@ -821,6 +863,8 @@ class PeternakanService
 
         $panens = DB::table('panen')->join('laporan', 'panen.laporanId', '=', 'laporan.id')
             ->whereIn('laporan.unitBudidayaId', $activeCoops)
+            ->where('laporan.isDeleted', 0)
+            ->where('panen.isDeleted', 0)
             ->whereDate('laporan.createdAt', '>=', $startDate)
             ->whereDate('laporan.createdAt', '<=', $endDate)
             ->selectRaw('DATE(laporan.createdAt) as dt, SUM(panen.jumlah) as tTelur, SUM(COALESCE(panen.berat, panen.jumlah * 0.06)) as tMass')
@@ -830,6 +874,8 @@ class PeternakanService
 
         $pakans = DB::table('harianTernak')->join('laporan', 'harianTernak.laporanId', '=', 'laporan.id')
             ->whereIn('laporan.unitBudidayaId', $activeCoops)
+            ->where('laporan.isDeleted', 0)
+            ->where('harianTernak.isDeleted', 0)
             ->whereDate('laporan.createdAt', '>=', $startDate)
             ->whereDate('laporan.createdAt', '<=', $endDate)
             ->selectRaw('DATE(laporan.createdAt) as dt, SUM(harianTernak.pakan) as totalPakan')
@@ -1006,6 +1052,8 @@ class PeternakanService
 
         $panenQuery = DB::table('panen')->join('laporan', 'panen.laporanId', '=', 'laporan.id')
             ->whereIn('laporan.unitBudidayaId', $activeCoops)
+            ->where('laporan.isDeleted', 0)
+            ->where('panen.isDeleted', 0)
             ->whereDate('laporan.createdAt', now()->toDateString());
 
         $panen = $panenQuery->selectRaw('SUM(panen.jumlah) as tTelur, SUM(COALESCE(panen.berat, panen.jumlah * 0.06)) as tMass')->first();
@@ -1014,6 +1062,8 @@ class PeternakanService
 
         $pakan = DB::table('harianTernak')->join('laporan', 'harianTernak.laporanId', '=', 'laporan.id')
             ->whereIn('laporan.unitBudidayaId', $activeCoops)
+            ->where('laporan.isDeleted', 0)
+            ->where('harianTernak.isDeleted', 0)
             ->whereDate('laporan.createdAt', now()->toDateString())
             ->sum('harianTernak.pakan');
 
@@ -1021,6 +1071,8 @@ class PeternakanService
 
         $mati = DB::table('kematian')->join('laporan', 'kematian.laporanId', '=', 'laporan.id')
             ->whereIn('laporan.unitBudidayaId', $activeCoops)
+            ->where('laporan.isDeleted', 0)
+            ->where('kematian.isDeleted', 0)
             ->whereDate('kematian.tanggal', '>=', now()->startOfMonth()->toDateString())
             ->count();
         $mortality = $coopSum > 0 ? ($mati / $coopSum) * 100 : 0;
@@ -1082,6 +1134,8 @@ class PeternakanService
                 $telur = DB::table('panen')
                     ->join('laporan', 'panen.laporanId', '=', 'laporan.id')
                     ->where('laporan.unitBudidayaId', $coop->id)
+                    ->where('laporan.isDeleted', 0)
+                    ->where('panen.isDeleted', 0)
                     ->whereDate('laporan.createdAt', $today)
                     ->sum('panen.jumlah');
                 $hdpToday = round(($telur / $pop) * 100, 1);
@@ -1158,15 +1212,15 @@ class PeternakanService
         $laporans = DB::table('laporan')
             ->whereIn('unitBudidayaId', $coops->pluck('id'))
             ->where('isDeleted', 0)
-            ->whereIn('tipe', ['Panen', 'Mati'])
+            ->whereIn('tipe', ['panen', 'kematian', 'Panen', 'Mati'])
             ->orderBy('createdAt', 'desc')
             ->limit(10)
             ->get();
 
         $logs = [];
         foreach ($laporans as $l) {
-            $panen = DB::table('panen')->where('laporanId', $l->id)->sum('jumlah');
-            $reject = DB::table('kematian')->where('laporanId', $l->id)->count();
+            $panen = DB::table('panen')->where('laporanId', $l->id)->where('isDeleted', 0)->sum('jumlah');
+            $reject = DB::table('kematian')->where('laporanId', $l->id)->where('isDeleted', 0)->count();
 
             $b = $coops[$l->unitBudidayaId];
             $age = Carbon::parse($b->createdAt)->diffInWeeks(now()) . ' Wks';
@@ -1176,9 +1230,9 @@ class PeternakanService
                 'barn' => $b->nama,
                 'flock_age' => $age,
                 'birds' => number_format((float)($b->jumlah ?? 0), 0, ',', '.'),
-                'eggs' => $l->tipe === 'Panen' ? number_format((float)($panen ?? 0), 0, ',', '.') : '-',
-                'rejects' => $l->tipe === 'Kematian' ? $reject : '-',
-                'status' => $l->tipe === 'Panen' ? 'Optimal' : 'Attention'
+                'eggs' => strtolower($l->tipe) === 'panen' ? number_format((float)($panen ?? 0), 0, ',', '.') : '-',
+                'rejects' => strtolower($l->tipe) === 'kematian' ? $reject : '-',
+                'status' => strtolower($l->tipe) === 'panen' ? 'Optimal' : 'Attention'
             ];
         }
 

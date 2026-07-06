@@ -114,7 +114,7 @@
                 </p>
             </div>
             <div class="flex items-center gap-3">
-                <a href="{{ route('peternakan') }}" class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition flex items-center gap-2 no-underline">
+                <a href="{{ route('peternakan', array_filter(['komoditas' => $activeKomoditasId])) }}" class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition flex items-center gap-2 no-underline">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
                     Kembali
                 </a>

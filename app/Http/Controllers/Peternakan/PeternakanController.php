@@ -80,7 +80,11 @@ class PeternakanController extends Controller
         $this->peternakanService->forKomoditas($request->query('komoditas'));
 
         $barns = $this->peternakanService->getBarnEnvironment()['barns'];
-        $barn = collect($barns)->first(fn ($b) => $b['id'] == $id) ?? $barns[0];
+        $barn = collect($barns)->first(fn ($b) => ($b['id'] ?? null) == $id);
+        if (!$barn || ($barn['id'] ?? null) === 'no-data') {
+            abort(404, 'Kandang tidak ditemukan untuk komoditas aktif.');
+        }
+
         $iotDevices = $this->peternakanService->getBarnIotDevices($barn);
 
         return view('peternakan.show', [
@@ -92,7 +96,7 @@ class PeternakanController extends Controller
             'iotDevice' => $iotDevices[0] ?? null,
             'spkMessages' => $this->peternakanService->getBarnSpkMessages($barn),
             'activityLog' => $this->peternakanService->getBarnActivityLog($barn),
-            'productivityTrend' => $this->peternakanService->getProductivityTrend(),
+            'productivityTrend' => $this->peternakanService->getProductivityTrend($barn['id']),
             'eggQuality' => $this->peternakanService->getEggQuality($barn),
             'activeKomoditasId' => $this->peternakanService->getActiveKomoditasId(),
         ]);
