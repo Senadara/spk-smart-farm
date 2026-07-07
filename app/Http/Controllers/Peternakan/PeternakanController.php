@@ -67,6 +67,7 @@ class PeternakanController extends Controller
             'fuzzyProduktivitasByBarn' => $this->buildProduktivitasByBarn($barns),
             'productionLog' => $this->peternakanService->getProductionLog(),
             'listKandang' => $this->peternakanService->getListKandang(),
+            'dailyReportStatus' => $this->peternakanService->getDailyReportStatus(),
             'evaluationTime' => $evaluationTime,
             'hasKomoditas' => $komoditas->isNotEmpty(),
         ]);
@@ -98,6 +99,7 @@ class PeternakanController extends Controller
             'activityLog' => $this->peternakanService->getBarnActivityLog($barn),
             'productivityTrend' => $this->peternakanService->getProductivityTrend($barn['id']),
             'eggQuality' => $this->peternakanService->getEggQuality($barn),
+            'dailyDataAudit' => $this->peternakanService->getBarnDailyDataAudit($barn),
             'activeKomoditasId' => $this->peternakanService->getActiveKomoditasId(),
         ]);
     }

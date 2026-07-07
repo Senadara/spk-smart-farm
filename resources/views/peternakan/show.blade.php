@@ -266,6 +266,127 @@
         </div>
 
         {{-- ═══ EGG QUALITY CARD ═══ --}}
+        @php
+            $hasEggReport = $eggQuality['hasReport'] ?? false;
+            $gradeDistribution = $eggQuality['gradeDistribution'] ?? [];
+            $hasGradeDetail = $eggQuality['hasGradeDetail'] ?? false;
+            $rejectRate = $eggQuality['rejectRate'] ?? null;
+        @endphp
+        <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-3 mb-5">
+                <div>
+                    <h3 class="text-base font-semibold text-gray-800">Detail Produksi Telur</h3>
+                    <p class="text-xs text-gray-400 mt-0.5">Sumber hari ini: laporan panen, panen, dan rincian grade - {{ $eggQuality['sourceDate'] }}</p>
+                </div>
+                <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold {{ $hasEggReport ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">
+                    {{ $hasEggReport ? 'Data hari ini tersedia' : 'Belum ada panen hari ini' }}
+                </span>
+            </div>
+
+            @if(!$hasEggReport)
+                <div class="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900 mb-5">
+                    <p class="font-semibold">Belum ada laporan panen untuk kandang ini pada {{ $eggQuality['sourceDate'] }}.</p>
+                    <p class="mt-1 text-xs leading-relaxed opacity-90">
+                        Distribusi grade, reject telur, egg mass, dan rata-rata berat telur akan tampil setelah laporan panen harian masuk.
+                        @if(!empty($eggQuality['lastPanenAt']))
+                            Laporan panen terakhir: {{ $eggQuality['lastPanenAt'] }}.
+                        @endif
+                    </p>
+                </div>
+            @endif
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Distribusi Grade</p>
+                    @if($hasGradeDetail)
+                        <div class="h-4 w-full rounded-full overflow-hidden flex mb-4 bg-gray-100">
+                            @foreach ($gradeDistribution as $grade)
+                                <div class="h-full {{ $grade['color'] }}" style="width: {{ max($grade['pct'], 1) }}%" title="{{ $grade['label'] }}"></div>
+                            @endforeach
+                        </div>
+                        <div class="space-y-2">
+                            @foreach ($gradeDistribution as $grade)
+                                <div class="flex items-center justify-between text-xs">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-2 h-2 rounded-full {{ $grade['color'] }}"></div>
+                                        <span class="text-gray-600">{{ $grade['label'] }}</span>
+                                    </div>
+                                    <span class="font-bold text-gray-900">{{ $grade['pct'] }}% <span class="font-normal text-gray-400">({{ number_format((float)$grade['count'], 0, ',', '.') }})</span></span>
+                                </div>
+                            @endforeach
+                        </div>
+                    @else
+                        <div class="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4 text-xs text-gray-500">
+                            Rincian grade belum tersedia untuk laporan hari ini.
+                        </div>
+                    @endif
+                </div>
+
+                <div>
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Ringkasan Panen</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="rounded-xl border border-gray-100 p-3">
+                            <p class="text-[10px] text-gray-400 uppercase font-semibold">Total Telur</p>
+                            <p class="mt-1 text-xl font-black text-gray-900">{{ number_format((float)($eggQuality['totalEggs'] ?? 0), 0, ',', '.') }}</p>
+                        </div>
+                        <div class="rounded-xl border border-gray-100 p-3">
+                            <p class="text-[10px] text-gray-400 uppercase font-semibold">Egg Mass</p>
+                            <p class="mt-1 text-xl font-black text-gray-900">{{ number_format((float)($eggQuality['totalWeightKg'] ?? 0), 2, ',', '.') }} kg</p>
+                        </div>
+                        <div class="rounded-xl border border-gray-100 p-3">
+                            <p class="text-[10px] text-gray-400 uppercase font-semibold">Berat Rata-rata</p>
+                            <p class="mt-1 text-xl font-black text-gray-900">{{ $eggQuality['avgWeightGram'] !== null ? number_format((float)$eggQuality['avgWeightGram'], 1, ',', '.') . 'g' : '-' }}</p>
+                        </div>
+                        <div class="rounded-xl border border-gray-100 p-3">
+                            <p class="text-[10px] text-gray-400 uppercase font-semibold">Reject/Afkir</p>
+                            <p class="mt-1 text-xl font-black {{ $rejectRate !== null && $rejectRate > 5 ? 'text-amber-600' : 'text-gray-900' }}">{{ $rejectRate !== null ? number_format((float)$rejectRate, 2, ',', '.') . '%' : '-' }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Data Belum Tersedia</p>
+                    <div class="space-y-2">
+                        @foreach (($eggQuality['missingFields'] ?? []) as $missing)
+                            <div class="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-2">
+                                <p class="text-xs font-semibold text-gray-700">{{ $missing['label'] }}</p>
+                                <p class="text-[11px] text-gray-500 mt-0.5">{{ $missing['description'] }}</p>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <div class="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+                    <p class="text-xs font-bold text-gray-700 mb-2">Ketersediaan data laporan harian</p>
+                    <div class="flex flex-wrap gap-2">
+                        @foreach (($dailyDataAudit['available'] ?? []) as $item)
+                            @php
+                                $auditCls = [
+                                    'ready' => 'bg-emerald-50 text-emerald-700 border-emerald-100',
+                                    'empty' => 'bg-amber-50 text-amber-700 border-amber-100',
+                                    'fallback' => 'bg-sky-50 text-sky-700 border-sky-100',
+                                ][$item['status']] ?? 'bg-gray-50 text-gray-600 border-gray-100';
+                            @endphp
+                            <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold {{ $auditCls }}" title="{{ $item['source'] }}">
+                                {{ $item['label'] }}
+                            </span>
+                        @endforeach
+                    </div>
+                </div>
+                <div class="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+                    <p class="text-xs font-bold text-gray-700 mb-2">Opsi tindakan</p>
+                    <ul class="space-y-1 text-[11px] text-gray-500 leading-relaxed">
+                        @foreach (array_slice($dailyDataAudit['actions'] ?? [], 0, 3) as $action)
+                            <li class="flex gap-2"><span class="mt-1 h-1 w-1 rounded-full bg-gray-400 shrink-0"></span><span>{{ $action }}</span></li>
+                        @endforeach
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        @if(false)
         <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
             <h3 class="text-base font-semibold text-gray-800 mb-5">Egg Production Details (Today)</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -332,6 +453,8 @@
         </div>
 
         {{-- ═══ PRODUCTION LOG TABLE ═══ --}}
+        @endif
+
         <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
             <h3 class="text-base font-semibold text-gray-800 mb-4">Log Produksi 7 Hari</h3>
             <div class="overflow-x-auto">
@@ -363,6 +486,78 @@
         </div>
 
         {{-- ═══ SPK MESSAGES + ACTIVITY LOG ═══ --}}
+        @php
+            $spkItems = collect($spkMessages);
+            $spkIssue = $spkItems->first(fn ($item) => ($item['status'] ?? 'normal') !== 'normal') ?? $spkItems->first();
+            $spkDangerCount = $spkItems->where('status', 'danger')->count();
+            $spkWarningCount = $spkItems->where('status', 'warning')->count();
+            $spkStatus = $spkDangerCount > 0 ? 'danger' : ($spkWarningCount > 0 ? 'warning' : 'normal');
+            $spkBadge = [
+                'normal' => ['label' => 'Aman', 'cls' => 'bg-emerald-50 text-emerald-700'],
+                'warning' => ['label' => 'Perlu cek', 'cls' => 'bg-amber-50 text-amber-700'],
+                'danger' => ['label' => 'Kritis', 'cls' => 'bg-red-50 text-red-700'],
+            ][$spkStatus];
+            $spkLink = route('spk.dashboard', ['komoditas' => 'petelur', 'coop_id' => $barn['id']]);
+            $taskLink = route('spk.tasks.index', ['coop_id' => $barn['id']]);
+        @endphp
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <h3 class="text-base font-semibold text-gray-800">Analisis SPK</h3>
+                        <p class="text-xs text-gray-400 mt-0.5">Ringkasan cepat untuk {{ $barn['name'] }}</p>
+                    </div>
+                    <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $spkBadge['cls'] }}">{{ $spkBadge['label'] }}</span>
+                </div>
+                <p class="mt-4 text-sm text-gray-600 leading-relaxed">
+                    {{ $spkIssue['message'] ?? 'Belum ada ringkasan SPK untuk kandang ini.' }}
+                </p>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    @foreach ($spkItems->take(3) as $msg)
+                        @php
+                            $chipCls = [
+                                'normal' => 'bg-gray-50 text-gray-600 border-gray-100',
+                                'warning' => 'bg-amber-50 text-amber-700 border-amber-100',
+                                'danger' => 'bg-red-50 text-red-700 border-red-100',
+                            ][$msg['status'] ?? 'normal'] ?? 'bg-gray-50 text-gray-600 border-gray-100';
+                        @endphp
+                        <span class="rounded-full border px-2.5 py-1 text-[11px] font-semibold {{ $chipCls }}">{{ $msg['mode'] }}</span>
+                    @endforeach
+                </div>
+                <a href="{{ $spkLink }}" class="mt-5 inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition no-underline">
+                    Buka Analisa SPK Kandang Ini
+                </a>
+            </div>
+
+            <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+                <div class="flex items-start justify-between gap-3 mb-4">
+                    <div>
+                        <h3 class="text-base font-semibold text-gray-800">Aktivitas Petugas</h3>
+                        <p class="text-xs text-gray-400 mt-0.5">Laporan terbaru dari kandang ini</p>
+                    </div>
+                    <a href="{{ $taskLink }}" class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition no-underline">Penugasan</a>
+                </div>
+                <div class="space-y-2">
+                    @foreach (array_slice($activityLog, 0, 4) as $act)
+                        @php
+                            $dotColor = ['success'=>'bg-emerald-500','info'=>'bg-sky-500','warning'=>'bg-amber-500'][$act['type']] ?? 'bg-gray-400';
+                        @endphp
+                        <div class="flex items-start gap-3 rounded-lg border border-gray-100 px-3 py-2.5">
+                            <span class="mt-1.5 h-2 w-2 rounded-full {{ $dotColor }} shrink-0"></span>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center justify-between gap-2">
+                                    <p class="text-sm font-semibold text-gray-800 truncate">{{ $act['title'] }}</p>
+                                    <span class="text-[10px] text-gray-400 shrink-0">{{ $act['time'] }}</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">{{ $act['desc'] }}</p>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+
+        @if(false)
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {{-- SPK Messages --}}
             <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
@@ -407,6 +602,8 @@
                 </div>
             </div>
         </div>
+
+        @endif
 
     </div>
 @endsection

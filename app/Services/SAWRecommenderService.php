@@ -17,7 +17,7 @@ class SAWRecommenderService
         private SupplierInsightService $insightService,
     ) {}
 
-    public function getRecommendations(int $userId, int $produkId, bool $forceRecalculate = false)
+    public function getRecommendations(string $userId, int $produkId, bool $forceRecalculate = false)
     {
         if (!$forceRecalculate) {
             $cached = SpkRanking::where('user_id', $userId)

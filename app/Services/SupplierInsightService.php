@@ -15,7 +15,7 @@ class SupplierInsightService
     /**
      * @return Collection<int, array{type: string, message: string, severity: string}>
      */
-    public function generateInsights(int $userId, ?int $produkId = null): Collection
+    public function generateInsights(string $userId, ?int $produkId = null): Collection
     {
         $insights = collect();
 
@@ -51,9 +51,10 @@ class SupplierInsightService
                     : 0;
 
                 if ($diff > 0) {
+                    $supplierName = $cheapest->supplier?->nama ?? 'Supplier';
                     $insights->push([
                         'type' => 'price_gap',
-                        'message' => "Selisih harga antar supplier mencapai {$diff}% untuk produk ini (termurah: {$cheapest->supplier->nama}).",
+                        'message' => "Selisih harga antar supplier mencapai {$diff}% untuk produk ini (termurah: {$supplierName}).",
                         'severity' => 'warning',
                     ]);
                 }
@@ -70,14 +71,16 @@ class SupplierInsightService
             if ($recent->count() >= 2) {
                 $best = $recent->sortByDesc('value')->first();
                 $worst = $recent->sortBy('value')->first();
-                $drop = $worst->value > 0
+                $drop = $best->value > 0
                     ? round((($best->value - $worst->value) / $best->value) * 100, 1)
                     : 0;
 
                 if ($drop >= 5) {
+                    $worstName = $worst->supplier?->nama ?? 'Supplier';
+                    $bestName = $best->supplier?->nama ?? 'supplier terbaik';
                     $insights->push([
                         'type' => 'quality_gap',
-                        'message' => "{$worst->supplier->nama} menawarkan kualitas lebih rendah (~{$drop}% di bawah {$best->supplier->nama}) meski harga bisa lebih kompetitif.",
+                        'message' => "{$worstName} menawarkan kualitas lebih rendah (~{$drop}% di bawah {$bestName}) meski harga bisa lebih kompetitif.",
                         'severity' => 'warning',
                     ]);
                 }
@@ -89,13 +92,15 @@ class SupplierInsightService
             $slow = SpkSupplierParameterValue::where('produk_id', $produkId)
                 ->where('parameter_id', $kecepatanParam->id)
                 ->with('supplier')
-                ->orderByDesc('value')
+                ->orderBy('value')
                 ->first();
 
-            if ($slow && $slow->value >= 3) {
+            $estimatedDays = $slow && $slow->value > 0 ? round(100 / $slow->value, 1) : null;
+            if ($slow && $estimatedDays !== null && $estimatedDays >= 3) {
+                $supplierName = $slow->supplier?->nama ?? 'Supplier';
                 $insights->push([
                     'type' => 'delivery_risk',
-                    'message' => "{$slow->supplier->nama} memiliki estimasi pengiriman lebih lama ({$slow->value} hari) — pertimbangkan untuk pesanan mendesak.",
+                    'message' => "{$supplierName} memiliki estimasi pengiriman lebih lama (~{$estimatedDays} hari) - pertimbangkan untuk pesanan mendesak.",
                     'severity' => 'danger',
                 ]);
             }
@@ -109,9 +114,11 @@ class SupplierInsightService
             ->first();
 
         if ($latestRanking) {
+            $supplierName = $latestRanking->supplier?->nama ?? 'Supplier';
+            $score = number_format($latestRanking->final_score, 4);
             $insights->push([
                 'type' => 'saw_recommendation',
-                'message' => "Rekomendasi SAW saat ini: {$latestRanking->supplier->nama} (skor " . number_format($latestRanking->final_score, 4) . ', peringkat #' . $latestRanking->ranking . ').',
+                'message' => "Rekomendasi SAW saat ini: {$supplierName} (skor {$score}, peringkat #{$latestRanking->ranking}).",
                 'severity' => 'success',
             ]);
         }
@@ -119,7 +126,7 @@ class SupplierInsightService
         return $insights;
     }
 
-    public function logSelection(int $userId, int $supplierId, int $produkId, ?float $score = null, ?int $ranking = null): void
+    public function logSelection(string $userId, int $supplierId, int $produkId, ?float $score = null, ?int $ranking = null): void
     {
         SpkSupplierSelectionLog::create([
             'user_id' => $userId,

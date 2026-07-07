@@ -18,7 +18,7 @@ class TenantScope implements Scope
         if ($user && isset($user['role'])) {
             if ($user['role'] === 'pjawab') {
                 $builder->where('owner_id', $user['id']);
-            } elseif ($user['role'] === 'petugas') {
+            } elseif ($user['role'] === 'petugas' && isset($user['owner_id'])) {
                 $builder->where('owner_id', $user['owner_id']);
             }
         }

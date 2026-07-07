@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
@@ -17,12 +18,20 @@ class DatabaseSeeder extends Seeder
 
         User::firstOrCreate(
             ['email' => 'test@example.com'],
-            ['name' => 'Test User', 'password' => bcrypt('password')]
+            [
+                'id' => (string) Str::uuid(),
+                'name' => 'Test User',
+                'password' => 'password',
+                'role' => 'pjawab',
+                'isActive' => true,
+            ]
         );
 
         $this->call([
+            SpkFuzzySeeder::class,
             AyamPetelurSeeder::class,
             SpkSupplierSeeder::class,
+            SpkDssDemoSeeder::class,
         ]);
     }
 }

@@ -11,13 +11,20 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('spk_ahp_perbandingans')) {
+            return;
+        }
+
         Schema::create('spk_ahp_perbandingans', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
+            $table->char('user_id', 36)->charset('utf8mb4')->collation('utf8mb4_bin');
             $table->foreignId('parameter_1_id')->constrained('spk_parameters')->onDelete('cascade');
             $table->foreignId('parameter_2_id')->constrained('spk_parameters')->onDelete('cascade');
             $table->float('nilai_skala');
             $table->timestamps();
+
+            $table->index('user_id');
+            $table->foreign('user_id')->references('id')->on('user')->cascadeOnDelete();
         });
     }
 

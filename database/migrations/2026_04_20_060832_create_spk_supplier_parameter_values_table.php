@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('spk_supplier_parameter_values')) {
+            return;
+        }
+
         Schema::create('spk_supplier_parameter_values', function (Blueprint $table) {
             $table->id();
             $table->foreignId('supplier_id')->constrained('master_suppliers')->onDelete('cascade');

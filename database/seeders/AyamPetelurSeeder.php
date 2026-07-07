@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 
@@ -14,6 +15,8 @@ class AyamPetelurSeeder extends Seeder
      */
     public function run(): void
     {
+        mt_srand(20260706);
+
         // 0. Ensure User
         $user = DB::table('user')->first();
         if (!$user) {
@@ -34,28 +37,43 @@ class AyamPetelurSeeder extends Seeder
         $jenisBudidaya = DB::table('jenisBudidaya')->where('nama', 'Ayam Petelur')->first();
         if (!$jenisBudidaya) {
             $jenisBudidayaId = Str::uuid()->toString();
-            DB::table('jenisBudidaya')->insert([
+            $jenisBudidayaData = [
                 'id' => $jenisBudidayaId,
                 'nama' => 'Ayam Petelur',
+                'tipe' => 'hewan',
                 'createdAt' => now(),
                 'updatedAt' => now(),
-                'updatedBy' => 'Seeder',
                 'isDeleted' => 0,
-            ]);
+            ];
+
+            if (Schema::hasColumn('jenisBudidaya', 'updatedBy')) {
+                $jenisBudidayaData['updatedBy'] = 'Seeder';
+            }
+
+            DB::table('jenisBudidaya')->insert($jenisBudidayaData);
         } else {
             $jenisBudidayaId = $jenisBudidaya->id;
         }
 
+        $satuanEkorId = '55555555-5555-5555-5555-555555555555';
+        DB::table('satuan')->updateOrInsert(
+            ['id' => $satuanEkorId],
+            [
+                'nama' => 'Ekor',
+                'lambang' => 'ekor',
+                'isDeleted' => 0,
+                'createdAt' => now(),
+                'updatedAt' => now(),
+            ]
+        );
+
         // 1.5 Ensure Komoditas Ayam Layer
         $komoditas = DB::table('komoditas')->where('nama', 'Ayam Layer')->where('jenisBudidayaId', $jenisBudidayaId)->first();
         if (!$komoditas) {
-            $satuanEkor = DB::table('satuan')->where('nama', 'Ekor')->first();
-            $satuanId = $satuanEkor ? $satuanEkor->id : null;
-            
             DB::table('komoditas')->insert([
                 'id' => Str::uuid()->toString(),
                 'jenisBudidayaId' => $jenisBudidayaId,
-                'satuanId' => $satuanId ?? '55555555-5555-5555-5555-555555555555',
+                'satuanId' => $satuanEkorId,
                 'nama' => 'Ayam Layer',
                 'createdAt' => now(),
                 'updatedAt' => now(),

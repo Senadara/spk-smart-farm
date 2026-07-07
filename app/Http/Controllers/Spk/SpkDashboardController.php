@@ -19,7 +19,7 @@ class SpkDashboardController extends Controller
     public function index(Request $request, \App\Services\PeternakanService $peternakanService)
     {
         $komoditas = $request->input('komoditas', 'petelur');
-        $coopId    = $request->input('coop_id');   // null = global
+        $coopId    = $request->filled('coop_id') ? $request->input('coop_id') : null;   // null = global
         $historyId = $request->input('history_id');
 
         $peternakanService->forKomoditas($komoditas);
@@ -38,17 +38,18 @@ class SpkDashboardController extends Controller
 
         // ── Fuzzy Status & Chart dari hasil engine ────────────────────
         $fuzzyData  = $this->getFuzzyStatus($latestResult, $prodData);
-        $chartData  = $this->getChartData();
+        $chartData  = $this->getChartData($coopId);
 
         // ── Action Tickets (tetap mock sampai modul tersedia) ─────────
         $actionTickets = $this->getActionTickets($activeHistory['id'] ?? 'N/A');
 
         // ── Kandang options dari unitBudidaya ─────────────────────────
-        $jenis       = DB::table('jenisBudidaya')->where('nama', 'like', '%Ayam Petelur%')->where('isDeleted', 0)->first();
+        $jenisId = $peternakanService->getActiveJenisBudidayaId();
         $barnsOption = DB::table('unitBudidaya')
-            ->where('jenisBudidayaId', $jenis?->id)
+            ->when($jenisId, fn ($query) => $query->where('jenisBudidayaId', $jenisId))
             ->where('status', 1)
             ->where('isDeleted', 0)
+            ->orderBy('nama')
             ->get(['id', 'nama'])
             ->map(fn($c) => ['id' => $c->id, 'name' => $c->nama])
             ->prepend(['id' => null, 'name' => 'Semua Kandang (Global)'])
@@ -215,13 +216,18 @@ class SpkDashboardController extends Controller
     }
 
 
-    private function getChartData(): array
+    private function getChartData(?string $coopId = null): array
     {
         // HDP comparison: 30 hari terakhir dari SpkFuzzyLog
-        $logs = SpkFuzzyLog::query()
-            ->orderBy('createdAt', 'asc')
-            ->limit(30)
-            ->get(['input_json', 'createdAt', 'status_lingkungan']);
+        $query = SpkFuzzyLog::query()->orderBy('createdAt', 'asc')->limit(30);
+        
+        if ($coopId) {
+            $query->where('unit_budidaya_id', $coopId);
+        } else {
+            $query->whereNull('unit_budidaya_id');
+        }
+
+        $logs = $query->get(['input_json', 'createdAt', 'status_lingkungan']);
 
         $labels      = [];
         $hdpActual   = [];

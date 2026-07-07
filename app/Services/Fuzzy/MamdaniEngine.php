@@ -328,7 +328,7 @@ class MamdaniEngine
                     'output_set_id'   => $rule->output_set_id,
                     'output_set_name' => $rule->outputSet?->name,
                     'diagnosis'       => $rule->diagnosis,
-                    'recommendation'  => $rule->diagnosis,
+                    'recommendation'  => $rule->recommendation,
                     'conditions'      => $rule->conditions->map(fn($c) => [
                         'variable_name' => $c->variable?->name,
                         'set_name'      => $c->set?->name,

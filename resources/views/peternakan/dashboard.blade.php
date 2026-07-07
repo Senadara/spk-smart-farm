@@ -229,6 +229,80 @@
         </div>
         @endif
 
+        @if(!($dailyReportStatus['isReady'] ?? false))
+            @php
+                $dailyStatus = $dailyReportStatus['status'] ?? 'empty';
+                $dailyTone = match($dailyStatus) {
+                    'partial' => [
+                        'wrap' => 'border-sky-200 bg-sky-50 text-sky-900',
+                        'icon' => 'text-sky-600 bg-sky-100',
+                        'pill' => 'bg-sky-100 text-sky-700',
+                    ],
+                    'no_coops' => [
+                        'wrap' => 'border-gray-200 bg-gray-50 text-gray-800',
+                        'icon' => 'text-gray-600 bg-gray-100',
+                        'pill' => 'bg-gray-100 text-gray-600',
+                    ],
+                    default => [
+                        'wrap' => 'border-amber-200 bg-amber-50 text-amber-900',
+                        'icon' => 'text-amber-600 bg-amber-100',
+                        'pill' => 'bg-amber-100 text-amber-700',
+                    ],
+                };
+                $missingBarns = array_slice($dailyReportStatus['missingBarns'] ?? [], 0, 4);
+            @endphp
+            <div class="rounded-xl border px-5 py-4 shadow-sm {{ $dailyTone['wrap'] }}">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="flex gap-3">
+                        <div class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg {{ $dailyTone['icon'] }}">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6h6v6m2 4H7a2 2 0 01-2-2V7a2 2 0 012-2h2l2-2h2l2 2h2a2 2 0 012 2v12a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 class="text-sm font-bold">{{ $dailyReportStatus['title'] ?? 'Laporan harian belum tersedia' }}</h2>
+                                <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold {{ $dailyTone['pill'] }}">
+                                    {{ $dailyReportStatus['reportedCount'] ?? 0 }}/{{ $dailyReportStatus['totalCoops'] ?? 0 }} kandang
+                                </span>
+                            </div>
+                            <p class="mt-1 text-sm leading-relaxed opacity-90">
+                                {{ $dailyReportStatus['message'] ?? 'Data produksi akan tampil setelah laporan harian dicatat.' }}
+                            </p>
+                            <div class="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                                <div class="rounded-lg bg-white/60 px-3 py-2">
+                                    <span class="font-semibold">Tanggal laporan:</span>
+                                    <span>{{ $dailyReportStatus['date'] ?? now()->format('d M Y') }}</span>
+                                </div>
+                                <div class="rounded-lg bg-white/60 px-3 py-2">
+                                    <span class="font-semibold">Data yang tetap valid:</span>
+                                    <span>sensor IoT, status kandang, dan riwayat laporan lama</span>
+                                </div>
+                            </div>
+                            @if(!empty($missingBarns))
+                                <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                                    <span class="font-semibold">Belum ada laporan:</span>
+                                    @foreach($missingBarns as $barnName)
+                                        <span class="rounded-full bg-white/70 px-2.5 py-1 font-medium">{{ $barnName }}</span>
+                                    @endforeach
+                                    @if(count($dailyReportStatus['missingBarns'] ?? []) > count($missingBarns))
+                                        <span class="font-medium opacity-80">+{{ count($dailyReportStatus['missingBarns']) - count($missingBarns) }} kandang lain</span>
+                                    @endif
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="shrink-0 rounded-lg bg-white/70 px-4 py-3 text-xs leading-relaxed lg:w-72">
+                        <p class="font-bold">Apa yang perlu dilakukan?</p>
+                        <p class="mt-1 opacity-90">Input laporan panen, pakan, atau kematian harian dari aplikasi/API Smart Farming. Setelah tersimpan, refresh dashboard atau jalankan evaluasi SPK.</p>
+                        @if(!empty($dailyReportStatus['lastReportAt']))
+                            <p class="mt-2 opacity-75">Laporan terakhir: {{ $dailyReportStatus['lastReportAt'] }}</p>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        @endif
+
         {{-- SECTION 1: KPI --}}
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             @foreach($kpiMetrics as $kpi)
@@ -427,4 +501,3 @@
 @push('scripts')
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 @endpush
-

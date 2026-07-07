@@ -11,9 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('spk_rankings')) {
+            return;
+        }
+
         Schema::create('spk_rankings', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
+            $table->char('user_id', 36)->charset('utf8mb4')->collation('utf8mb4_bin');
             $table->foreignId('produk_id')->constrained('master_produks')->onDelete('cascade');
             $table->foreignId('supplier_id')->constrained('master_suppliers')->onDelete('cascade');
             $table->float('final_score');
@@ -21,6 +25,9 @@ return new class extends Migration
             $table->boolean('is_valid')->default(true);
             $table->timestamp('last_calculated_at')->nullable();
             $table->timestamps();
+
+            $table->index('user_id');
+            $table->foreign('user_id')->references('id')->on('user')->cascadeOnDelete();
         });
     }
 

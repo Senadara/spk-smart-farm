@@ -63,7 +63,7 @@ class SpkSupplierDssController extends Controller
         $insights = collect();
 
         if ($userId !== null && $produkId && $bobots->isNotEmpty()) {
-            $rankings = $this->sawService->getRecommendations($userId, $produkId, true);
+            $rankings = $this->sawService->getRecommendations($userId, $produkId);
             $rankings->load('supplier', 'produk');
             $evaluation = $this->sawService->getEvaluationMatrix($produkId);
             $insights = $this->insightService->generateInsights($userId, $produkId);
@@ -92,8 +92,8 @@ class SpkSupplierDssController extends Controller
         if ($userId === null) {
             return back()->withInput()->with(
                 'error',
-                'Pengguna login tidak bisa dipetakan ke tabel pengguna aplikasi (`users`). ' .
-                    'Pastikan kolom ID pada session valid (lebih besar dari nol) atau email akun Anda ada di `users`. ' .
+                'Pengguna login tidak bisa dipetakan ke tabel pengguna aplikasi (`user`). ' .
+                    'Pastikan ID session atau email akun Anda ada di `user`. ' .
                     'Konfigurasi AHP tidak disimpan.'
             );
         }
@@ -136,7 +136,7 @@ class SpkSupplierDssController extends Controller
         $userId = SpkDssActorId::resolve($request);
         if ($userId === null) {
             return response()->json([
-                'message' => 'User tidak dikenali untuk DSS (tidak ada users.id atau email pemetaan).',
+                'message' => 'User tidak dikenali untuk DSS (tidak ada user.id atau email pemetaan).',
             ], 401);
         }
         $force = $request->boolean('recalculate');
