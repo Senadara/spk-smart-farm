@@ -4,120 +4,205 @@
 @section('breadcrumb', 'Penugasan')
 
 @section('content')
-    <div x-data="penugasanPage()" class="max-w-full space-y-6" x-cloak>
+    @php
+        $role = data_get(session('user'), 'role');
+        $isPjawab = $role === 'pjawab';
+        $isPetugas = $role === 'petugas';
+        $priorityOptions = ['urgent' => 'Urgent', 'high' => 'Tinggi', 'medium' => 'Sedang', 'low' => 'Rendah'];
+        $statItems = [
+            ['label' => 'Total Tugas', 'value' => $stats['total'], 'icon' => 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2', 'class' => 'bg-slate-50 text-slate-600 border-slate-100'],
+            ['label' => 'To Do', 'value' => $stats['todo'], 'icon' => 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', 'class' => 'bg-zinc-50 text-zinc-600 border-zinc-100'],
+            ['label' => 'Dikerjakan', 'value' => $stats['in_progress'], 'icon' => 'M13 10V3L4 14h7v7l9-11h-7z', 'class' => 'bg-sky-50 text-sky-600 border-sky-100'],
+            ['label' => 'Selesai', 'value' => $stats['done'], 'icon' => 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', 'class' => 'bg-emerald-50 text-emerald-600 border-emerald-100'],
+            ['label' => 'Terlambat', 'value' => $stats['overdue'], 'icon' => 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z', 'class' => 'bg-rose-50 text-rose-600 border-rose-100'],
+        ];
+    @endphp
 
-        {{-- ═══ HEADER ═══ --}}
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white px-5 py-4 rounded-xl border border-gray-100 shadow-sm">
-            <div>
-                <h1 class="text-xl font-bold text-gray-900 flex items-center gap-2">
-                    <svg class="w-6 h-6 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-                    Penugasan & Laporan Tindakan
-                </h1>
-                <p class="text-xs text-gray-400 mt-0.5">Kelola tugas tindakan dari hasil analisa SPK untuk petugas lapangan</p>
+    <div x-data="penugasanPage()" class="max-w-full space-y-6" x-cloak>
+        @if ($errors->any())
+            <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {{ $errors->first() }}
             </div>
-            <div class="flex items-center gap-3">
-                @if(session('user') && isset(session('user')['role']) && session('user')['role'] === 'pjawab')
-                <button @click="showCreateModal = true" class="flex items-center gap-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg transition shadow-sm">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-                    Buat Tugas
-                </button>
+        @endif
+
+        <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div class="h-1 bg-gradient-to-r from-emerald-500 via-sky-500 to-indigo-500"></div>
+            <div class="flex flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h1 class="flex items-center gap-2 text-xl font-bold text-slate-900">
+                            <svg class="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                            Penugasan & Laporan Tindakan
+                        </h1>
+                        <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                            {{ $isPetugas ? 'Petugas' : 'Penanggung Jawab' }}
+                        </span>
+                    </div>
+                    <p class="mt-1 text-xs text-slate-500">Kelola tindak lanjut hasil analisa SPK sampai laporan pengerjaan selesai.</p>
+                </div>
+
+                @if($isPjawab)
+                    <button @click="showCreateModal = true" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                        Buat Tugas
+                    </button>
                 @endif
             </div>
         </div>
 
-        {{-- ═══ STATS ROW ═══ --}}
-        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            @php
-                $statItems = [
-                    ['label' => 'Total Tugas', 'value' => $stats['total'], 'color' => 'gray', 'icon' => 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2'],
-                    ['label' => 'To Do', 'value' => $stats['todo'], 'color' => 'gray', 'icon' => 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'],
-                    ['label' => 'Dikerjakan', 'value' => $stats['in_progress'], 'color' => 'blue', 'icon' => 'M13 10V3L4 14h7v7l9-11h-7z'],
-                    ['label' => 'Selesai', 'value' => $stats['done'], 'color' => 'emerald', 'icon' => 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'],
-                    ['label' => 'Terlambat', 'value' => $stats['overdue'], 'color' => 'red', 'icon' => 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z'],
-                ];
-            @endphp
+        <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
             @foreach ($statItems as $stat)
-                <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-                    <div class="flex items-center gap-2 mb-1">
-                        <div class="w-7 h-7 rounded-lg bg-{{ $stat['color'] }}-50 flex items-center justify-center">
-                            <svg class="w-4 h-4 text-{{ $stat['color'] }}-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="{{ $stat['icon'] }}"/></svg>
+                <div class="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <div class="mb-2 flex items-center gap-2">
+                        <div class="flex h-8 w-8 items-center justify-center rounded-lg border {{ $stat['class'] }}">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="{{ $stat['icon'] }}"/></svg>
                         </div>
-                        <span class="text-[10px] uppercase font-bold tracking-wider text-gray-400">{{ $stat['label'] }}</span>
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">{{ $stat['label'] }}</span>
                     </div>
-                    <span class="text-2xl font-black text-gray-900">{{ $stat['value'] }}</span>
+                    <span class="text-2xl font-black text-slate-900">{{ $stat['value'] }}</span>
                 </div>
             @endforeach
         </div>
 
-        {{-- ═══ TABS ═══ --}}
-        <div class="flex items-center border-b border-gray-200">
-            <a href="?tab=active" class="px-6 py-3 border-b-2 text-sm font-bold transition-colors {{ $tab === 'active' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+        @if($isPjawab)
+            <div class="overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-sm">
+                <div class="flex flex-col gap-3 border-b border-emerald-100 bg-emerald-50/70 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900">Planning Penugasan Petugas</h2>
+                        <p class="mt-0.5 text-xs text-slate-500">Rekomendasi ini dibuat dari log SPK terbaru yang belum memiliki tugas aktif.</p>
+                    </div>
+                    <a href="{{ route('spk.dashboard') }}" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3h2v18h-2zM4 13h2v8H4zM18 8h2v13h-2z"/></svg>
+                        Analisa SPK
+                    </a>
+                </div>
+
+                <div class="grid gap-3 p-4 lg:grid-cols-2 2xl:grid-cols-3">
+                    @forelse($taskPlans as $plan)
+                        <div class="flex min-h-[190px] flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 transition hover:border-emerald-200 hover:shadow-sm">
+                            <div class="space-y-3">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">{{ $plan['barn'] }}</p>
+                                        <h3 class="mt-1 text-sm font-bold leading-snug text-slate-900">{{ $plan['title'] }}</h3>
+                                    </div>
+                                    <span class="shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold {{ $plan['priorityClass'] }}">
+                                        {{ $plan['priorityLabel'] }}
+                                    </span>
+                                </div>
+
+                                <p class="text-xs leading-relaxed text-slate-600">{{ $plan['recommendation'] }}</p>
+
+                                <div class="grid grid-cols-2 gap-2 text-[11px]">
+                                    <div class="rounded-lg bg-slate-50 px-3 py-2">
+                                        <span class="block font-bold uppercase tracking-wide text-slate-400">Alasan</span>
+                                        <span class="mt-0.5 block text-slate-700">{{ $plan['reason'] }}</span>
+                                    </div>
+                                    <div class="rounded-lg bg-sky-50 px-3 py-2">
+                                        <span class="block font-bold uppercase tracking-wide text-sky-500">Petugas</span>
+                                        <span class="mt-0.5 block text-slate-700">{{ $plan['assignee'] }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                                <span class="text-[11px] font-semibold text-slate-500">Tenggat {{ \Carbon\Carbon::parse($plan['due_date'])->format('d M Y') }}</span>
+                                <a href="{{ $plan['url'] }}" class="inline-flex items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-700">
+                                    Buat Tugas
+                                </a>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="col-span-full rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center">
+                            <p class="text-sm font-semibold text-slate-700">
+                                {{ $users->isEmpty() ? 'Belum ada petugas aktif untuk menerima tugas.' : 'Belum ada planning tugas baru dari log SPK terbaru.' }}
+                            </p>
+                            <p class="mt-1 text-xs text-slate-500">
+                                {{ $users->isEmpty() ? 'Tambahkan akun petugas terlebih dahulu agar rekomendasi bisa langsung ditugaskan.' : 'Semua log SPK terbaru sudah stabil atau sudah memiliki tugas aktif.' }}
+                            </p>
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+        @elseif($isPetugas)
+            <div class="rounded-xl border border-sky-100 bg-sky-50/70 px-5 py-4">
+                <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900">Agenda Petugas</h2>
+                        <p class="text-xs text-slate-500">Daftar di bawah otomatis hanya menampilkan tugas yang ditugaskan kepada akun Anda.</p>
+                    </div>
+                    <div class="flex gap-2 text-[11px] font-semibold">
+                        <span class="rounded-full bg-white px-3 py-1.5 text-sky-700">{{ $stats['todo'] }} To Do</span>
+                        <span class="rounded-full bg-white px-3 py-1.5 text-emerald-700">{{ $stats['in_progress'] }} Dikerjakan</span>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        <div class="flex flex-wrap items-center gap-2 border-b border-slate-200">
+            <a href="{{ route('spk.tasks.index', ['tab' => 'active']) }}" class="border-b-2 px-5 py-3 text-sm font-bold transition-colors {{ $tab === 'active' ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700' }}">
                 Papan Tugas Aktif
             </a>
-            <a href="?tab=history" class="px-6 py-3 border-b-2 text-sm font-bold transition-colors {{ $tab === 'history' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
-                Arsip & Histori Selesai
+            <a href="{{ route('spk.tasks.index', ['tab' => 'history']) }}" class="border-b-2 px-5 py-3 text-sm font-bold transition-colors {{ $tab === 'history' ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700' }}">
+                Arsip & Histori
             </a>
         </div>
 
         @if($tab === 'active')
-            {{-- ═══ ACTIVE TASKS (Kanban) ═══ --}}
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
-                <h3 class="text-sm font-bold text-gray-800">Board Penugasan</h3>
-                <form method="GET" action="{{ route('spk.tasks.index') }}" class="flex items-center gap-2">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <h3 class="text-sm font-bold text-slate-800">Board Penugasan</h3>
+                <form method="GET" action="{{ route('spk.tasks.index') }}" class="flex flex-wrap items-center gap-2">
                     <input type="hidden" name="tab" value="active">
-                    @if(session('user') && isset(session('user')['role']) && session('user')['role'] === 'pjawab')
-                    <select name="user_id" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-purple-400 cursor-pointer" onchange="this.form.submit()">
-                        <option value="all">Semua Petugas</option>
-                        @foreach($users as $user)
-                            <option value="{{ $user->id }}" {{ $userFilter == $user->id ? 'selected' : '' }}>{{ $user->name }}</option>
+                    @if($isPjawab)
+                        <select name="user_id" class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600 focus:border-emerald-400 focus:outline-none" onchange="this.form.submit()">
+                            <option value="all">Semua Petugas</option>
+                            @foreach($users as $user)
+                                <option value="{{ $user->id }}" {{ $userFilter == $user->id ? 'selected' : '' }}>{{ $user->name }}</option>
+                            @endforeach
+                        </select>
+                    @endif
+                    <select name="priority" class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600 focus:border-emerald-400 focus:outline-none" onchange="this.form.submit()">
+                        <option value="all" {{ $priorityFilter === 'all' ? 'selected' : '' }}>Semua Prioritas</option>
+                        @foreach($priorityOptions as $value => $label)
+                            <option value="{{ $value }}" {{ $priorityFilter === $value ? 'selected' : '' }}>{{ $label }}</option>
                         @endforeach
                     </select>
-                    @endif
-                    <select name="priority" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-purple-400 cursor-pointer" onchange="this.form.submit()">
-                        <option value="all" {{ $priorityFilter === 'all' ? 'selected' : '' }}>Semua Prioritas</option>
-                        <option value="urgent" {{ $priorityFilter === 'urgent' ? 'selected' : '' }}>Urgent</option>
-                        <option value="high" {{ $priorityFilter === 'high' ? 'selected' : '' }}>Tinggi</option>
-                        <option value="medium" {{ $priorityFilter === 'medium' ? 'selected' : '' }}>Sedang</option>
-                        <option value="low" {{ $priorityFilter === 'low' ? 'selected' : '' }}>Rendah</option>
-                    </select>
                     <div class="relative">
-                        <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                        <input type="text" name="search" value="{{ $search }}" placeholder="Cari tugas..." class="w-48 text-xs border border-gray-200 rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:border-purple-400" onchange="this.form.submit()">
+                        <svg class="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <input type="text" name="search" value="{{ $search }}" placeholder="Cari tugas..." class="w-full rounded-lg border border-slate-200 py-2 pl-8 pr-3 text-xs focus:border-emerald-400 focus:outline-none sm:w-52" onchange="this.form.submit()">
                     </div>
                 </form>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {{-- Column: TO DO --}}
-                <div class="bg-gray-50 rounded-xl p-3 border border-gray-100 min-h-[300px] shadow-inner">
-                    <h4 class="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-1 py-2 flex items-center justify-between border-b border-gray-200 mb-3">
+            <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <div class="min-h-[320px] rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <h4 class="mb-3 flex items-center justify-between border-b border-slate-200 px-1 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                         <span class="flex items-center gap-1.5">
-                            <span class="w-2 h-2 rounded-full bg-gray-400"></span> To Do
+                            <span class="h-2 w-2 rounded-full bg-slate-400"></span> To Do
                         </span>
-                        <span class="bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded text-[10px] font-bold">{{ $kanban['todo']->count() }}</span>
+                        <span class="rounded bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-700">{{ $kanban['todo']->count() }}</span>
                     </h4>
                     <div class="space-y-2">
                         @forelse ($kanban['todo'] as $task)
                             @include('spk.partials.task-card', ['task' => $task])
                         @empty
-                            <p class="text-[11px] text-gray-400 text-center py-8">Tidak ada tugas</p>
+                            <p class="py-8 text-center text-[11px] text-slate-400">Tidak ada tugas</p>
                         @endforelse
                     </div>
                 </div>
 
-                {{-- Column: IN PROGRESS --}}
-                <div class="bg-blue-50/40 rounded-xl p-3 border border-blue-100 min-h-[300px] shadow-inner">
-                    <h4 class="text-[10px] font-bold text-blue-600 uppercase tracking-widest px-1 py-2 flex items-center justify-between border-b border-blue-200 mb-3">
+                <div class="min-h-[320px] rounded-xl border border-sky-100 bg-sky-50/50 p-3">
+                    <h4 class="mb-3 flex items-center justify-between border-b border-sky-100 px-1 py-2 text-[10px] font-bold uppercase tracking-widest text-sky-600">
                         <span class="flex items-center gap-1.5">
-                            <span class="w-2 h-2 rounded-full bg-blue-500"></span> Dikerjakan
+                            <span class="h-2 w-2 rounded-full bg-sky-500"></span> Dikerjakan
                         </span>
-                        <span class="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-bold">{{ $kanban['in_progress']->count() }}</span>
+                        <span class="rounded bg-white px-1.5 py-0.5 text-[10px] font-bold text-sky-700">{{ $kanban['in_progress']->count() }}</span>
                     </h4>
                     <div class="space-y-2">
                         @forelse ($kanban['in_progress'] as $task)
                             @include('spk.partials.task-card', ['task' => $task])
                         @empty
-                            <p class="text-[11px] text-blue-400 text-center py-8">Tidak ada tugas</p>
+                            <p class="py-8 text-center text-[11px] text-sky-400">Tidak ada tugas</p>
                         @endforelse
                     </div>
                 </div>
@@ -125,222 +210,215 @@
         @endif
 
         @if($tab === 'history')
-            {{-- ═══ HISTORY TASKS (Table) ═══ --}}
-            <div class="bg-white border border-gray-100 rounded-xl shadow-sm">
-                <div class="p-4 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <h3 class="text-sm font-bold text-gray-800">Histori & Arsip Tugas</h3>
+            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div class="flex flex-col gap-4 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
+                    <h3 class="text-sm font-bold text-slate-800">Histori & Arsip Tugas</h3>
                     <form method="GET" action="{{ route('spk.tasks.index') }}" class="flex flex-wrap items-center gap-2">
                         <input type="hidden" name="tab" value="history">
-                        
-                        @if(session('user') && isset(session('user')['role']) && session('user')['role'] === 'pjawab')
-                        <select name="user_id" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-purple-400" onchange="this.form.submit()">
-                            <option value="all">Semua Petugas</option>
-                            @foreach($users as $user)
-                                <option value="{{ $user->id }}" {{ $userFilter == $user->id ? 'selected' : '' }}>{{ $user->name }}</option>
-                            @endforeach
-                        </select>
+
+                        @if($isPjawab)
+                            <select name="user_id" class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600 focus:border-emerald-400 focus:outline-none" onchange="this.form.submit()">
+                                <option value="all">Semua Petugas</option>
+                                @foreach($users as $user)
+                                    <option value="{{ $user->id }}" {{ $userFilter == $user->id ? 'selected' : '' }}>{{ $user->name }}</option>
+                                @endforeach
+                            </select>
                         @endif
-                        
+
                         <div class="flex items-center gap-1">
-                            <input type="date" name="start_date" value="{{ $startDate }}" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-purple-400" onchange="this.form.submit()">
-                            <span class="text-gray-400 text-xs">-</span>
-                            <input type="date" name="end_date" value="{{ $endDate }}" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-purple-400" onchange="this.form.submit()">
+                            <input type="date" name="start_date" value="{{ $startDate }}" class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600 focus:border-emerald-400 focus:outline-none" onchange="this.form.submit()">
+                            <span class="text-xs text-slate-400">-</span>
+                            <input type="date" name="end_date" value="{{ $endDate }}" class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600 focus:border-emerald-400 focus:outline-none" onchange="this.form.submit()">
                         </div>
 
-                        <select name="status" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-purple-400" onchange="this.form.submit()">
-                            <option value="all">Semua (Done/Cancel)</option>
+                        <select name="status" class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600 focus:border-emerald-400 focus:outline-none" onchange="this.form.submit()">
+                            <option value="all">Semua Status</option>
                             <option value="done" {{ $statusFilter == 'done' ? 'selected' : '' }}>Selesai</option>
                             <option value="cancelled" {{ $statusFilter == 'cancelled' ? 'selected' : '' }}>Dibatalkan</option>
                         </select>
                     </form>
                 </div>
-                
+
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
+                    <table class="w-full border-collapse text-left">
                         <thead>
-                            <tr class="bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                <th class="p-3 border-b border-gray-200">Judul Tugas</th>
-                                <th class="p-3 border-b border-gray-200">Petugas</th>
-                                <th class="p-3 border-b border-gray-200">Waktu Selesai</th>
-                                <th class="p-3 border-b border-gray-200">Status</th>
-                                <th class="p-3 border-b border-gray-200 text-right">Aksi</th>
+                            <tr class="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                <th class="border-b border-slate-200 p-3">Judul Tugas</th>
+                                <th class="border-b border-slate-200 p-3">Petugas</th>
+                                <th class="border-b border-slate-200 p-3">Waktu Selesai</th>
+                                <th class="border-b border-slate-200 p-3">Status</th>
+                                <th class="border-b border-slate-200 p-3 text-right">Aksi</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-100">
+                        <tbody class="divide-y divide-slate-100">
                             @forelse($historyTasks as $htask)
-                                <tr class="hover:bg-gray-50/50 transition">
+                                <tr class="transition hover:bg-slate-50/70">
                                     <td class="p-3">
-                                        <p class="text-xs font-semibold text-gray-800 line-clamp-1">{{ $htask->title }}</p>
-                                        <p class="text-[10px] text-gray-400">{{ $htask->unitBudidaya->nama ?? 'Umum' }}</p>
+                                        <p class="line-clamp-1 text-xs font-semibold text-slate-800">{{ $htask->title }}</p>
+                                        <p class="text-[10px] text-slate-400">{{ $htask->unitBudidaya->nama ?? 'Umum' }}</p>
                                     </td>
                                     <td class="p-3">
                                         <div class="flex items-center gap-1.5">
-                                            <div class="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center text-[8px] font-bold text-purple-600">
+                                            <div class="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-[8px] font-bold text-emerald-700">
                                                 {{ $htask->assignee ? strtoupper(substr($htask->assignee->name, 0, 1)) : '?' }}
                                             </div>
-                                            <span class="text-xs text-gray-600">{{ $htask->assignee->name ?? 'Tidak ada' }}</span>
+                                            <span class="text-xs text-slate-600">{{ $htask->assignee->name ?? 'Tidak ada' }}</span>
                                         </div>
                                     </td>
-                                    <td class="p-3 text-xs text-gray-500">
+                                    <td class="p-3 text-xs text-slate-500">
                                         {{ $htask->completed_at ? $htask->completed_at->format('d M Y, H:i') : '-' }}
                                     </td>
                                     <td class="p-3">
                                         @if($htask->status == 'done')
-                                            <span class="text-[10px] font-bold uppercase px-2 py-1 rounded bg-emerald-100 text-emerald-700">Selesai</span>
+                                            <span class="rounded bg-emerald-100 px-2 py-1 text-[10px] font-bold uppercase text-emerald-700">Selesai</span>
                                         @else
-                                            <span class="text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-100 text-red-700">Dibatalkan</span>
+                                            <span class="rounded bg-rose-100 px-2 py-1 text-[10px] font-bold uppercase text-rose-700">Dibatalkan</span>
                                         @endif
                                     </td>
                                     <td class="p-3 text-right">
-                                        <a href="{{ route('spk.tasks.show', $htask->id) }}" class="text-xs font-semibold text-purple-600 hover:text-purple-800 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition">Detail</a>
+                                        <a href="{{ route('spk.tasks.show', $htask->id) }}" class="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">Detail</a>
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="p-8 text-center text-gray-400 text-xs">Belum ada histori tugas yang diselesaikan.</td>
+                                    <td colspan="5" class="p-8 text-center text-xs text-slate-400">Belum ada histori tugas yang diselesaikan.</td>
                                 </tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
-                
+
                 @if($historyTasks->hasPages())
-                    <div class="p-4 border-t border-gray-100">
+                    <div class="border-t border-slate-100 p-4">
                         {{ $historyTasks->links() }}
                     </div>
                 @endif
             </div>
         @endif
 
-
-        {{-- ═══ CREATE TASK MODAL ═══ --}}
         <div x-show="showCreateModal" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="showCreateModal = false" style="display: none;">
-            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" @click.stop>
-                <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                    <h3 class="text-sm font-bold text-gray-900 flex items-center gap-2">
-                        <svg class="w-5 h-5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            <div class="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl" @click.stop>
+                <div class="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <h3 class="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        <svg class="h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                         Buat Tugas Baru
                     </h3>
-                    <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <button @click="showCreateModal = false" class="text-slate-400 hover:text-slate-600">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
-                <form method="POST" action="{{ route('spk.tasks.store') }}" class="px-6 py-5 space-y-4">
+                <form method="POST" action="{{ route('spk.tasks.store') }}" class="space-y-4 px-6 py-5">
                     @csrf
                     <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Judul Tugas <span class="text-red-500">*</span></label>
-                        <input type="text" name="title" required placeholder="e.g. Perbaiki ventilasi kandang A2" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200">
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">Judul Tugas <span class="text-rose-500">*</span></label>
+                        <input type="text" name="title" required value="{{ old('title', $prefill['title']) }}" placeholder="Contoh: Perbaiki ventilasi kandang A2" class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-200">
                     </div>
-                    
-                    {{-- SPK Reference Dropdown --}}
+
                     <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Sumber Rekomendasi SPK</label>
-                        <select name="spk_fuzzy_log_id" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:border-purple-400">
-                            <option value="">— Tidak Berkaitan dengan SPK (Tugas Umum) —</option>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">Sumber Rekomendasi SPK</label>
+                        <select name="spk_fuzzy_log_id" class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none">
+                            <option value="">Tidak berkaitan dengan SPK</option>
                             @foreach($recentSpks as $spk)
                                 @php
                                     $spkDate = \Carbon\Carbon::parse($spk->createdAt)->format('d M y H:i');
                                     $barnName = $spk->unitBudidaya->nama ?? 'Global';
                                 @endphp
-                                <option value="{{ $spk->id }}" {{ $prefill['spk_id'] == $spk->id ? 'selected' : '' }}>
-                                    [{{ $spkDate }} - {{ $barnName }}] {{ \Str::limit($spk->recommendation, 60) }}
+                                <option value="{{ $spk->id }}" {{ old('spk_fuzzy_log_id', $prefill['spk_id']) == $spk->id ? 'selected' : '' }}>
+                                    [{{ $spkDate }} - {{ $barnName }}] {{ \Str::limit($spk->recommendation ?: $spk->narrative, 60) }}
                                 </option>
                             @endforeach
                         </select>
-                        <p class="text-[10px] text-gray-400 mt-1">Pilih ini jika tugas adalah tindak lanjut dari hasil analisa SPK sebelumnya.</p>
                     </div>
 
                     <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Deskripsi & Rekomendasi</label>
-                        <textarea name="description" rows="3" placeholder="Detail tindakan yang harus dilakukan..." class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200">{{ $prefill['desc'] }}</textarea>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">Deskripsi & Rekomendasi</label>
+                        <textarea name="description" rows="4" placeholder="Detail tindakan yang harus dilakukan..." class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-200">{{ old('description', $prefill['desc']) }}</textarea>
                     </div>
-                    
-                    <div class="grid grid-cols-2 gap-3">
+
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">Prioritas <span class="text-red-500">*</span></label>
-                            <select name="priority" required class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:border-purple-400">
-                                <option value="medium">Sedang</option>
-                                <option value="urgent">Urgent</option>
-                                <option value="high">Tinggi</option>
-                                <option value="low">Rendah</option>
+                            <label class="mb-1 block text-xs font-semibold text-slate-600">Prioritas <span class="text-rose-500">*</span></label>
+                            <select name="priority" required class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none">
+                                @foreach($priorityOptions as $value => $label)
+                                    <option value="{{ $value }}" {{ old('priority', $prefill['priority']) === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                @endforeach
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">Tenggat Waktu</label>
-                            <input type="date" name="due_date" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:border-purple-400">
+                            <label class="mb-1 block text-xs font-semibold text-slate-600">Tenggat Waktu</label>
+                            <input type="date" name="due_date" value="{{ old('due_date', $prefill['due_date']) }}" class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none">
                         </div>
                     </div>
-                    
-                    <div class="grid grid-cols-2 gap-3">
+
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">Ditugaskan Kepada</label>
-                            <select name="assigned_to" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:border-purple-400">
-                                <option value="">— Belum ditugaskan —</option>
+                            <label class="mb-1 block text-xs font-semibold text-slate-600">Ditugaskan Kepada</label>
+                            <select name="assigned_to" class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none">
+                                <option value="">Belum ditugaskan</option>
                                 @foreach ($users as $user)
-                                    <option value="{{ $user->id }}">{{ $user->name }}</option>
+                                    <option value="{{ $user->id }}" {{ old('assigned_to', $prefill['assigned_to']) == $user->id ? 'selected' : '' }}>{{ $user->name }}</option>
                                 @endforeach
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">Kandang Target</label>
-                            <select name="unit_budidaya_id" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:border-purple-400">
-                                <option value="">— Umum —</option>
+                            <label class="mb-1 block text-xs font-semibold text-slate-600">Kandang Target</label>
+                            <select name="unit_budidaya_id" class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none">
+                                <option value="">Umum</option>
                                 @foreach ($barns as $barn)
-                                    <option value="{{ $barn->id }}" {{ $prefill['coop_id'] == $barn->id ? 'selected' : '' }}>{{ $barn->nama }}</option>
+                                    <option value="{{ $barn->id }}" {{ old('unit_budidaya_id', $prefill['coop_id']) == $barn->id ? 'selected' : '' }}>{{ $barn->nama }}</option>
                                 @endforeach
                             </select>
                         </div>
                     </div>
-                    
+
                     <div class="flex justify-end gap-2 pt-2">
-                        <button type="button" @click="showCreateModal = false" class="text-xs font-semibold text-gray-500 bg-gray-100 hover:bg-gray-200 px-4 py-2.5 rounded-lg transition">Batal</button>
-                        <button type="submit" class="text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 px-5 py-2.5 rounded-lg transition shadow-sm">Simpan Tugas</button>
+                        <button type="button" @click="showCreateModal = false" class="rounded-lg bg-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-200">Batal</button>
+                        <button type="submit" class="rounded-lg bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700">Simpan Tugas</button>
                     </div>
                 </form>
             </div>
         </div>
 
-        {{-- ═══ REPORT MODAL ═══ --}}
         <div x-show="showReportModal" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="showReportModal = false" style="display: none;">
-            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg" @click.stop>
-                <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                    <h3 class="text-sm font-bold text-gray-900 flex items-center gap-2">
-                        <svg class="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            <div class="w-full max-w-lg rounded-2xl bg-white shadow-2xl" @click.stop>
+                <div class="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <h3 class="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        <svg class="h-5 w-5 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                         Laporan Pengerjaan
                     </h3>
-                    <button @click="showReportModal = false" class="text-gray-400 hover:text-gray-600">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <button @click="showReportModal = false" class="text-slate-400 hover:text-slate-600">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
-                <form :action="reportActionUrl" method="POST" class="px-6 py-5 space-y-4">
+                <form :action="reportActionUrl" method="POST" enctype="multipart/form-data" class="space-y-4 px-6 py-5">
                     @csrf
-                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                        <p class="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Tugas</p>
-                        <p class="text-sm font-semibold text-gray-800" x-text="reportTaskTitle"></p>
+                    <div class="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                        <p class="mb-0.5 text-[10px] font-bold uppercase text-slate-400">Tugas</p>
+                        <p class="text-sm font-semibold text-slate-800" x-text="reportTaskTitle"></p>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Catatan Pengerjaan <span class="text-red-500">*</span></label>
-                        <textarea name="description" rows="3" required placeholder="Jelaskan apa yang sudah dikerjakan..." class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"></textarea>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">Catatan Pengerjaan <span class="text-rose-500">*</span></label>
+                        <textarea name="description" rows="3" required placeholder="Jelaskan apa yang sudah dikerjakan..." class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-200"></textarea>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">URL Bukti Foto (Opsional)</label>
-                        <input type="text" name="photo" placeholder="https://..." class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:border-blue-400">
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">Upload Bukti Foto (Opsional)</label>
+                        <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-sky-700 focus:border-sky-400 focus:outline-none">
+                        <p class="mt-1 text-[10px] text-slate-400">Format JPG, PNG, atau WebP. Maksimal 4 MB.</p>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Update Status <span class="text-red-500">*</span></label>
-                        <select name="status_update" required class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:border-blue-400">
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">Update Status <span class="text-rose-500">*</span></label>
+                        <select name="status_update" required class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-sky-400 focus:outline-none">
                             <option value="in_progress">Masih Dikerjakan</option>
                             <option value="done">Selesai</option>
                         </select>
                     </div>
                     <div class="flex justify-end gap-2 pt-2">
-                        <button type="button" @click="showReportModal = false" class="text-xs font-semibold text-gray-500 bg-gray-100 hover:bg-gray-200 px-4 py-2.5 rounded-lg transition">Batal</button>
-                        <button type="submit" class="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 px-5 py-2.5 rounded-lg transition shadow-sm">Kirim Laporan</button>
+                        <button type="button" @click="showReportModal = false" class="rounded-lg bg-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-200">Batal</button>
+                        <button type="submit" class="rounded-lg bg-sky-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700">Kirim Laporan</button>
                     </div>
                 </form>
             </div>
         </div>
-
     </div>
 @endsection
 

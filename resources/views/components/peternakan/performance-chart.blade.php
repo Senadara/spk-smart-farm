@@ -21,9 +21,9 @@
 
         get subtitle() {
             return {
-                '30d': 'HDP vs FCR — 30 hari terakhir',
-                '90d': 'HDP vs FCR — 90 hari terakhir',
-                'ytd': 'HDP vs FCR — year to date',
+                '30d': 'HDP vs FCR - 30 hari terakhir',
+                '90d': 'HDP vs FCR - 90 hari terakhir',
+                'ytd': 'HDP vs FCR - year to date',
             }[this.range] ?? 'Comparing HDP vs FCR';
         },
 
@@ -108,7 +108,7 @@
             });
         },
     }"
-    {{ $attributes->merge(['class' => 'bg-white border border-gray-100 rounded-xl p-5 shadow-sm flex flex-col h-full']) }}
+    {{ $attributes->merge(['class' => 'bg-white border border-gray-100 rounded-xl p-5 shadow-sm flex flex-col h-full min-h-[320px]']) }}
 >
     <div class="flex flex-wrap items-center justify-between gap-3 mb-4 shrink-0">
         <div>
@@ -121,7 +121,7 @@
             <button @click="range = 'ytd'" :class="range === 'ytd' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'" class="px-3 py-1.5 text-xs font-medium rounded-md transition-all">YTD</button>
         </div>
     </div>
-    <div class="flex-1 relative min-h-[200px]">
+    <div class="flex-1 relative min-h-[220px]">
         <canvas x-ref="canvas"></canvas>
     </div>
 </div>

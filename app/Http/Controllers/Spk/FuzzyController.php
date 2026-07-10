@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Spk;
 
 use App\Http\Controllers\Controller;
 use App\Models\SpkFuzzyLog;
+use App\Models\SpkFuzzyProfile;
 use App\Services\Fuzzy\InputResolver;
 use App\Services\Fuzzy\MamdaniEngine;
 use App\Services\Fuzzy\NarrativeGenerator;
@@ -31,6 +32,8 @@ class FuzzyController extends Controller
     public function processFuzzy(Request $request): JsonResponse
     {
         $coopId   = $request->query('coop_id');  // null = global
+        $commodityId = $request->query('commodity_id') ?: $request->query('komoditas');
+        $profileId = $request->query('profile_id');
         $barnName = null;
 
         if ($coopId) {
@@ -40,10 +43,12 @@ class FuzzyController extends Controller
 
         try {
             // 1. Kumpulkan input dari semua sumber
-            $inputs = $this->resolver->resolve($coopId);
+            $profile = SpkFuzzyProfile::resolveForContext($commodityId, $coopId, $profileId);
+            $commodityId = $commodityId ?: $profile?->commodity_id;
+            $inputs = $this->resolver->resolve($coopId, $commodityId, $profile?->id);
 
             // 2. Jalankan 3-engine cascaded Mamdani
-            $result = $this->engine->processCascaded($inputs);
+            $result = $this->engine->processCascaded($inputs, $profile?->id, $commodityId, $coopId);
 
             // 3. Generate narasi AI-like
             $narrative = $this->narrator->generate($result, $barnName);
@@ -51,6 +56,8 @@ class FuzzyController extends Controller
             // 4. Simpan ke log
             $log = SpkFuzzyLog::create([
                 'unit_budidaya_id'    => $coopId,
+                'profile_id'          => $result['profile']['id'] ?? $profile?->id,
+                'commodity_id'        => $result['profile']['commodity_id'] ?? $commodityId,
                 'input_json'          => $inputs,
                 'fuzzified_json'      => [
                     'lingkungan' => $result['lingkungan']['fuzzified'] ?? [],
@@ -74,6 +81,8 @@ class FuzzyController extends Controller
                 'success'    => true,
                 'log_id'     => $log->id,
                 'coop_id'    => $coopId,
+                'profile'    => $result['profile'] ?? null,
+                'commodity_id' => $result['profile']['commodity_id'] ?? $commodityId,
                 'barn_name'  => $barnName,
                 'inputs'     => $inputs,
                 'result'     => [
@@ -198,13 +207,24 @@ class FuzzyController extends Controller
     /**
      * Tampilkan konfigurasi aktif (variabel, sets, rules) — untuk debugging/admin.
      */
-    public function getConfig(): JsonResponse
+    public function getConfig(Request $request): JsonResponse
     {
-        $variables = \App\Models\SpkFuzzyVariable::with(['sets', 'inputSource'])->get();
-        $rules     = \App\Models\SpkFuzzyRule::with(['conditions.variable', 'conditions.set', 'outputSet'])->get();
+        $profile = SpkFuzzyProfile::resolveForContext(
+            $request->query('commodity_id') ?: $request->query('komoditas'),
+            $request->query('coop_id'),
+            $request->query('profile_id')
+        );
+
+        $variables = \App\Models\SpkFuzzyVariable::with(['sets', 'inputSource'])
+            ->when($profile, fn ($query) => $query->where('profile_id', $profile->id))
+            ->get();
+        $rules = \App\Models\SpkFuzzyRule::with(['conditions.variable', 'conditions.set', 'outputSet'])
+            ->when($profile, fn ($query) => $query->where('profile_id', $profile->id))
+            ->get();
 
         return response()->json([
             'success'   => true,
+            'profile'   => $profile,
             'variables' => $variables,
             'rules'     => $rules,
         ]);

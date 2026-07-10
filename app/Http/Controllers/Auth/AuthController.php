@@ -2,9 +2,8 @@
 
 namespace App\Http\Controllers\Auth;
 
-use App\Http\Controllers\Controller;
-
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Models\LoginHistory;
 use App\Services\AuthService;
@@ -45,20 +44,24 @@ class AuthController extends Controller
             $user = $response['data'] ?? $response['user'] ?? [];
             LoginHistory::updateOrCreate(
                 [
-                    'email'      => $user['email'] ?? $request->input('email'),
+                    'email' => $user['email'] ?? $request->input('email'),
                     'ipAddress' => $request->ip(),
                     'userAgent' => $request->userAgent(),
                 ],
                 [
-                    'userId'  => $user['id'] ?? null,
-                    'name'     => $user['name'] ?? '-',
-                    'role'     => $user['role'] ?? '-',
+                    'userId' => $user['id'] ?? null,
+                    'name' => $user['name'] ?? '-',
+                    'role' => $user['role'] ?? '-',
                     'createdAt' => now(),
                 ]
             );
 
-            return redirect()->route('dashboard')
-                ->with('success', 'Selamat datang, ' . ($user['name'] ?? 'User') . '!');
+            $destination = ($user['role'] ?? null) === 'supplier'
+                ? 'supplier.dashboard'
+                : 'dashboard';
+
+            return redirect()->route($destination)
+                ->with('success', 'Selamat datang, '.($user['name'] ?? 'User').'!');
         } catch (ApiException $e) {
             return back()
                 ->withInput($request->only('email'))

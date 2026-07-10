@@ -2,12 +2,13 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Dashboard\DashboardController;
+use App\Http\Controllers\DataMasterController;
 use App\Http\Controllers\Inventory\InventoryController;
 use App\Http\Controllers\Iot\IotController;
-use App\Http\Controllers\Peternakan\PeternakanController;
 use App\Http\Controllers\Perkebunan\PerkebunanController;
-use App\Http\Controllers\DataMasterController;
+use App\Http\Controllers\Peternakan\PeternakanController;
 use App\Http\Controllers\Profile\ProfileController;
+use App\Http\Controllers\Supplier\SupplierPanelController;
 use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
 
@@ -17,33 +18,38 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 |
 | Route structure:
-| 1. Root → redirect ke dashboard (jika login) atau login (jika guest)
-| 2. Guest routes → login (protected: guest.api middleware)
-| 3. Auth routes → dashboard, profil, logout (protected: auth.api middleware)
+| 1. Root -> redirect ke dashboard (jika login) atau login (jika guest)
+| 2. Guest routes -> login (protected: guest.api middleware)
+| 3. Auth routes -> dashboard, profil, logout (protected: auth.api middleware)
 |
 */
 
 // Root redirect
 Route::get('/', function () {
     if (session()->has('api_token')) {
+        if (session('user.role') === 'supplier') {
+            return redirect()->route('supplier.dashboard');
+        }
+
         return redirect()->route('dashboard');
     }
+
     return redirect()->route('login');
 });
 
-// Guest routes — hanya bisa diakses kalau BELUM login
+// Guest routes - hanya bisa diakses kalau BELUM login
 Route::middleware('guest.api')->group(function () {
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
 });
 
-// Webhook IoT — HARUS di luar auth.api agar device IoT bisa kirim data tanpa login
+// Webhook IoT - HARUS di luar auth.api agar device IoT bisa kirim data tanpa login
 Route::post('/iot/webhook/{deviceCode}', [IotController::class, 'handleWebhook'])
     ->name('iot.webhook')
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 
-// Auth routes — hanya bisa diakses jika berhasil login
-Route::middleware('auth.api')->group(function () {
+// Auth routes - hanya bisa diakses jika berhasil login
+Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual,user'])->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -54,6 +60,7 @@ Route::middleware('auth.api')->group(function () {
 
     // Analisa SPK
     Route::get('/spk-analysis', [\App\Http\Controllers\Spk\SpkDashboardController::class, 'index'])->name('spk.dashboard');
+    Route::post('/spk-analysis/evaluate', [\App\Http\Controllers\Spk\SpkDashboardController::class, 'evaluate'])->name('spk.dashboard.evaluate');
 
     // Fuzzy Mamdani Engine
     Route::prefix('spk-fuzzy')->group(function () {
@@ -62,7 +69,7 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/history/{id}', [\App\Http\Controllers\Spk\FuzzyController::class, 'getHistoryDetail'])->name('spk.fuzzy.history.detail');
         Route::get('/config', [\App\Http\Controllers\Spk\FuzzyController::class, 'getConfig'])->name('spk.fuzzy.config');
     });
-    
+
     // SPK Supplier Recommendations (AHP-SAW DSS)
     Route::prefix('spk-suppliers')->group(function () {
         Route::get('/', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'index'])->name('spk.suppliers.index');
@@ -95,32 +102,32 @@ Route::middleware('auth.api')->group(function () {
         Route::get('/config', [IotController::class, 'config'])->name('iot.config');
         Route::get('/monitoring', [IotController::class, 'monitoring'])->name('iot.monitoring');
 
-        // CRUD Endpoints — Devices
+        // CRUD Endpoints - Devices
         Route::post('/devices', [IotController::class, 'storeDevice'])->name('iot.devices.store');
         Route::put('/devices/{id}', [IotController::class, 'updateDevice'])->name('iot.devices.update');
         Route::delete('/devices/{id}', [IotController::class, 'destroyDevice'])->name('iot.devices.destroy');
 
-        // CRUD Endpoints — Mappings
+        // CRUD Endpoints - Mappings
         Route::post('/mappings', [IotController::class, 'storeMapping'])->name('iot.mappings.store');
         Route::put('/mappings/{id}', [IotController::class, 'updateMapping'])->name('iot.mappings.update');
         Route::delete('/mappings/{id}', [IotController::class, 'destroyMapping'])->name('iot.mappings.destroy');
 
-        // CRUD Endpoints — Protocols
+        // CRUD Endpoints - Protocols
         Route::post('/protocols', [IotController::class, 'storeProtocol'])->name('iot.protocols.store');
         Route::put('/protocols/{id}', [IotController::class, 'updateProtocol'])->name('iot.protocols.update');
         Route::delete('/protocols/{id}', [IotController::class, 'destroyProtocol'])->name('iot.protocols.destroy');
 
-        // CRUD Endpoints — Connections
+        // CRUD Endpoints - Connections
         Route::post('/connections', [IotController::class, 'storeConnection'])->name('iot.connections.store');
         Route::put('/connections/{id}', [IotController::class, 'updateConnection'])->name('iot.connections.update');
         Route::delete('/connections/{id}', [IotController::class, 'destroyConnection'])->name('iot.connections.destroy');
 
-        // CRUD Endpoints — Parameters
+        // CRUD Endpoints - Parameters
         Route::post('/parameters', [IotController::class, 'storeParameter'])->name('iot.parameters.store');
         Route::put('/parameters/{id}', [IotController::class, 'updateParameter'])->name('iot.parameters.update');
         Route::delete('/parameters/{id}', [IotController::class, 'destroyParameter'])->name('iot.parameters.destroy');
 
-        // CRUD Endpoints — Commodity Parameters
+        // CRUD Endpoints - Commodity Parameters
         Route::post('/commodity-params', [IotController::class, 'storeCommodityParam'])->name('iot.commodity-params.store');
         Route::put('/commodity-params/{id}', [IotController::class, 'updateCommodityParam'])->name('iot.commodity-params.update');
         Route::delete('/commodity-params/{id}', [IotController::class, 'destroyCommodityParam'])->name('iot.commodity-params.destroy');
@@ -130,6 +137,13 @@ Route::middleware('auth.api')->group(function () {
 
     // Inventaris
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory');
+    Route::prefix('inventory')->name('inventory.')->group(function () {
+        Route::post('/items', [InventoryController::class, 'store'])->name('items.store');
+        Route::get('/items/{item}', [InventoryController::class, 'show'])->name('items.show');
+        Route::post('/items/{item}/adjust', [InventoryController::class, 'adjust'])->name('items.adjust');
+        Route::post('/purchase-order', [InventoryController::class, 'purchaseOrder'])->name('purchase-order');
+        Route::get('/analysis', [InventoryController::class, 'analysis'])->name('analysis');
+    });
 
     // Data Master (DASH-02)
     Route::get('/data-master', [DataMasterController::class, 'index'])->name('data-master.index');
@@ -161,10 +175,7 @@ Route::middleware('auth.api')->group(function () {
         Route::post('/reset', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'resetToDefault'])->name('settings.fuzzy.reset');
     });
 
-    // Profil
-    Route::get('/profil', [ProfileController::class, 'show'])->name('profile');
-
-    // Supplier Management & SPK AHP-SAW Config 
+    // Supplier Management & SPK AHP-SAW Config
     Route::prefix('supplier-spk')->group(function () {
         Route::apiResource('suppliers', \App\Http\Controllers\SupplierController::class);
         Route::get('parameters', [\App\Http\Controllers\SpkParameterController::class, 'index'])->name('spk.parameters.index');
@@ -175,6 +186,26 @@ Route::middleware('auth.api')->group(function () {
         Route::get('evaluation/{produkId}', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiEvaluation'])->name('spk.suppliers.evaluation');
     });
 
-    // Logout
+});
+
+Route::middleware('auth.api')->group(function () {
+    Route::get('/profil', [ProfileController::class, 'show'])->name('profile');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+    Route::middleware('role:supplier')->prefix('supplier')->name('supplier.')->group(function () {
+        Route::get('/', [SupplierPanelController::class, 'dashboard'])->name('dashboard');
+        Route::get('/store', [SupplierPanelController::class, 'editStore'])->name('store.edit');
+        Route::put('/store', [SupplierPanelController::class, 'updateStore'])->name('store.update');
+
+        Route::get('/products', [SupplierPanelController::class, 'products'])->name('products.index');
+        Route::post('/products', [SupplierPanelController::class, 'storeProduct'])->name('products.store');
+        Route::put('/products/{product}', [SupplierPanelController::class, 'updateProduct'])->name('products.update');
+        Route::delete('/products/{product}', [SupplierPanelController::class, 'destroyProduct'])->name('products.destroy');
+
+        Route::get('/orders', [SupplierPanelController::class, 'orders'])->name('orders.index');
+        Route::patch('/orders/{order}/status', [SupplierPanelController::class, 'updateOrderStatus'])
+            ->name('orders.status');
+
+        Route::get('/finance', [SupplierPanelController::class, 'finance'])->name('finance');
+    });
 });

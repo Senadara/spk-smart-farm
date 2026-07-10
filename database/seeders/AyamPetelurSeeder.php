@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Carbon\Carbon;
 use Illuminate\Support\Str;
 
 class AyamPetelurSeeder extends Seeder
@@ -19,7 +18,7 @@ class AyamPetelurSeeder extends Seeder
 
         // 0. Ensure User
         $user = DB::table('user')->first();
-        if (!$user) {
+        if (! $user) {
             $userId = Str::uuid()->toString();
             DB::table('user')->insert([
                 'id' => $userId,
@@ -35,7 +34,7 @@ class AyamPetelurSeeder extends Seeder
 
         // 1. Ensure Jenis Budidaya
         $jenisBudidaya = DB::table('jenisBudidaya')->where('nama', 'Ayam Petelur')->first();
-        if (!$jenisBudidaya) {
+        if (! $jenisBudidaya) {
             $jenisBudidayaId = Str::uuid()->toString();
             $jenisBudidayaData = [
                 'id' => $jenisBudidayaId,
@@ -69,7 +68,7 @@ class AyamPetelurSeeder extends Seeder
 
         // 1.5 Ensure Komoditas Ayam Layer
         $komoditas = DB::table('komoditas')->where('nama', 'Ayam Layer')->where('jenisBudidayaId', $jenisBudidayaId)->first();
-        if (!$komoditas) {
+        if (! $komoditas) {
             DB::table('komoditas')->insert([
                 'id' => Str::uuid()->toString(),
                 'jenisBudidayaId' => $jenisBudidayaId,
@@ -86,7 +85,7 @@ class AyamPetelurSeeder extends Seeder
         $gradeIds = [];
         foreach ($grades as $g) {
             $grade = DB::table('grade')->where('nama', $g)->first();
-            if (!$grade) {
+            if (! $grade) {
                 $id = Str::uuid()->toString();
                 DB::table('grade')->insert(['id' => $id, 'nama' => $g, 'createdAt' => now(), 'updatedAt' => now()]);
                 $gradeIds[$g] = $id;
@@ -100,7 +99,7 @@ class AyamPetelurSeeder extends Seeder
         $paramIds = [];
         foreach ($params as $code => $name) {
             $p = DB::table('iot_parameter')->where('parameterCode', $code)->first();
-            if (!$p) {
+            if (! $p) {
                 $id = Str::uuid()->toString();
                 DB::table('iot_parameter')->insert([
                     'id' => $id,
@@ -117,7 +116,7 @@ class AyamPetelurSeeder extends Seeder
 
         // 4. Ensure IoT Protocol
         $protocol = DB::table('iot_protocol')->where('protocolName', 'MQTT')->first();
-        if (!$protocol) {
+        if (! $protocol) {
             $protocolId = Str::uuid()->toString();
             DB::table('iot_protocol')->insert([
                 'id' => $protocolId,
@@ -131,7 +130,7 @@ class AyamPetelurSeeder extends Seeder
 
         // 5. Ensure Connection Config
         $config = DB::table('iot_connection_config')->where('mqttBrokerUrl', 'broker.hivemq.com')->first();
-        if (!$config) {
+        if (! $config) {
             $configId = Str::uuid()->toString();
             DB::table('iot_connection_config')->insert([
                 'id' => $configId,
@@ -152,8 +151,8 @@ class AyamPetelurSeeder extends Seeder
 
         foreach ($kandangs as $k) {
             $coop = DB::table('unitBudidaya')->where('nama', $k['nama'])->where('jenisBudidayaId', $jenisBudidayaId)->first();
-            
-            if (!$coop) {
+
+            if (! $coop) {
                 $coopId = Str::uuid()->toString();
                 DB::table('unitBudidaya')->insert([
                     'id' => $coopId,
@@ -174,14 +173,14 @@ class AyamPetelurSeeder extends Seeder
 
             // Ensure Device
             $device = DB::table('iot_device')->where('unitBudidayaId', $coopId)->first();
-            if (!$device) {
+            if (! $device) {
                 $deviceId = Str::uuid()->toString();
                 DB::table('iot_device')->insert([
                     'id' => $deviceId,
                     'connectionConfigId' => $configId,
                     'unitBudidayaId' => $coopId,
-                    'deviceCode' => 'DEV_' . strtoupper(Str::random(6)),
-                    'deviceName' => 'Sensor Nodes ' . $k['nama'],
+                    'deviceCode' => 'DEV_'.strtoupper(Str::random(6)),
+                    'deviceName' => 'Sensor Nodes '.$k['nama'],
                     'status' => 'active',
                     'createdAt' => now(),
                 ]);
@@ -191,23 +190,27 @@ class AyamPetelurSeeder extends Seeder
 
             // Seed IoT Data for past 24 hours
             $recentData = DB::table('iot_sensor_data')->where('deviceId', $deviceId)->where('sensorTimestamp', '>=', now()->subHours(24))->count();
-            
-            if ($recentData < 24) { 
+
+            if ($recentData < 24) {
                 $sensorInserts = [];
                 for ($h = 24; $h >= 0; $h--) {
                     $ts = now()->subHours($h);
-                    
-                    $baseTemp = 24; 
-                    if ($ts->hour > 8 && $ts->hour < 16) $baseTemp = 27; 
-                    $temp = $baseTemp + (rand(-15, 15) / 10); 
-                    
-                    $baseHumid = 65; 
-                    if ($baseTemp > 26) $baseHumid = 55;
+
+                    $baseTemp = 24;
+                    if ($ts->hour > 8 && $ts->hour < 16) {
+                        $baseTemp = 27;
+                    }
+                    $temp = $baseTemp + (rand(-15, 15) / 10);
+
+                    $baseHumid = 65;
+                    if ($baseTemp > 26) {
+                        $baseHumid = 55;
+                    }
                     $humid = $baseHumid + rand(-5, 5);
 
-                    $ammon = rand(50, 150) / 10; 
+                    $ammon = rand(50, 150) / 10;
 
-                    $light = ($ts->hour > 5 && $ts->hour < 18) ? rand(200, 300) : rand(10, 30); 
+                    $light = ($ts->hour > 5 && $ts->hour < 18) ? rand(200, 300) : rand(10, 30);
 
                     $sensorInserts[] = ['id' => Str::uuid()->toString(), 'deviceId' => $deviceId, 'parameterId' => $paramIds['TEMP'], 'sensorTimestamp' => $ts->toDateTimeString(), 'value' => $temp, 'createdAt' => now()];
                     $sensorInserts[] = ['id' => Str::uuid()->toString(), 'deviceId' => $deviceId, 'parameterId' => $paramIds['HUMID'], 'sensorTimestamp' => $ts->toDateTimeString(), 'value' => $humid, 'createdAt' => now()];
@@ -221,10 +224,10 @@ class AyamPetelurSeeder extends Seeder
 
             // Seed 30 day Laporan
             $hasLaporan = DB::table('laporan')->where('unitBudidayaId', $coopId)->whereDate('createdAt', now()->toDateString())->exists();
-            if (!$hasLaporan) {
+            if (! $hasLaporan) {
                 for ($d = 30; $d >= 0; $d--) {
                     $date = now()->subDays($d);
-                    
+
                     $totalPop = DB::table('unitBudidaya')->where('id', $coopId)->value('jumlah');
 
                     // =========================
@@ -241,7 +244,7 @@ class AyamPetelurSeeder extends Seeder
                             'createdAt' => $date->copy()->setHour(9)->toDateTimeString(),
                             'updatedAt' => now(),
                             'isDeleted' => 0,
-                            'judul' => "Laporan Kematian Harian",
+                            'judul' => 'Laporan Kematian Harian',
                         ]);
                         for ($m = 0; $m < $mati; $m++) {
                             DB::table('kematian')->insert([
@@ -250,11 +253,11 @@ class AyamPetelurSeeder extends Seeder
                                 'tanggal' => $date->toDateString(),
                                 'penyebab' => 'Penyakit ND/SNOT',
                                 'isDeleted' => 0,
-                                'createdAt' => now(),
-                                'updatedAt' => now()
+                                'createdAt' => $date->copy()->setHour(9)->toDateTimeString(),
+                                'updatedAt' => $date->copy()->setHour(9)->toDateTimeString(),
                             ]);
                         }
-                        
+
                         DB::table('unitBudidaya')->where('id', $coopId)->decrement('jumlah', $mati);
                         $totalPop -= $mati;
                     }
@@ -271,13 +274,11 @@ class AyamPetelurSeeder extends Seeder
                         'createdAt' => $date->copy()->setHour(16)->toDateTimeString(),
                         'updatedAt' => now(),
                         'isDeleted' => 0,
-                        'judul' => "Laporan Panen Harian",
+                        'judul' => 'Laporan Panen Harian',
                     ]);
 
                     $feedPerBirdKg = rand(110, 120) / 1000;
-                    $totalFeedKg = round($totalPop * $feedPerBirdKg, 0); // Convert to int since it is TINYINT
-                    
-                    if ($totalFeedKg > 127) $totalFeedKg = 127; // Max for signed tinyint!
+                    $totalFeedKg = round($totalPop * $feedPerBirdKg, 2);
 
                     DB::table('harianTernak')->insert([
                         'id' => Str::uuid()->toString(),
@@ -285,13 +286,13 @@ class AyamPetelurSeeder extends Seeder
                         'pakan' => $totalFeedKg,
                         'cekKandang' => 1,
                         'isDeleted' => 0,
-                        'createdAt' => now(),
-                        'updatedAt' => now()
+                        'createdAt' => $date->copy()->setTime(7, 30)->toDateTimeString(),
+                        'updatedAt' => $date->copy()->setTime(7, 30)->toDateTimeString(),
                     ]);
 
                     $hdp = rand(850, 950) / 1000;
                     $totalTelur = round($totalPop * $hdp);
-                    
+
                     $avgEggWeightKg = rand(60, 65) / 1000;
                     $totalBeratTelur = round($totalTelur * $avgEggWeightKg, 2);
 
@@ -302,8 +303,8 @@ class AyamPetelurSeeder extends Seeder
                         'jumlah' => $totalTelur,
                         'berat' => $totalBeratTelur,
                         'isDeleted' => 0,
-                        'createdAt' => now(),
-                        'updatedAt' => now()
+                        'createdAt' => $date->copy()->setHour(16)->toDateTimeString(),
+                        'updatedAt' => $date->copy()->setHour(16)->toDateTimeString(),
                     ]);
 
                     $gradeA = round($totalTelur * 0.80);
@@ -312,10 +313,10 @@ class AyamPetelurSeeder extends Seeder
                     $gradeO = $totalTelur - ($gradeA + $gradeB + $gradeC);
 
                     DB::table('panenRincianGrade')->insert([
-                        ['id' => Str::uuid()->toString(), 'panenId' => $panenId, 'gradeId' => $gradeIds['Grade A'], 'jumlah' => $gradeA, 'createdAt' => now(), 'updatedAt' => now()],
-                        ['id' => Str::uuid()->toString(), 'panenId' => $panenId, 'gradeId' => $gradeIds['Grade B'], 'jumlah' => $gradeB, 'createdAt' => now(), 'updatedAt' => now()],
-                        ['id' => Str::uuid()->toString(), 'panenId' => $panenId, 'gradeId' => $gradeIds['Grade C'], 'jumlah' => $gradeC, 'createdAt' => now(), 'updatedAt' => now()],
-                        ['id' => Str::uuid()->toString(), 'panenId' => $panenId, 'gradeId' => $gradeIds['Afkir'], 'jumlah' => max(0, $gradeO), 'createdAt' => now(), 'updatedAt' => now()],
+                        ['id' => Str::uuid()->toString(), 'panenId' => $panenId, 'gradeId' => $gradeIds['Grade A'], 'jumlah' => $gradeA, 'createdAt' => $date->copy()->setHour(16)->toDateTimeString(), 'updatedAt' => $date->copy()->setHour(16)->toDateTimeString()],
+                        ['id' => Str::uuid()->toString(), 'panenId' => $panenId, 'gradeId' => $gradeIds['Grade B'], 'jumlah' => $gradeB, 'createdAt' => $date->copy()->setHour(16)->toDateTimeString(), 'updatedAt' => $date->copy()->setHour(16)->toDateTimeString()],
+                        ['id' => Str::uuid()->toString(), 'panenId' => $panenId, 'gradeId' => $gradeIds['Grade C'], 'jumlah' => $gradeC, 'createdAt' => $date->copy()->setHour(16)->toDateTimeString(), 'updatedAt' => $date->copy()->setHour(16)->toDateTimeString()],
+                        ['id' => Str::uuid()->toString(), 'panenId' => $panenId, 'gradeId' => $gradeIds['Afkir'], 'jumlah' => max(0, $gradeO), 'createdAt' => $date->copy()->setHour(16)->toDateTimeString(), 'updatedAt' => $date->copy()->setHour(16)->toDateTimeString()],
                     ]);
                 }
             }

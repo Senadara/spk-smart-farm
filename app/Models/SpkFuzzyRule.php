@@ -19,12 +19,21 @@ class SpkFuzzyRule extends Model
 
     protected $fillable = [
         'id',
+        'profile_id',
         'name',
         'operator',
         'output_set_id',
         'group',
         'diagnosis',
     ];
+
+    /**
+     * Profile fuzzy tempat rule ini berada.
+     */
+    public function profile(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(SpkFuzzyProfile::class, 'profile_id');
+    }
 
     /**
      * Kondisi-kondisi IF pada rule ini.

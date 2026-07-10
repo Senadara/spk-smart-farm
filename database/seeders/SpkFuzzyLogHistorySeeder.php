@@ -13,16 +13,21 @@ class SpkFuzzyLogHistorySeeder extends Seeder
     {
         DB::table('spk_fuzzy_logs')->delete();
 
+        $profile = DB::table('spk_fuzzy_profiles')
+            ->where('is_active', true)
+            ->where('status', 'active')
+            ->first(['id', 'commodity_id']);
+
         $coops = DB::table('unitBudidaya')->get();
 
         foreach ($coops as $coop) {
-            $this->seedLogsForCoop($coop->id);
+            $this->seedLogsForCoop($coop->id, $profile?->id, $profile?->commodity_id);
         }
         // Also seed global logs
-        $this->seedLogsForCoop(null);
+        $this->seedLogsForCoop(null, $profile?->id, $profile?->commodity_id);
     }
 
-    private function seedLogsForCoop(?string $coopId)
+    private function seedLogsForCoop(?string $coopId, ?string $profileId = null, ?string $commodityId = null)
     {
         $now = Carbon::now();
         for ($i = 15; $i >= 0; $i--) {
@@ -38,6 +43,8 @@ class SpkFuzzyLogHistorySeeder extends Seeder
             DB::table('spk_fuzzy_logs')->insert([
                 'id' => (string) Str::uuid(),
                 'unit_budidaya_id' => $coopId,
+                'profile_id' => $profileId,
+                'commodity_id' => $commodityId,
                 'input_json' => json_encode([
                     'hdp' => $hdp,
                     'fcr' => $fcr,

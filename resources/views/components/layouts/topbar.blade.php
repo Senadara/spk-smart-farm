@@ -16,7 +16,7 @@
 //         ];
 //     });
 
-$notifications = collect([
+$notifications = session('user.role') === 'supplier' ? collect() : collect([
     [
         'id' => 1,
         'title' => 'Suhu Tinggi',
@@ -57,7 +57,7 @@ $icons = [
 
         {{-- Breadcrumb --}}
         <nav class="flex items-center gap-2 text-sm">
-            <a href="{{ route('dashboard') }}"
+            <a href="{{ session('user.role') === 'supplier' ? route('supplier.dashboard') : route('dashboard') }}"
                 class="text-[var(--color-gray-400)] hover:text-[var(--color-primary)] no-underline transition-colors">Smart
                 Farm</a>
             <span class="text-[var(--color-gray-300)]">›</span>

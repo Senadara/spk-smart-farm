@@ -4,6 +4,7 @@ namespace App\Services\Fuzzy;
 
 use App\Models\SpkFuzzyVariable;
 use App\Models\SpkFuzzyRule;
+use App\Models\SpkFuzzyProfile;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -31,14 +32,24 @@ class MamdaniEngine
      * @param  array<string,float> $inputs Unified input dari InputResolver
      * @return array
      */
-    public function processCascaded(array $inputs): array
+    public function processCascaded(array $inputs, ?string $profileId = null, ?string $commodityId = null, ?string $coopId = null): array
     {
-        $lingkungan = $this->processGroup('lingkungan', $inputs);
-        $kesehatan  = $this->processGroup('kesehatan', $inputs);
-        $kausalitas = $this->lookupKausalitas($lingkungan['label'], $kesehatan['label']);
+        $profile = SpkFuzzyProfile::resolveForContext($commodityId, $coopId, $profileId);
+        $resolvedProfileId = $profile?->id;
+
+        $lingkungan = $this->processGroup('lingkungan', $inputs, $resolvedProfileId);
+        $kesehatan  = $this->processGroup('kesehatan', $inputs, $resolvedProfileId);
+        $kausalitas = $this->lookupKausalitas($lingkungan['label'], $kesehatan['label'], $resolvedProfileId);
 
         return [
             'inputs'     => $inputs,
+            'profile'    => $profile ? [
+                'id' => $profile->id,
+                'commodity_id' => $profile->commodity_id,
+                'name' => $profile->name,
+                'version' => $profile->version,
+                'status' => $profile->status,
+            ] : null,
             'lingkungan' => $lingkungan,
             'kesehatan'  => $kesehatan,
             'kausalitas' => $kausalitas,
@@ -52,10 +63,10 @@ class MamdaniEngine
      * @param  array<string,float> $inputs
      * @return array
      */
-    public function processGroup(string $group, array $inputs): array
+    public function processGroup(string $group, array $inputs, ?string $profileId = null): array
     {
-        $variables = $this->loadVariables($group);
-        $rules     = $this->loadRules($group);
+        $variables = $this->loadVariables($group, $profileId);
+        $rules     = $this->loadRules($group, $profileId);
 
         if (empty($rules)) {
             return $this->emptyResult("Tidak ada rules untuk group '{$group}'.");
@@ -259,9 +270,9 @@ class MamdaniEngine
      * @param  string $kesehatanLabel
      * @return array
      */
-    public function lookupKausalitas(string $lingkLabel, string $kesehatanLabel): array
+    public function lookupKausalitas(string $lingkLabel, string $kesehatanLabel, ?string $profileId = null): array
     {
-        $rules = $this->loadRules('kausalitas');
+        $rules = $this->loadRules('kausalitas', $profileId);
 
         foreach ($rules as $rule) {
             $condLabels = array_column($rule['conditions'], 'set_name');
@@ -293,13 +304,15 @@ class MamdaniEngine
     // CACHE LOADERS
     // ──────────────────────────────────────────────────────────────────
 
-    private function loadVariables(string $group): array
+    private function loadVariables(string $group, ?string $profileId = null): array
     {
-        $cacheKey = "fuzzy_vars_{$group}";
+        $profileKey = $profileId ?: 'global';
+        $cacheKey = "fuzzy_vars_{$profileKey}_{$group}";
 
-        return Cache::remember($cacheKey, $this->cacheTtl, function () use ($group) {
+        return Cache::remember($cacheKey, $this->cacheTtl, function () use ($group, $profileId) {
             $vars = SpkFuzzyVariable::with('sets')
                 ->where('group', $group)
+                ->when($profileId, fn ($query) => $query->where('profile_id', $profileId))
                 ->get();
 
             return [
@@ -309,16 +322,19 @@ class MamdaniEngine
         });
     }
 
-    private function loadRules(string $group): array
+    private function loadRules(string $group, ?string $profileId = null): array
     {
-        $cacheKey = "fuzzy_rules_{$group}";
+        $profileKey = $profileId ?: 'global';
+        $cacheKey = "fuzzy_rules_{$profileKey}_{$group}";
 
-        return Cache::remember($cacheKey, $this->cacheTtl, function () use ($group) {
+        return Cache::remember($cacheKey, $this->cacheTtl, function () use ($group, $profileId) {
             $rules = SpkFuzzyRule::with([
                 'conditions.variable',
                 'conditions.set',
                 'outputSet',
-            ])->where('group', $group)->get();
+            ])->where('group', $group)
+                ->when($profileId, fn ($query) => $query->where('profile_id', $profileId))
+                ->get();
 
             return $rules->map(function ($rule) {
                 return [
@@ -342,11 +358,17 @@ class MamdaniEngine
     /**
      * Bersihkan cache fuzzy config (dipanggil saat seeder/admin update config).
      */
-    public static function clearCache(): void
+    public static function clearCache(?string $profileId = null): void
     {
-        foreach (['lingkungan', 'kesehatan', 'kausalitas'] as $group) {
-            Cache::forget("fuzzy_vars_{$group}");
-            Cache::forget("fuzzy_rules_{$group}");
+        $profileIds = $profileId
+            ? [$profileId]
+            : array_merge(['global'], SpkFuzzyProfile::query()->pluck('id')->all());
+
+        foreach ($profileIds as $pid) {
+            foreach (['lingkungan', 'kesehatan', 'kausalitas'] as $group) {
+                Cache::forget("fuzzy_vars_{$pid}_{$group}");
+                Cache::forget("fuzzy_rules_{$pid}_{$group}");
+            }
         }
     }
 

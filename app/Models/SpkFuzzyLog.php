@@ -20,6 +20,8 @@ class SpkFuzzyLog extends Model
     protected $fillable = [
         'id',
         'unit_budidaya_id',
+        'profile_id',
+        'commodity_id',
         'input_json',
         'fuzzified_json',
         'rule_result_json',
@@ -46,5 +48,15 @@ class SpkFuzzyLog extends Model
     public function unitBudidaya(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(UnitBudidaya::class, 'unit_budidaya_id');
+    }
+
+    public function profile(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(SpkFuzzyProfile::class, 'profile_id');
+    }
+
+    public function commodity(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Komoditas::class, 'commodity_id');
     }
 }

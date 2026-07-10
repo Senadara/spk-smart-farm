@@ -32,6 +32,9 @@ class DatabaseSeeder extends Seeder
             AyamPetelurSeeder::class,
             SpkSupplierSeeder::class,
             SpkDssDemoSeeder::class,
+            InventorySeeder::class,
+            DailyReportInventoryUsageSeeder::class,
+            SupplierPortalSeeder::class,
         ]);
     }
 }

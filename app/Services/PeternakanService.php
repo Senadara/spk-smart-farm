@@ -1444,6 +1444,8 @@ class PeternakanService
             'lingkungan' => [
                 'status' => 'Monitor',
                 'statusColor' => 'amber',
+                'score' => 76.4,
+                'scoreColor' => 'blue',
                 'title' => 'Decision: Check Ventilation.',
                 'description' => 'Environment score is 76.4/100. Humidity is ideal, but elevated temperature and ammonia levels suggest reduced airflow efficiency.',
                 'link' => '#'
@@ -1451,6 +1453,8 @@ class PeternakanService
             'produktivitas' => [
                 'status' => 'Maintain',
                 'statusColor' => 'blue',
+                'score' => 92.5,
+                'scoreColor' => 'emerald',
                 'title' => 'Decision: Keep Current Rations.',
                 'description' => 'Health score is 92.5/100. Birds are performing optimally. Feed quality dip is negligible given high HDP output.',
                 'link' => '#'
@@ -1458,6 +1462,8 @@ class PeternakanService
             'gabungan' => [
                 'status' => 'Excellent',
                 'statusColor' => 'emerald',
+                'score' => 92.5,
+                'scoreColor' => 'emerald',
                 'title' => 'Decision: Expand Phase 2.',
                 'description' => 'Combined weighted score indicates peak performance. Current environmental stress is minor compared to productivity gains.',
                 'link' => '#',

@@ -3,8 +3,8 @@
 namespace App\Services\Fuzzy;
 
 use App\Models\SpkFuzzyVariable;
+use App\Models\SpkFuzzyProfile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * InputResolver — mengumpulkan semua input fuzzy dari multi-source:
@@ -22,11 +22,14 @@ class InputResolver
      * @param  string|null $coopId UUID unitBudidaya. Null = global.
      * @return array<string, float>  Contoh: ['suhu' => 32.5, 'kelembapan' => 60.0, 'hdp' => 92.1]
      */
-    public function resolve(?string $coopId = null): array
+    public function resolve(?string $coopId = null, ?string $commodityId = null, ?string $profileId = null): array
     {
+        $profile = SpkFuzzyProfile::resolveForContext($commodityId, $coopId, $profileId);
+
         // Ambil semua variabel input dengan sumber datanya
         $variables = SpkFuzzyVariable::with('inputSource')
             ->where('type', 'input')
+            ->when($profile, fn ($query) => $query->where('profile_id', $profile->id))
             ->get();
 
         $inputs = [];

@@ -36,8 +36,6 @@ class SpkActionTask extends Model
         'completed_at' => 'datetime',
     ];
 
-    /* ── Relationships ─────────────────────────────────── */
-
     public function fuzzyLog()
     {
         return $this->belongsTo(SpkFuzzyLog::class, 'spk_fuzzy_log_id');
@@ -62,8 +60,6 @@ class SpkActionTask extends Model
     {
         return $this->hasMany(SpkActionReport::class, 'task_id')->orderBy('createdAt', 'desc');
     }
-
-    /* ── Helpers ────────────────────────────────────────── */
 
     public function getPriorityColorAttribute(): string
     {
