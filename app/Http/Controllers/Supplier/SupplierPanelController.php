@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Supplier;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
+use App\Models\MasterSupplier;
+use App\Models\SpkRanking;
 use App\Models\SupplierOrder;
 use App\Models\SupplierProduct;
 use App\Models\SupplierStore;
@@ -86,6 +88,8 @@ class SupplierPanelController extends Controller
             'nama' => 'required|string|max:255',
             'phone' => 'required|string|max:30',
             'alamat' => 'required|string|max:500',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
             'deskripsi' => 'nullable|string|max:2000',
             'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
         ]);
@@ -109,12 +113,27 @@ class SupplierPanelController extends Controller
                 'nama' => $validated['nama'],
                 'phone' => $validated['phone'],
                 'alamat' => $validated['alamat'],
+                'latitude' => $validated['latitude'] ?? null,
+                'longitude' => $validated['longitude'] ?? null,
                 'deskripsi' => $validated['deskripsi'] ?? null,
                 'logoToko' => $logoPath,
                 'tokoStatus' => $store?->tokoStatus ?? 'request',
                 'TypeToko' => $store?->TypeToko ?? 'umkm',
             ]
         );
+
+        $supplier = MasterSupplier::query()->where('nama', $validated['nama'])->first();
+        if ($supplier) {
+            $supplier->update([
+                'alamat' => $validated['alamat'],
+                'latitude' => $validated['latitude'] ?? null,
+                'longitude' => $validated['longitude'] ?? null,
+                'kontak' => $validated['phone'],
+                'deskripsi' => $validated['deskripsi'] ?? $supplier->deskripsi,
+            ]);
+
+            SpkRanking::query()->where('supplier_id', $supplier->id)->update(['is_valid' => false]);
+        }
 
         return redirect()->route('supplier.store.edit')
             ->with('success', $store

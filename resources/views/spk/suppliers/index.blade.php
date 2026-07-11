@@ -32,16 +32,16 @@
             
             <a href="{{ route('spk.suppliers.index') }}" class="px-4 py-1.5 rounded-full text-sm font-medium transition {{ $category === 'all' ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30' : 'bg-gray-50 text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 border border-gray-100' }}">Semua</a>
             
-            <a href="{{ route('spk.suppliers.index', ['category' => 'pakan']) }}" class="px-4 py-1.5 rounded-full text-sm font-medium transition {{ $category === 'pakan' ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30' : 'bg-gray-50 text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 border border-gray-100' }}">🌽 Pakan Pokok</a>
+            <a href="{{ route('spk.suppliers.index', ['category' => 'pakan']) }}" class="px-4 py-1.5 rounded-full text-sm font-medium transition {{ $category === 'pakan' ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30' : 'bg-gray-50 text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 border border-gray-100' }}">Pakan Pokok</a>
             
-            <a href="{{ route('spk.suppliers.index', ['category' => 'obat']) }}" class="px-4 py-1.5 rounded-full text-sm font-medium transition {{ $category === 'obat' ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30' : 'bg-gray-50 text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 border border-gray-100' }}">💊 Obat & Vaksin</a>
+            <a href="{{ route('spk.suppliers.index', ['category' => 'obat']) }}" class="px-4 py-1.5 rounded-full text-sm font-medium transition {{ $category === 'obat' ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30' : 'bg-gray-50 text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 border border-gray-100' }}">Obat & Vaksin</a>
             
-            <a href="{{ route('spk.suppliers.index', ['category' => 'alat']) }}" class="px-4 py-1.5 rounded-full text-sm font-medium transition {{ $category === 'alat' ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30' : 'bg-gray-50 text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 border border-gray-100' }}">⚙️ Peralatan Kandang</a>
+            <a href="{{ route('spk.suppliers.index', ['category' => 'alat']) }}" class="px-4 py-1.5 rounded-full text-sm font-medium transition {{ $category === 'alat' ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30' : 'bg-gray-50 text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 border border-gray-100' }}">Peralatan Kandang</a>
 
             <div class="flex-grow"></div>
             
-            <a href="{{ route('spk.suppliers.dss.config') }}" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 transition border border-amber-100">⚖ Konfigurasi AHP</a>
-            <a href="{{ route('spk.suppliers.dss.dashboard') }}" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition border border-indigo-100">📊 Dashboard SAW</a>
+            <a href="{{ route('spk.suppliers.dss.config') }}" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 transition border border-amber-100">Konfigurasi AHP</a>
+            <a href="{{ route('spk.suppliers.dss.dashboard') }}" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition border border-indigo-100">Dashboard SAW</a>
             <a href="{{ route('spk.suppliers.products') }}" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-purple-50 text-purple-600 hover:bg-purple-100 transition border border-purple-100 flex items-center gap-1.5">
                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
                Mode Banding Barang

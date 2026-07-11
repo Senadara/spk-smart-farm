@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\FarmProfile;
 use App\Models\MasterProduk;
 use App\Models\MasterSupplier;
 use App\Models\SpkParameter;
@@ -55,9 +56,21 @@ class SupplierPortalSeeder extends Seeder
                 'nama' => 'CV Sumber Ternak Digital',
                 'phone' => '081234567890',
                 'alamat' => 'Kabupaten Malang, Jawa Timur',
+                'latitude' => -7.9797000,
+                'longitude' => 112.6304000,
                 'deskripsi' => 'Penyedia pakan, vitamin, dan perlengkapan peternakan ayam petelur.',
                 'tokoStatus' => 'active',
                 'TypeToko' => 'umkm',
+            ]
+        );
+
+        FarmProfile::query()->updateOrCreate(
+            ['user_id' => $customer->id],
+            [
+                'farm_name' => 'Demo Farm Layer Malang',
+                'address' => 'Pakis, Kabupaten Malang, Jawa Timur',
+                'latitude' => -7.9459000,
+                'longitude' => 112.7147000,
             ]
         );
 
@@ -159,6 +172,8 @@ class SupplierPortalSeeder extends Seeder
             ['nama' => $store->nama],
             [
                 'alamat' => $store->alamat,
+                'latitude' => $store->latitude,
+                'longitude' => $store->longitude,
                 'kontak' => $store->phone,
                 'deskripsi' => $store->deskripsi,
                 'kategori' => 'pakan,vitamin,perlengkapan',

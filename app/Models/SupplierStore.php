@@ -23,6 +23,8 @@ class SupplierStore extends Model
         'nama',
         'phone',
         'alamat',
+        'latitude',
+        'longitude',
         'logoToko',
         'deskripsi',
         'isDeleted',
@@ -33,6 +35,8 @@ class SupplierStore extends Model
     protected function casts(): array
     {
         return [
+            'latitude' => 'float',
+            'longitude' => 'float',
             'isDeleted' => 'boolean',
         ];
     }

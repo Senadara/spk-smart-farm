@@ -81,6 +81,7 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
         Route::get('/dss/api/rankings/{produkId}', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiRankings'])->name('spk.suppliers.dss.api.rankings');
         Route::get('/dss/api/weights', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiWeights'])->name('spk.suppliers.dss.api.weights');
         Route::get('/dss/api/insights', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiInsights'])->name('spk.suppliers.dss.api.insights');
+        Route::post('/{id}/orders', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'storeOrder'])->name('spk.suppliers.orders.store')->whereNumber('id');
         Route::get('/{id}', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'show'])->name('spk.suppliers.show')->whereNumber('id');
     });
 
@@ -190,6 +191,7 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
 
 Route::middleware('auth.api')->group(function () {
     Route::get('/profil', [ProfileController::class, 'show'])->name('profile');
+    Route::patch('/profil/farm-location', [ProfileController::class, 'updateFarm'])->name('profile.farm-location');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::middleware('role:supplier')->prefix('supplier')->name('supplier.')->group(function () {

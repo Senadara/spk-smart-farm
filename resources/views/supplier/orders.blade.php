@@ -8,7 +8,7 @@
     <div>
         <p class="text-sm font-medium text-emerald-700 mb-1">{{ $store->nama }}</p>
         <h1 class="text-2xl font-bold text-gray-900">Manajemen Pesanan</h1>
-        <p class="text-sm text-gray-500 mt-1">Proses pesanan secara berurutan agar status pembeli tetap akurat.</p>
+        <p class="text-sm text-gray-500 mt-1">Pesanan dicatat di sistem, sedangkan pembayaran dan bukti transfer dikonfirmasi langsung di luar sistem.</p>
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
@@ -75,7 +75,7 @@
                                     <input type="hidden" name="status" value="diterima">
                                     <button class="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold">Terima</button>
                                 </form>
-                                <form method="POST" action="{{ route('supplier.orders.status', $order) }}" onsubmit="return confirm('Tolak pesanan dan proses pengembalian dana?')">
+                            <form method="POST" action="{{ route('supplier.orders.status', $order) }}" onsubmit="return confirm('Tolak pesanan ini?')">
                                     @csrf
                                     @method('PATCH')
                                     <input type="hidden" name="status" value="ditolak">
@@ -89,6 +89,7 @@
                                 <input type="hidden" name="status" value="selesai">
                                 <button class="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold">Tandai Selesai</button>
                             </form>
+                            <p class="mt-2 text-[11px] text-gray-400">Gunakan setelah pembayaran luar sistem dan pengiriman/ambil barang selesai.</p>
                         @endif
                     </div>
                 </div>
@@ -96,7 +97,7 @@
         @empty
             <div class="bg-white border border-gray-200 rounded-lg p-10 text-center">
                 <p class="font-semibold text-gray-800">Tidak ada pesanan pada filter ini</p>
-                <p class="text-sm text-gray-500 mt-1">Pesanan baru akan muncul otomatis setelah pembeli menyelesaikan checkout.</p>
+                <p class="text-sm text-gray-500 mt-1">Pesanan baru akan muncul setelah pembeli membuat pesanan dari halaman supplier.</p>
             </div>
         @endforelse
     </div>

@@ -60,6 +60,20 @@
                     class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">{{ old('alamat', $store?->alamat) }}</textarea>
                 @error('alamat')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
             </div>
+            <div>
+                <label for="latitude" class="block text-sm font-semibold text-gray-700 mb-2">Latitude toko</label>
+                <input id="latitude" name="latitude" type="number" step="0.0000001" value="{{ old('latitude', $store?->latitude) }}"
+                    placeholder="-7.9666204"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                @error('latitude')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            </div>
+            <div>
+                <label for="longitude" class="block text-sm font-semibold text-gray-700 mb-2">Longitude toko</label>
+                <input id="longitude" name="longitude" type="number" step="0.0000001" value="{{ old('longitude', $store?->longitude) }}"
+                    placeholder="112.6326321"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                @error('longitude')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            </div>
             <div class="md:col-span-2">
                 <label for="deskripsi" class="block text-sm font-semibold text-gray-700 mb-2">Deskripsi toko</label>
                 <textarea id="deskripsi" name="deskripsi" rows="5"

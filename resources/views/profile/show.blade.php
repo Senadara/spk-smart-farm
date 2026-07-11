@@ -46,6 +46,64 @@
     </div>
 </x-card>
 
+@if(($user['role'] ?? '') !== 'supplier')
+<x-card class="mb-6">
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+            <h3 class="text-base font-bold text-[var(--color-gray-900)]">Lokasi Operasional Peternakan</h3>
+            <p class="mt-1 text-sm text-[var(--color-gray-500)]">Lokasi ini menjadi titik asal perhitungan jarak supplier pada SPK AHP-SAW.</p>
+        </div>
+        @if($farmProfile?->hasCoordinates())
+            <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Koordinat aktif</span>
+        @else
+            <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Lengkapi koordinat</span>
+        @endif
+    </div>
+
+    <form method="POST" action="{{ route('profile.farm-location') }}" class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+        @csrf
+        @method('PATCH')
+
+        <div>
+            <label for="farm_name" class="mb-1 block text-sm font-semibold text-[var(--color-gray-700)]">Nama peternakan</label>
+            <input id="farm_name" name="farm_name" value="{{ old('farm_name', $farmProfile?->farm_name) }}"
+                placeholder="Contoh: SmartFarm Layer Malang"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+            @error('farm_name')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+            <label for="address" class="mb-1 block text-sm font-semibold text-[var(--color-gray-700)]">Alamat utama</label>
+            <input id="address" name="address" value="{{ old('address', $farmProfile?->address) }}" required
+                placeholder="Alamat operasional peternakan"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+            @error('address')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+            <label for="latitude" class="mb-1 block text-sm font-semibold text-[var(--color-gray-700)]">Latitude</label>
+            <input id="latitude" name="latitude" type="number" step="0.0000001" value="{{ old('latitude', $farmProfile?->latitude) }}"
+                placeholder="-7.9666204"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+            @error('latitude')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+            <label for="longitude" class="mb-1 block text-sm font-semibold text-[var(--color-gray-700)]">Longitude</label>
+            <input id="longitude" name="longitude" type="number" step="0.0000001" value="{{ old('longitude', $farmProfile?->longitude) }}"
+                placeholder="112.6326321"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+            @error('longitude')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+
+        <div class="md:col-span-2 flex flex-col gap-3 rounded-lg bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-xs text-gray-500">Ambil koordinat dari Google Maps dengan klik kanan pada lokasi peternakan, lalu salin angka latitude dan longitude.</p>
+            <button class="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">Simpan Lokasi</button>
+        </div>
+    </form>
+</x-card>
+@endif
+
 {{-- Login History --}}
 <x-card>
     <h3 class="text-base font-bold text-[var(--color-gray-900)] mb-4">Riwayat Login</h3>
