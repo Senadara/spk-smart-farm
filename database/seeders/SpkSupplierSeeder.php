@@ -21,12 +21,17 @@ class SpkSupplierSeeder extends Seeder
             [
                 'nama_parameter' => 'Kualitas',
                 'tipe' => 'benefit',
-                'deskripsi' => 'Skor kualitas produk 0–100',
+                'deskripsi' => 'Skor kualitas produk 0-100',
             ],
             [
                 'nama_parameter' => 'Kecepatan Pengiriman',
                 'tipe' => 'benefit',
-                'deskripsi' => 'Kecepatan pengiriman (hari, semakin cepat semakin baik — nilai = 1/estimasi hari)',
+                'deskripsi' => 'Kecepatan pengiriman (hari, semakin cepat semakin baik - nilai = 1/estimasi hari)',
+            ],
+            [
+                'nama_parameter' => 'Jarak',
+                'tipe' => 'cost',
+                'deskripsi' => 'Jarak dari lokasi operasional peternakan owner ke lokasi supplier. Nilai dihitung otomatis per user.',
             ],
         ];
 
@@ -43,6 +48,8 @@ class SpkSupplierSeeder extends Seeder
             [
                 'nama' => 'PT Agrinusa Jaya',
                 'alamat' => 'Malang, Jawa Timur',
+                'latitude' => -7.9666204,
+                'longitude' => 112.6326321,
                 'kontak' => '+6281234567890',
                 'kategori' => 'pakan,obat',
                 'rating' => 4.8,
@@ -52,6 +59,8 @@ class SpkSupplierSeeder extends Seeder
             [
                 'nama' => 'CV Medion Farma Unggas',
                 'alamat' => 'Bandung, Jawa Barat',
+                'latitude' => -6.9174639,
+                'longitude' => 107.6191228,
                 'kontak' => '+6289876543210',
                 'kategori' => 'obat',
                 'rating' => 4.9,
@@ -61,6 +70,8 @@ class SpkSupplierSeeder extends Seeder
             [
                 'nama' => 'Makmur Poultry Supply',
                 'alamat' => 'Blitar, Jawa Timur',
+                'latitude' => -8.0983000,
+                'longitude' => 112.1681000,
                 'kontak' => '+628111222333',
                 'kategori' => 'alat',
                 'rating' => 4.5,
@@ -70,6 +81,8 @@ class SpkSupplierSeeder extends Seeder
             [
                 'nama' => 'Jaya Pakan Nusantara',
                 'alamat' => 'Surabaya, Jawa Timur',
+                'latitude' => -7.2574719,
+                'longitude' => 112.7520883,
                 'kontak' => '+628334455667',
                 'kategori' => 'pakan',
                 'rating' => 4.2,
@@ -87,11 +100,11 @@ class SpkSupplierSeeder extends Seeder
         }
 
         $produks = [
-            ['nama' => 'Pakan Layer Premium (50kg)', 'deskripsi' => 'Pakan pokok layer', 'icon' => '🌾', 'kategori' => 'Pakan Pokok'],
-            ['nama' => 'Vaksin ND-IB (1000 dosis)', 'deskripsi' => 'Vaksin kesehatan', 'icon' => '💉', 'kategori' => 'Kesehatan'],
-            ['nama' => 'Vitamin Stress (1kg)', 'deskripsi' => 'Suplemen', 'icon' => '🧪', 'kategori' => 'Suplemen'],
-            ['nama' => 'Jagung Giling (50kg)', 'deskripsi' => 'Bahan campuran', 'icon' => '🌽', 'kategori' => 'Bahan Campuran'],
-            ['nama' => 'Egg Tray Plastik (30 Butir)', 'deskripsi' => 'Perlengkapan', 'icon' => '🥚', 'kategori' => 'Perlengkapan'],
+            ['nama' => 'Pakan Layer Premium (50kg)', 'deskripsi' => 'Pakan pokok layer', 'kategori' => 'Pakan Pokok'],
+            ['nama' => 'Vaksin ND-IB (1000 dosis)', 'deskripsi' => 'Vaksin kesehatan', 'kategori' => 'Kesehatan'],
+            ['nama' => 'Vitamin Stress (1kg)', 'deskripsi' => 'Suplemen', 'kategori' => 'Suplemen'],
+            ['nama' => 'Jagung Giling (50kg)', 'deskripsi' => 'Bahan campuran', 'kategori' => 'Bahan Campuran'],
+            ['nama' => 'Egg Tray Plastik (30 Butir)', 'deskripsi' => 'Perlengkapan', 'kategori' => 'Perlengkapan'],
         ];
 
         $produkModels = [];
@@ -102,7 +115,7 @@ class SpkSupplierSeeder extends Seeder
             );
         }
 
-        // supplier ↔ produk
+        // supplier to produk
         $links = [
             'PT Agrinusa Jaya' => ['Pakan Layer Premium (50kg)', 'Vaksin ND-IB (1000 dosis)', 'Vitamin Stress (1kg)'],
             'CV Medion Farma Unggas' => ['Vaksin ND-IB (1000 dosis)', 'Vitamin Stress (1kg)'],
@@ -156,6 +169,6 @@ class SpkSupplierSeeder extends Seeder
             }
         }
 
-        $this->command?->info('✅ SpkSupplierSeeder: kriteria, supplier, produk, dan nilai evaluasi berhasil di-seed.');
+        $this->command?->info('SpkSupplierSeeder: kriteria, supplier, produk, dan nilai evaluasi berhasil di-seed.');
     }
 }

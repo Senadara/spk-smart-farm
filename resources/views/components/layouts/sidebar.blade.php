@@ -5,6 +5,8 @@
 </div>
 
 {{-- Sidebar --}}
+@php($isSupplier = session('user.role') === 'supplier')
+
 <aside id="sidebar" class="fixed top-0 left-0 z-50 h-full w-[var(--sidebar-width)]
               bg-white flex flex-col border-r border-[var(--color-gray-200)]
               -translate-x-full transition-transform duration-300 ease-in-out
@@ -19,6 +21,47 @@
 
     {{-- Menu Utama --}}
     <div class="flex-1 overflow-y-auto px-4 py-4 flex flex-col justify-between">
+        @if($isSupplier)
+        <div>
+            <div class="mb-5">
+                <div class="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-gray-400)] px-3 mb-2">
+                    Panel Supplier
+                </div>
+                <ul class="space-y-1 list-none p-0 m-0">
+                    <li>
+                        <x-sidebar.menu-item :href="route('supplier.dashboard')" :active="request()->routeIs('supplier.dashboard')" icon="home">
+                            Dashboard Toko
+                        </x-sidebar.menu-item>
+                    </li>
+                    <li>
+                        <x-sidebar.menu-item :href="route('supplier.products.index')" :active="request()->routeIs('supplier.products.*')" icon="box">
+                            Produk
+                        </x-sidebar.menu-item>
+                    </li>
+                    <li>
+                        <x-sidebar.menu-item :href="route('supplier.orders.index')" :active="request()->routeIs('supplier.orders.*')" icon="cart">
+                            Pesanan
+                        </x-sidebar.menu-item>
+                    </li>
+                    <li>
+                        <x-sidebar.menu-item :href="route('supplier.finance')" :active="request()->routeIs('supplier.finance')" icon="wallet">
+                            Keuangan
+                        </x-sidebar.menu-item>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="mt-auto pt-4 border-t border-[var(--color-gray-100)]">
+            <ul class="space-y-1 list-none p-0 m-0">
+                <li>
+                    <x-sidebar.menu-item :href="route('supplier.store.edit')" :active="request()->routeIs('supplier.store.*')" icon="store">
+                        Profil Toko
+                    </x-sidebar.menu-item>
+                </li>
+            </ul>
+        </div>
+        @else
         <div>
             {{-- Section: Data Operasional --}}
             <div class="mb-5">
@@ -110,6 +153,7 @@
                 </li>
             </ul>
         </div>
+        @endif
     </div>
 
     {{-- Logout --}}

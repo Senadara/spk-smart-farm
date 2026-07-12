@@ -7,8 +7,18 @@ use Illuminate\Database\Eloquent\Model;
 class MasterSupplier extends Model
 {
     protected $fillable = [
-        'nama', 'alamat', 'kontak', 'deskripsi', 'kategori', 'rating', 'jarak_km', 'logo_url',
+        'nama', 'alamat', 'latitude', 'longitude', 'kontak', 'deskripsi', 'kategori', 'rating', 'jarak_km', 'logo_url',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'latitude' => 'float',
+            'longitude' => 'float',
+            'rating' => 'float',
+            'jarak_km' => 'float',
+        ];
+    }
 
     public function produks()
     {

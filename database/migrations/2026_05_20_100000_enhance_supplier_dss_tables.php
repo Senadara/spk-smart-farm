@@ -8,41 +8,61 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('master_suppliers', function (Blueprint $table) {
-            $table->text('deskripsi')->nullable()->after('kontak');
-            $table->string('kategori')->nullable()->after('deskripsi');
-            $table->decimal('rating', 3, 1)->default(0)->after('kategori');
-            $table->unsignedInteger('jarak_km')->nullable()->after('rating');
-            $table->string('logo_url')->nullable()->after('jarak_km');
-        });
+        if (Schema::hasTable('master_suppliers')) {
+            Schema::table('master_suppliers', function (Blueprint $table) {
+                if (! Schema::hasColumn('master_suppliers', 'deskripsi')) {
+                    $table->text('deskripsi')->nullable()->after('kontak');
+                }
+                if (! Schema::hasColumn('master_suppliers', 'kategori')) {
+                    $table->string('kategori')->nullable()->after('deskripsi');
+                }
+                if (! Schema::hasColumn('master_suppliers', 'rating')) {
+                    $table->decimal('rating', 3, 1)->default(0)->after('kategori');
+                }
+                if (! Schema::hasColumn('master_suppliers', 'jarak_km')) {
+                    $table->unsignedInteger('jarak_km')->nullable()->after('rating');
+                }
+                if (! Schema::hasColumn('master_suppliers', 'logo_url')) {
+                    $table->string('logo_url')->nullable()->after('jarak_km');
+                }
+            });
+        }
 
-        Schema::table('spk_parameters', function (Blueprint $table) {
-            $table->text('deskripsi')->nullable()->after('tipe');
-        });
+        if (Schema::hasTable('spk_parameters') && ! Schema::hasColumn('spk_parameters', 'deskripsi')) {
+            Schema::table('spk_parameters', function (Blueprint $table) {
+                $table->text('deskripsi')->nullable()->after('tipe');
+            });
+        }
 
-        Schema::create('spk_ahp_configurations', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('user_id');
-            $table->float('cr');
-            $table->boolean('is_valid')->default(false);
-            $table->unsignedInteger('version')->default(1);
-            $table->json('weights_snapshot')->nullable();
-            $table->timestamps();
+        if (! Schema::hasTable('spk_ahp_configurations')) {
+            Schema::create('spk_ahp_configurations', function (Blueprint $table) {
+                $table->id();
+                $table->char('user_id', 36)->charset('utf8mb4')->collation('utf8mb4_bin');
+                $table->float('cr');
+                $table->boolean('is_valid')->default(false);
+                $table->unsignedInteger('version')->default(1);
+                $table->json('weights_snapshot')->nullable();
+                $table->timestamps();
 
-            $table->index(['user_id', 'version']);
-        });
+                $table->index(['user_id', 'version']);
+                $table->foreign('user_id')->references('id')->on('user')->cascadeOnDelete();
+            });
+        }
 
-        Schema::create('spk_supplier_selection_logs', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('user_id');
-            $table->foreignId('supplier_id')->constrained('master_suppliers')->cascadeOnDelete();
-            $table->foreignId('produk_id')->constrained('master_produks')->cascadeOnDelete();
-            $table->float('final_score')->nullable();
-            $table->unsignedTinyInteger('ranking')->nullable();
-            $table->timestamps();
+        if (! Schema::hasTable('spk_supplier_selection_logs')) {
+            Schema::create('spk_supplier_selection_logs', function (Blueprint $table) {
+                $table->id();
+                $table->char('user_id', 36)->charset('utf8mb4')->collation('utf8mb4_bin');
+                $table->foreignId('supplier_id')->constrained('master_suppliers')->cascadeOnDelete();
+                $table->foreignId('produk_id')->constrained('master_produks')->cascadeOnDelete();
+                $table->float('final_score')->nullable();
+                $table->unsignedTinyInteger('ranking')->nullable();
+                $table->timestamps();
 
-            $table->index(['user_id', 'created_at']);
-        });
+                $table->index(['user_id', 'created_at']);
+                $table->foreign('user_id')->references('id')->on('user')->cascadeOnDelete();
+            });
+        }
     }
 
     public function down(): void

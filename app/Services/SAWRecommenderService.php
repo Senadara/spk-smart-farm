@@ -2,24 +2,26 @@
 
 namespace App\Services;
 
-use App\Models\SpkRanking;
-use App\Models\SpkAhpBobot;
-use App\Models\SpkParameter;
-use App\Models\SpkSupplierParameterValue;
 use App\Models\MasterProduk;
 use App\Models\MasterSupplier;
+use App\Models\SpkAhpBobot;
+use App\Models\SpkParameter;
+use App\Models\SpkRanking;
+use App\Models\SpkSupplierParameterValue;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use stdClass;
 
 class SAWRecommenderService
 {
     public function __construct(
         private NormalizationService $normalizer,
         private SupplierInsightService $insightService,
+        private SupplierDistanceService $distanceService,
     ) {}
 
-    public function getRecommendations(int $userId, int $produkId, bool $forceRecalculate = false)
+    public function getRecommendations(string $userId, int $produkId, bool $forceRecalculate = false)
     {
-        if (!$forceRecalculate) {
+        if (! $forceRecalculate) {
             $cached = SpkRanking::where('user_id', $userId)
                 ->where('produk_id', $produkId)
                 ->where('is_valid', true)
@@ -35,17 +37,18 @@ class SAWRecommenderService
 
         $bobots = SpkAhpBobot::where('user_id', $userId)->where('is_valid', true)->get();
         if ($bobots->isEmpty()) {
-            return new EloquentCollection();
+            return new EloquentCollection;
         }
 
         $bobotMap = $bobots->pluck('bobot', 'parameter_id');
 
         $produk = MasterProduk::with('suppliers')->find($produkId);
-        if (!$produk || $produk->suppliers->isEmpty()) {
-            return new EloquentCollection();
+        if (! $produk || $produk->suppliers->isEmpty()) {
+            return new EloquentCollection;
         }
 
-        $supplierIds = $produk->suppliers->pluck('id');
+        $suppliers = $produk->suppliers->keyBy('id');
+        $supplierIds = $suppliers->keys();
         $parameters = SpkParameter::all();
         $paramTypes = $parameters->pluck('tipe', 'id')->toArray();
 
@@ -53,15 +56,23 @@ class SAWRecommenderService
             ->where('produk_id', $produkId)
             ->get();
 
-        $minMax = $this->normalizer->computeMinMax($paramValues);
+        $minMax = $this->normalizer->computeMinMax(
+            $this->withRuntimeDistanceValues($paramValues, $parameters, $suppliers, $userId)
+        );
 
         $scores = [];
         foreach ($supplierIds as $sid) {
             $valuesByParameter = [];
             foreach ($parameters as $param) {
+                if ($this->isDistanceParameter($param)) {
+                    $valuesByParameter[$param->id] = $this->distanceValue($suppliers[$sid], $userId);
+
+                    continue;
+                }
+
                 $pv = $paramValues->where('supplier_id', $sid)->where('parameter_id', $param->id)->first();
                 if ($pv) {
-                    $valuesByParameter[$param->id] = $pv->value;
+                    $valuesByParameter[$param->id] = (float) $pv->value;
                 }
             }
 
@@ -115,10 +126,10 @@ class SAWRecommenderService
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function getEvaluationMatrix(int $produkId): array
+    public function getEvaluationMatrix(int $produkId, ?string $userId = null): array
     {
         $produk = MasterProduk::with('suppliers')->find($produkId);
-        if (!$produk) {
+        if (! $produk) {
             return [];
         }
 
@@ -127,7 +138,10 @@ class SAWRecommenderService
             ->whereIn('supplier_id', $produk->suppliers->pluck('id'))
             ->get();
 
-        $minMax = $this->normalizer->computeMinMax($paramValues);
+        $suppliers = $produk->suppliers->keyBy('id');
+        $minMax = $this->normalizer->computeMinMax(
+            $this->withRuntimeDistanceValues($paramValues, $parameters, $suppliers, $userId)
+        );
         $paramTypes = $parameters->pluck('tipe', 'id')->toArray();
 
         $result = [];
@@ -140,10 +154,15 @@ class SAWRecommenderService
 
             $valuesByParameter = [];
             foreach ($parameters as $param) {
-                $pv = $paramValues->where('supplier_id', $supplier->id)
-                    ->where('parameter_id', $param->id)
-                    ->first();
-                $val = $pv?->value;
+                if ($this->isDistanceParameter($param)) {
+                    $val = $this->distanceValue($supplier, $userId);
+                } else {
+                    $pv = $paramValues->where('supplier_id', $supplier->id)
+                        ->where('parameter_id', $param->id)
+                        ->first();
+                    $val = $pv?->value;
+                }
+
                 $valuesByParameter[$param->id] = $val ?? 0;
 
                 $key = $this->attributeKey($param->nama_parameter);
@@ -173,6 +192,7 @@ class SAWRecommenderService
             'harga' => 'price',
             'kualitas' => 'quality',
             'kecepatan' => 'delivery_speed',
+            'jarak' => 'distance',
         ];
 
         $lower = strtolower($nama);
@@ -183,5 +203,39 @@ class SAWRecommenderService
         }
 
         return str_replace(' ', '_', strtolower($nama));
+    }
+
+    private function isDistanceParameter(SpkParameter $parameter): bool
+    {
+        return str_contains(strtolower($parameter->nama_parameter), 'jarak');
+    }
+
+    private function distanceValue(MasterSupplier $supplier, ?string $userId): float
+    {
+        return $this->distanceService->distanceToSupplier($supplier, $userId) ?? 9999.0;
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, SpkSupplierParameterValue>  $storedValues
+     * @param  \Illuminate\Support\Collection<int, SpkParameter>  $parameters
+     * @param  \Illuminate\Support\Collection<int, MasterSupplier>  $suppliers
+     * @return \Illuminate\Support\Collection<int, object>
+     */
+    private function withRuntimeDistanceValues($storedValues, $parameters, $suppliers, ?string $userId)
+    {
+        $values = collect($storedValues);
+        $distanceParameters = $parameters->filter(fn (SpkParameter $param) => $this->isDistanceParameter($param));
+
+        foreach ($distanceParameters as $parameter) {
+            foreach ($suppliers as $supplier) {
+                $row = new stdClass;
+                $row->supplier_id = $supplier->id;
+                $row->parameter_id = $parameter->id;
+                $row->value = $this->distanceValue($supplier, $userId);
+                $values->push($row);
+            }
+        }
+
+        return $values;
     }
 }

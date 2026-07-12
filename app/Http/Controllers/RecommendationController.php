@@ -20,7 +20,7 @@ class RecommendationController extends Controller
         $userId = SpkDssActorId::resolve($request);
         if ($userId === null) {
             return response()->json([
-                'message' => 'User DSS tidak dikenali. Pastikan id pengguna di session valid atau email Anda terdaftar di tabel users.',
+                'message' => 'User DSS tidak dikenali. Pastikan id pengguna di session valid atau email Anda terdaftar di tabel user.',
             ], 401);
         }
 

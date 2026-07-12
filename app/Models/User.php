@@ -12,10 +12,13 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
 
     protected $table = 'user';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     const CREATED_AT = 'createdAt';
+
     const UPDATED_AT = 'updatedAt';
 
     /**
@@ -27,10 +30,12 @@ class User extends Authenticatable
         'id',
         'name',
         'email',
+        'phone',
         'password',
         'role',
         'owner_id',
         'isActive',
+        'isDeleted',
     ];
 
     /**

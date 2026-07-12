@@ -11,7 +11,7 @@
             <p class="text-sm text-gray-500 mt-1">Cari harga termurah dan stok terbanyak dari berbagai supplier sekaligus.</p>
         </div>
         <a href="{{ route('spk.suppliers.index') }}" class="text-sm font-semibold text-gray-500 bg-white border border-gray-200 px-4 py-2 rounded-xl hover:bg-gray-50 transition">
-            ← Kembali ke Katalog
+            &larr; Kembali ke Katalog
         </a>
     </div>
 
@@ -37,7 +37,7 @@
                 <div class="divide-y divide-gray-50 max-h-[600px] overflow-y-auto">
                     @forelse($products as $prod)
                         <a href="{{ route('spk.suppliers.products', ['product_id' => $prod['id'], 'search' => $search ?? '']) }}" class="flex items-center gap-3 p-4 hover:bg-emerald-50 transition {{ ($activeProduct['id'] ?? '') === $prod['id'] ? 'bg-emerald-50/70 border-l-4 border-emerald-500' : 'border-l-4 border-transparent' }}">
-                            <div class="w-10 h-10 rounded-lg bg-white flex items-center justify-center text-xl shadow-sm border border-gray-100">
+                            <div class="w-10 h-10 rounded-lg bg-white flex items-center justify-center text-xs font-black text-emerald-700 shadow-sm border border-gray-100">
                                 {{ $prod['icon'] }}
                             </div>
                             <div>
@@ -60,7 +60,7 @@
                 <div class="bg-white rounded-2xl shadow-sm border border-emerald-50 p-6 mb-6">
                     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                         <div class="flex items-center gap-4">
-                            <div class="w-16 h-16 rounded-xl bg-purple-50 text-3xl flex items-center justify-center border border-purple-100">
+                            <div class="w-16 h-16 rounded-xl bg-purple-50 text-base font-black text-purple-700 flex items-center justify-center border border-purple-100">
                                 {{ $activeProduct['icon'] }}
                             </div>
                             <div>
@@ -78,9 +78,9 @@
                                 @endif
                                 
                                 <select name="sort" onchange="document.getElementById('filterTableForm').submit()" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-emerald-500 font-medium text-gray-600">
-                                    <option value="saw" {{ ($filterSort ?? 'saw') === 'saw' ? 'selected' : '' }}>🏆 Ranking SAW (DSS)</option>
-                                    <option value="cheapest" {{ $filterSort === 'cheapest' ? 'selected' : '' }}>⬇ Harga Termurah</option>
-                                    <option value="closest" {{ $filterSort === 'closest' ? 'selected' : '' }}>📍 Jarak Terdekat</option>
+                                    <option value="saw" {{ ($filterSort ?? 'saw') === 'saw' ? 'selected' : '' }}>Ranking SAW (DSS)</option>
+                                    <option value="cheapest" {{ $filterSort === 'cheapest' ? 'selected' : '' }}>Harga Termurah</option>
+                                    <option value="closest" {{ $filterSort === 'closest' ? 'selected' : '' }}>Jarak Terdekat</option>
                                 </select>
 
                                 <select name="stock" onchange="document.getElementById('filterTableForm').submit()" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-emerald-500 font-medium text-gray-600">
@@ -99,7 +99,7 @@
                         </div>
                     @elseif(empty($ahpReady))
                         <div class="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-100 text-xs text-amber-900">
-                            Ranking SAW belum aktif. <a href="{{ route('spk.suppliers.dss.config') }}" class="font-bold underline">Konfigurasi AHP</a> terlebih dahulu (CR ≤ 0.1).
+                            Ranking SAW belum aktif. <a href="{{ route('spk.suppliers.dss.config') }}" class="font-bold underline">Konfigurasi AHP</a> terlebih dahulu (CR <= 0.1).
                         </div>
                     @endif
 
@@ -126,7 +126,7 @@
                                 <tbody class="bg-white divide-y divide-gray-100">
                                     @php 
                                         $cheapest = collect($comparison)->min('price'); 
-                                        $closest = collect($comparison)->min('distance');
+                                        $closest = collect($comparison)->where('distanceKnown', true)->min('distance');
                                     @endphp
                                     
                                     @foreach($comparison as $c)
@@ -157,8 +157,8 @@
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap flex flex-col justify-center">
                                                 <div class="text-sm font-semibold text-gray-700 flex items-center gap-1">
-                                                    {{ $c['distance'] }} km 
-                                                    @if($c['distance'] == $closest)
+                                                    {{ $c['distanceLabel'] ?? number_format($c['distance'], 1, ',', '.').' km' }}
+                                                    @if($closest !== null && !empty($c['distanceKnown']) && $c['distance'] == $closest)
                                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">Terdekat</span>
                                                     @endif
                                                 </div>

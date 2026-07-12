@@ -1,10 +1,10 @@
 {{--
-KPI Metric Card — Horizontal card with trend indicator.
+KPI Metric Card - Horizontal card with trend indicator.
 
 Props:
-- $label : string — KPI name
-- $value : string — Formatted value
-- $trend : array — { direction, value, status }
+- $label : string - KPI name
+- $value : string - Formatted value
+- $trend : array - { direction, value, status }
 --}}
 
 @props([
@@ -29,11 +29,11 @@ Props:
     $arrowPath = $arrows[$trend['direction']] ?? $arrows['stable'];
 @endphp
 
-<div {{ $attributes->merge(['class' => 'bg-white border border-gray-100 rounded-xl p-4 hover:shadow-md transition-all']) }}>
-    <p class="text-xs font-medium text-gray-400 mb-1 uppercase tracking-wider">{{ $label }}</p>
-    <div class="flex items-end justify-between gap-2">
-        <p class="text-2xl font-bold text-gray-900 leading-none">{{ $value }}</p>
-        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-semibold rounded-full {{ $badgeClass }}">
+<div {{ $attributes->merge(['class' => 'bg-white border border-gray-100 rounded-xl p-3.5 xl:p-4 min-w-0 min-h-[94px] hover:shadow-md transition-all flex flex-col justify-between']) }}>
+    <p class="text-[11px] font-medium text-gray-400 mb-2 uppercase tracking-wider truncate" title="{{ $label }}">{{ $label }}</p>
+    <div class="flex items-end justify-between gap-2 min-w-0">
+        <p class="text-xl 2xl:text-2xl font-bold text-gray-900 leading-none truncate" title="{{ $value }}">{{ $value }}</p>
+        <span class="inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5 text-[11px] font-semibold rounded-full whitespace-nowrap {{ $badgeClass }}">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $arrowPath !!}</svg>
             {{ $trend['value'] }}
         </span>

@@ -182,29 +182,29 @@
             }" class="max-w-full space-y-5">
 
         {{-- HEADER --}}
-        <div class="flex flex-wrap items-center justify-between gap-4 mb-2">
-            <div class="min-w-0">
+        <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between mb-2">
+            <div class="min-w-0 max-w-4xl">
                 <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Decision Support & Operations</h1>
-                <p class="text-sm text-gray-500 mt-1.5 leading-relaxed">
-                    <span class="inline-flex items-center gap-1.5">
+                <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500 mt-1.5 leading-relaxed">
+                    <span class="inline-flex items-center gap-1.5 shrink-0">
                         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                         <span class="font-medium text-emerald-600">Live monitoring</span>
                     </span>
-                    <span class="mx-2 text-gray-300">•</span>
+                    <span class="h-1 w-1 rounded-full bg-gray-300"></span>
                     <span class="font-semibold text-gray-700">{{ $activeKomoditasNama }}</span>
-                    <span class="mx-2 text-gray-300">•</span>
+                    <span class="h-1 w-1 rounded-full bg-gray-300"></span>
                     <span>{{ count($barnEnvironment['barns']) }} kandang aktif</span>
-                    <span class="mx-2 text-gray-300">•</span>
+                    <span class="h-1 w-1 rounded-full bg-gray-300"></span>
                     <span>{{ count($productionLog) }} log produksi</span>
                 </p>
             </div>
-            <div class="flex items-center gap-3">
-                <div class="flex items-center gap-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-500 overflow-hidden pr-3 shadow-sm">
+            <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+                <div class="flex min-w-0 items-center gap-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-500 overflow-hidden pr-3 shadow-sm">
                     <div class="pl-3.5 py-2.5 pointer-events-none">
                         <svg class="w-4.5 h-4.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
                     </div>
                     <select @change="onKomoditasChange($event)"
-                        class="py-2.5 pl-1 pr-7 bg-transparent border-none text-gray-700 focus:outline-none cursor-pointer text-sm font-semibold appearance-none">
+                        class="w-full py-2.5 pl-1 pr-7 bg-transparent border-none text-gray-700 focus:outline-none cursor-pointer text-sm font-semibold appearance-none sm:w-auto">
                         @forelse($komoditas as $k)
                             <option value="{{ $k->id }}" {{ $k->id === $activeKomoditasId ? 'selected' : '' }}>{{ $k->nama }}</option>
                         @empty
@@ -212,7 +212,7 @@
                         @endforelse
                     </select>
                 </div>
-                <div class="flex items-center gap-2.5 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 shadow-sm">
+                <div class="flex items-center gap-2.5 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 shadow-sm sm:justify-center">
                     <svg class="w-4.5 h-4.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                     <span class="font-medium">{{ now()->format('m/d/Y') }}</span>
                 </div>
@@ -229,15 +229,89 @@
         </div>
         @endif
 
+        @if(!($dailyReportStatus['isReady'] ?? false))
+            @php
+                $dailyStatus = $dailyReportStatus['status'] ?? 'empty';
+                $dailyTone = match($dailyStatus) {
+                    'partial' => [
+                        'wrap' => 'border-sky-200 bg-sky-50 text-sky-900',
+                        'icon' => 'text-sky-600 bg-sky-100',
+                        'pill' => 'bg-sky-100 text-sky-700',
+                    ],
+                    'no_coops' => [
+                        'wrap' => 'border-gray-200 bg-gray-50 text-gray-800',
+                        'icon' => 'text-gray-600 bg-gray-100',
+                        'pill' => 'bg-gray-100 text-gray-600',
+                    ],
+                    default => [
+                        'wrap' => 'border-amber-200 bg-amber-50 text-amber-900',
+                        'icon' => 'text-amber-600 bg-amber-100',
+                        'pill' => 'bg-amber-100 text-amber-700',
+                    ],
+                };
+                $missingBarns = array_slice($dailyReportStatus['missingBarns'] ?? [], 0, 4);
+            @endphp
+            <div class="rounded-xl border px-5 py-4 shadow-sm {{ $dailyTone['wrap'] }}">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="flex gap-3">
+                        <div class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg {{ $dailyTone['icon'] }}">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6h6v6m2 4H7a2 2 0 01-2-2V7a2 2 0 012-2h2l2-2h2l2 2h2a2 2 0 012 2v12a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 class="text-sm font-bold">{{ $dailyReportStatus['title'] ?? 'Laporan harian belum tersedia' }}</h2>
+                                <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold {{ $dailyTone['pill'] }}">
+                                    {{ $dailyReportStatus['reportedCount'] ?? 0 }}/{{ $dailyReportStatus['totalCoops'] ?? 0 }} kandang
+                                </span>
+                            </div>
+                            <p class="mt-1 text-sm leading-relaxed opacity-90">
+                                {{ $dailyReportStatus['message'] ?? 'Data produksi akan tampil setelah laporan harian dicatat.' }}
+                            </p>
+                            <div class="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                                <div class="rounded-lg bg-white/60 px-3 py-2">
+                                    <span class="font-semibold">Tanggal laporan:</span>
+                                    <span>{{ $dailyReportStatus['date'] ?? now()->format('d M Y') }}</span>
+                                </div>
+                                <div class="rounded-lg bg-white/60 px-3 py-2">
+                                    <span class="font-semibold">Data yang tetap valid:</span>
+                                    <span>sensor IoT, status kandang, dan riwayat laporan lama</span>
+                                </div>
+                            </div>
+                            @if(!empty($missingBarns))
+                                <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                                    <span class="font-semibold">Belum ada laporan:</span>
+                                    @foreach($missingBarns as $barnName)
+                                        <span class="rounded-full bg-white/70 px-2.5 py-1 font-medium">{{ $barnName }}</span>
+                                    @endforeach
+                                    @if(count($dailyReportStatus['missingBarns'] ?? []) > count($missingBarns))
+                                        <span class="font-medium opacity-80">+{{ count($dailyReportStatus['missingBarns']) - count($missingBarns) }} kandang lain</span>
+                                    @endif
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="shrink-0 rounded-lg bg-white/70 px-4 py-3 text-xs leading-relaxed lg:w-72">
+                        <p class="font-bold">Apa yang perlu dilakukan?</p>
+                        <p class="mt-1 opacity-90">Input laporan panen, pakan, atau kematian harian dari aplikasi/API Smart Farming. Setelah tersimpan, refresh dashboard atau jalankan evaluasi SPK.</p>
+                        @if(!empty($dailyReportStatus['lastReportAt']))
+                            <p class="mt-2 opacity-75">Laporan terakhir: {{ $dailyReportStatus['lastReportAt'] }}</p>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        @endif
+
         {{-- SECTION 1: KPI --}}
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 xl:gap-4">
             @foreach($kpiMetrics as $kpi)
                 <x-peternakan.kpi-card :label="$kpi['label']" :value="$kpi['value']" :trend="$kpi['trend']" />
             @endforeach
         </div>
 
         {{-- SECTION 2: CHART + BARN ENVIRONMENT --}}
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
+        <div class="grid grid-cols-1 xl:grid-cols-5 gap-5">
             <x-peternakan.performance-chart
                 chartId="effChart"
                 :labels="$chartData['labels']"
@@ -245,16 +319,16 @@
                 :fcrData="$chartData['fcr']"
                 :chartDataByRange="$chartDataByRange"
                 :defaultRange="$chartRange"
-                class="lg:col-span-3"
+                class="xl:col-span-3"
             />
 
-            <div class="lg:col-span-2 bg-white border border-gray-100 rounded-xl p-6 shadow-sm flex flex-col h-full">
-                <div class="flex items-center justify-between mb-5">
+            <div class="xl:col-span-2 bg-white border border-gray-100 rounded-xl p-5 xl:p-6 shadow-sm flex flex-col h-full">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-5">
                     <h3 class="text-lg font-semibold text-gray-800">Barn Environment</h3>
                     <span class="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Batas IoT komoditas</span>
                 </div>
 
-                <div class="grid grid-cols-3 gap-2.5 mb-5">
+                <div class="grid grid-cols-2 gap-2.5 mb-5 sm:grid-cols-3">
                     @foreach($barnEnvironment['barns'] as $i => $barn)
                         @php
                             $barnColors = [
@@ -269,15 +343,15 @@
                         <button type="button"
                             @click="selectBarn({{ $i }})"
                             :class="activeBarn === {{ $i }} ? 'ring-2 {{ $ring }} scale-105 shadow-md' : 'hover:shadow-sm'"
-                            class="rounded-lg border px-3 py-3 text-center cursor-pointer transition-all {{ $baseColor }}"
+                            class="rounded-lg border px-2.5 py-3 text-center cursor-pointer transition-all {{ $baseColor }}"
                             title="Klik untuk melihat sensor kandang ini">
                             <p class="text-xs font-semibold truncate">{{ $barn['name'] }}</p>
-                            <p class="text-lg font-bold mt-0.5">{{ $barn['temp'] }}°</p>
+                            <p class="text-lg font-bold mt-0.5">{{ $barn['temp'] }}°C</p>
                         </button>
                     @endforeach
                 </div>
 
-                <div class="grid grid-cols-2 gap-3.5">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:gap-3.5">
                     @foreach([
                         ['key' => 'avg_temp', 'label' => 'Suhu', 'icon' => 'M12 9V3m0 0a2 2 0 10-4 0v9.764a4 4 0 106.764 1.528A3.99 3.99 0 0012 13V3z', 'status' => 'temp_status'],
                         ['key' => 'humidity', 'label' => 'Kelembapan', 'icon' => 'M12 21a8 8 0 004-14.947L12 2l-4 4.053A8 8 0 0012 21z', 'status' => 'humidity_status'],
@@ -323,7 +397,7 @@
             <div class="flex flex-wrap items-center justify-between gap-3 p-6 border-b border-gray-50">
                 <div>
                     <h3 class="text-lg font-semibold text-gray-800">Daftar Kandang (Unit Budidaya)</h3>
-                    <p class="text-sm text-gray-500 mt-1">Komoditas: <span class="font-medium text-gray-700">{{ $activeKomoditasNama }}</span> — klik kartu untuk membuka halaman detail</p>
+                    <p class="text-sm text-gray-500 mt-1">Komoditas: <span class="font-medium text-gray-700">{{ $activeKomoditasNama }}</span> - klik kartu untuk membuka halaman detail</p>
                 </div>
                 <span class="text-xs font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">{{ count($listKandang) }} kandang</span>
             </div>
@@ -337,7 +411,7 @@
                         };
                     @endphp
                     <a href="{{ route('peternakan.show', $kandang['id']) }}?komoditas={{ $activeKomoditasId }}"
-                       class="group flex items-center justify-between gap-4 border border-gray-100 rounded-xl px-5 py-4 hover:border-emerald-300 hover:bg-emerald-50/50 hover:shadow-sm transition-all"
+                       class="group flex flex-col gap-4 border border-gray-100 rounded-xl px-5 py-4 hover:border-emerald-300 hover:bg-emerald-50/50 hover:shadow-sm transition-all sm:flex-row sm:items-center sm:justify-between"
                        style="text-decoration: none;">
                         <div class="flex items-center gap-3.5 min-w-0">
                             <span class="w-3 h-3 rounded-full shrink-0 {{ $cfg['dot'] }}"></span>
@@ -348,12 +422,12 @@
                                 </div>
                                 <p class="text-sm text-gray-500 mt-1.5">
                                     {{ number_format((float)($kandang['jumlah'] ?? 0), 0, ',', '.') }} ekor
-                                    @if($kandang['kapasitas']) <span class="mx-1.5 text-gray-300">•</span> kapasitas {{ $kandang['kapasitas'] }} @endif
-                                    @if($kandang['lokasi']) <span class="mx-1.5 text-gray-300">•</span> {{ $kandang['lokasi'] }} @endif
+                                    @if($kandang['kapasitas']) <span class="mx-1.5 text-gray-300">/</span> kapasitas {{ $kandang['kapasitas'] }} @endif
+                                    @if($kandang['lokasi']) <span class="mx-1.5 text-gray-300">/</span> {{ $kandang['lokasi'] }} @endif
                                 </p>
                             </div>
                         </div>
-                        <div class="flex items-center gap-5 shrink-0 text-right">
+                        <div class="flex w-full items-center justify-between gap-5 shrink-0 text-right sm:w-auto sm:justify-end">
                             <div class="text-right">
                                 <p class="text-xs text-gray-400 font-medium">HDP hari ini</p>
                                 <p class="text-base font-bold text-gray-800">{{ $kandang['hdp'] }}%</p>
@@ -427,4 +501,3 @@
 @push('scripts')
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 @endpush
-

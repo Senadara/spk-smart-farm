@@ -19,6 +19,7 @@ class SpkFuzzyInputSource extends Model
 
     protected $fillable = [
         'id',
+        'profile_id',
         'variable_id',
         'source_type',
         'source_name',
@@ -34,5 +35,10 @@ class SpkFuzzyInputSource extends Model
     public function variable(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(SpkFuzzyVariable::class, 'variable_id');
+    }
+
+    public function profile(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(SpkFuzzyProfile::class, 'profile_id');
     }
 }

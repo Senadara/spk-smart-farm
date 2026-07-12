@@ -2,6 +2,7 @@
 
 @php
     $pColor = ['Urgent' => 'text-red-600 bg-red-100', 'High' => 'text-amber-600 bg-amber-100', 'Medium' => 'text-blue-600 bg-blue-100', 'Low' => 'text-gray-600 bg-gray-100'][$ticket['priority']] ?? 'text-gray-600 bg-gray-100';
+    $ticketCode = $ticket['code'] ?? substr($ticket['id'], 0, 8);
     $iconMap = [
         'Fuzzy Engine' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>',
         'Causality Analysis' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>',
@@ -13,7 +14,7 @@
 <a href="{{ route('spk.tasks.show', $ticket['id']) }}" class="block bg-white p-3 rounded-lg border border-gray-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all cursor-pointer group">
     <div class="flex items-start justify-between mb-2">
         <span class="text-[9px] font-bold px-1.5 py-0.5 rounded {{ $pColor }}">{{ $ticket['priority'] }} Priority</span>
-        <span class="text-[9px] font-mono text-gray-400">#{{ $ticket['id'] }}</span>
+        <span class="text-[9px] font-mono text-gray-400">#{{ $ticketCode }}</span>
     </div>
     
     <h5 class="text-xs font-bold text-gray-900 leading-tight mb-2 group-hover:text-emerald-700 transition-colors">{{ $ticket['title'] }}</h5>

@@ -17,6 +17,8 @@ class SpkFuzzySeeder extends Seeder
         DB::table('spk_fuzzy_sets')->delete();
         DB::table('spk_fuzzy_variables')->delete();
 
+        $profileId = $this->ensureDefaultProfile();
+
         // ── 1. VARIABEL ─────────────────────────────────────────────────
         // [group, name, type, unit, description]
         $variablesData = [
@@ -37,7 +39,7 @@ class SpkFuzzySeeder extends Seeder
         foreach ($variablesData as [$group, $name, $type, $unit, $desc]) {
             $id = (string) Str::uuid();
             DB::table('spk_fuzzy_variables')->insert([
-                'id' => $id, 'group' => $group, 'name' => $name,
+                'id' => $id, 'profile_id' => $profileId, 'group' => $group, 'name' => $name,
                 'type' => $type, 'unit' => $unit, 'description' => $desc,
                 'createdAt' => now(), 'updatedAt' => now(),
             ]);
@@ -132,7 +134,7 @@ class SpkFuzzySeeder extends Seeder
         ];
         foreach ($sourcesData as [$varName, $type, $srcName, $field, $fn, $extra]) {
             DB::table('spk_fuzzy_input_sources')->insert([
-                'id' => (string) Str::uuid(), 'variable_id' => $varIds[$varName],
+                'id' => (string) Str::uuid(), 'profile_id' => $profileId, 'variable_id' => $varIds[$varName],
                 'source_type' => $type, 'source_name' => $srcName,
                 'field_name' => $field, 'function_name' => $fn,
                 'extra_config' => $extra ? json_encode($extra) : null,
@@ -205,6 +207,7 @@ class SpkFuzzySeeder extends Seeder
             $ruleId = (string) Str::uuid();
             DB::table('spk_fuzzy_rules')->insert([
                 'id'            => $ruleId,
+                'profile_id'    => $profileId,
                 'name'          => "Rule-{$group}-" . ($i + 1),
                 'operator'      => $operator,
                 'output_set_id' => $setIds[$outVar][$outSet],
@@ -227,5 +230,51 @@ class SpkFuzzySeeder extends Seeder
         }
 
         $this->command->info('✅ SpkFuzzySeeder: ' . count($variablesData) . ' variabel, ' . count($setsData) . ' sets, ' . count($rulesData) . ' rules berhasil di-seed.');
+    }
+
+    private function ensureDefaultProfile(): string
+    {
+        $commodityId = DB::table('komoditas')
+            ->where('isDeleted', 0)
+            ->where(function ($query) {
+                $query->where('nama', 'like', '%Layer%')
+                    ->orWhere('nama', 'like', '%Petelur%')
+                    ->orWhere('nama', 'like', '%Ayam%');
+            })
+            ->orderByRaw("CASE WHEN nama LIKE '%Layer%' OR nama LIKE '%Petelur%' THEN 0 ELSE 1 END")
+            ->value('id');
+
+        $existing = DB::table('spk_fuzzy_profiles')
+            ->where('name', 'Ayam Petelur - RFC v1')
+            ->value('id');
+
+        if ($existing) {
+            DB::table('spk_fuzzy_profiles')
+                ->where('id', $existing)
+                ->update([
+                    'commodity_id' => $commodityId,
+                    'status' => 'active',
+                    'is_active' => true,
+                    'updatedAt' => now(),
+                ]);
+
+            return (string) $existing;
+        }
+
+        $profileId = (string) Str::uuid();
+
+        DB::table('spk_fuzzy_profiles')->insert([
+            'id' => $profileId,
+            'commodity_id' => $commodityId,
+            'name' => 'Ayam Petelur - RFC v1',
+            'version' => 'v1',
+            'status' => 'active',
+            'is_active' => true,
+            'notes' => 'Konfigurasi awal Fuzzy Mamdani untuk studi kasus ayam petelur RFC.',
+            'createdAt' => now(),
+            'updatedAt' => now(),
+        ]);
+
+        return $profileId;
     }
 }

@@ -29,7 +29,7 @@ class SpkSupplierDssController extends Controller
         $userId = SpkDssActorId::resolve($request);
         $saved = $userId !== null
             ? SpkAhpPerbandingan::where('user_id', $userId)->get()->keyBy(
-                fn ($p) => $p->parameter_1_id . '-' . $p->parameter_2_id
+                fn ($p) => $p->parameter_1_id.'-'.$p->parameter_2_id
             )
             : collect();
         $bobots = $userId !== null
@@ -63,9 +63,9 @@ class SpkSupplierDssController extends Controller
         $insights = collect();
 
         if ($userId !== null && $produkId && $bobots->isNotEmpty()) {
-            $rankings = $this->sawService->getRecommendations($userId, $produkId, true);
+            $rankings = $this->sawService->getRecommendations($userId, $produkId);
             $rankings->load('supplier', 'produk');
-            $evaluation = $this->sawService->getEvaluationMatrix($produkId);
+            $evaluation = $this->sawService->getEvaluationMatrix($produkId, $userId);
             $insights = $this->insightService->generateInsights($userId, $produkId);
         }
 
@@ -92,8 +92,8 @@ class SpkSupplierDssController extends Controller
         if ($userId === null) {
             return back()->withInput()->with(
                 'error',
-                'Pengguna login tidak bisa dipetakan ke tabel pengguna aplikasi (`users`). ' .
-                    'Pastikan kolom ID pada session valid (lebih besar dari nol) atau email akun Anda ada di `users`. ' .
+                'Pengguna login tidak bisa dipetakan ke tabel pengguna aplikasi (`user`). '.
+                    'Pastikan ID session atau email akun Anda ada di `user`. '.
                     'Konfigurasi AHP tidak disimpan.'
             );
         }
@@ -111,11 +111,11 @@ class SpkSupplierDssController extends Controller
 
         $result = $this->ahpService->calculateAndSaveWeights($userId);
 
-        if (!$result) {
+        if (! $result) {
             return back()->with('error', 'Minimal 2 kriteria diperlukan untuk perhitungan AHP.');
         }
 
-        if (!$result['is_valid']) {
+        if (! $result['is_valid']) {
             return back()
                 ->with('error', 'Input penilaian mengandung inkonsistensi tinggi (CR > 0.1). Silakan tinjau ulang perbandingan berpasangan.')
                 ->with('ahp_result', $result);
@@ -123,12 +123,14 @@ class SpkSupplierDssController extends Controller
 
         return redirect()
             ->route('spk.suppliers.dss.dashboard')
-            ->with('success', 'Konfigurasi AHP berhasil disimpan. CR = ' . $result['cr']);
+            ->with('success', 'Konfigurasi AHP berhasil disimpan. CR = '.$result['cr']);
     }
 
-    public function apiEvaluation(int $produkId)
+    public function apiEvaluation(Request $request, int $produkId)
     {
-        return response()->json($this->sawService->getEvaluationMatrix($produkId));
+        return response()->json(
+            $this->sawService->getEvaluationMatrix($produkId, SpkDssActorId::resolve($request))
+        );
     }
 
     public function apiRankings(Request $request, int $produkId)
@@ -136,7 +138,7 @@ class SpkSupplierDssController extends Controller
         $userId = SpkDssActorId::resolve($request);
         if ($userId === null) {
             return response()->json([
-                'message' => 'User tidak dikenali untuk DSS (tidak ada users.id atau email pemetaan).',
+                'message' => 'User tidak dikenali untuk DSS (tidak ada user.id atau email pemetaan).',
             ], 401);
         }
         $force = $request->boolean('recalculate');
@@ -144,7 +146,7 @@ class SpkSupplierDssController extends Controller
         $rankings = $this->sawService->getRecommendations($userId, $produkId, $force);
         if ($rankings->isEmpty()) {
             return response()->json([
-                'message' => 'Tidak ada peringkat. Pastikan bobot AHP valid (CR ≤ 0.1) dan produk memiliki supplier dengan nilai parameter.',
+                'message' => 'Tidak ada peringkat. Pastikan bobot AHP valid (CR <= 0.1) dan produk memiliki supplier dengan nilai parameter.',
             ], 404);
         }
 

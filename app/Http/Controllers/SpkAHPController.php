@@ -28,7 +28,7 @@ class SpkAHPController extends Controller
         $userId = SpkDssActorId::resolve($request);
         if ($userId === null) {
             return response()->json([
-                'message' => 'User tidak dikenali untuk DSS: tidak ada baris cocok di tabel users (id session tidak valid atau email tidak cocok).',
+                'message' => 'User tidak dikenali untuk DSS: tidak ada baris cocok di tabel user (id session tidak valid atau email tidak cocok).',
             ], 422);
         }
 

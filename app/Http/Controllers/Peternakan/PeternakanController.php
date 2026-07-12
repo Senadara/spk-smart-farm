@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Peternakan;
 use App\Http\Controllers\Controller;
 use App\Models\Komoditas;
 use App\Models\SpkFuzzyLog;
+use App\Models\SpkFuzzyProfile;
 use App\Services\Fuzzy\InputResolver;
 use App\Services\Fuzzy\MamdaniEngine;
 use App\Services\Fuzzy\NarrativeGenerator;
@@ -24,7 +25,7 @@ class PeternakanController extends Controller
     ) {}
 
     /**
-     * Dashboard utama peternakan — Decision Support & Operations.
+     * Dashboard utama peternakan - Decision Support & Operations.
      */
     public function index(Request $request)
     {
@@ -67,6 +68,7 @@ class PeternakanController extends Controller
             'fuzzyProduktivitasByBarn' => $this->buildProduktivitasByBarn($barns),
             'productionLog' => $this->peternakanService->getProductionLog(),
             'listKandang' => $this->peternakanService->getListKandang(),
+            'dailyReportStatus' => $this->peternakanService->getDailyReportStatus(),
             'evaluationTime' => $evaluationTime,
             'hasKomoditas' => $komoditas->isNotEmpty(),
         ]);
@@ -80,7 +82,11 @@ class PeternakanController extends Controller
         $this->peternakanService->forKomoditas($request->query('komoditas'));
 
         $barns = $this->peternakanService->getBarnEnvironment()['barns'];
-        $barn = collect($barns)->first(fn ($b) => $b['id'] == $id) ?? $barns[0];
+        $barn = collect($barns)->first(fn ($b) => ($b['id'] ?? null) == $id);
+        if (!$barn || ($barn['id'] ?? null) === 'no-data') {
+            abort(404, 'Kandang tidak ditemukan untuk komoditas aktif.');
+        }
+
         $iotDevices = $this->peternakanService->getBarnIotDevices($barn);
 
         return view('peternakan.show', [
@@ -92,14 +98,15 @@ class PeternakanController extends Controller
             'iotDevice' => $iotDevices[0] ?? null,
             'spkMessages' => $this->peternakanService->getBarnSpkMessages($barn),
             'activityLog' => $this->peternakanService->getBarnActivityLog($barn),
-            'productivityTrend' => $this->peternakanService->getProductivityTrend(),
+            'productivityTrend' => $this->peternakanService->getProductivityTrend($barn['id']),
             'eggQuality' => $this->peternakanService->getEggQuality($barn),
+            'dailyDataAudit' => $this->peternakanService->getBarnDailyDataAudit($barn),
             'activeKomoditasId' => $this->peternakanService->getActiveKomoditasId(),
         ]);
     }
 
     /**
-     * POST /peternakan/evaluate-all — jalankan fuzzy untuk semua kandang komoditas aktif.
+     * POST /peternakan/evaluate-all - jalankan fuzzy untuk semua kandang komoditas aktif.
      */
     public function evaluateAll(Request $request): JsonResponse
     {
@@ -192,8 +199,10 @@ class PeternakanController extends Controller
 
     private function runFuzzyEngine(?string $coopId): array
     {
-        $inputs = $this->inputResolver->resolve($coopId);
-        $result = $this->mamdaniEngine->processCascaded($inputs);
+        $commodityId = $this->peternakanService->getActiveKomoditasId();
+        $profile = SpkFuzzyProfile::resolveForContext($commodityId, $coopId);
+        $inputs = $this->inputResolver->resolve($coopId, $commodityId, $profile?->id);
+        $result = $this->mamdaniEngine->processCascaded($inputs, $profile?->id, $commodityId, $coopId);
         $barnName = $coopId ? DB::table('unitBudidaya')->where('id', $coopId)->value('nama') : null;
         $narrative = $this->narrativeGenerator->generate($result, $barnName);
 
@@ -208,6 +217,8 @@ class PeternakanController extends Controller
 
         return SpkFuzzyLog::create([
             'unit_budidaya_id' => $coopId,
+            'profile_id' => $result['profile']['id'] ?? null,
+            'commodity_id' => $result['profile']['commodity_id'] ?? $this->peternakanService->getActiveKomoditasId(),
             'input_json' => $result['inputs'] ?? [],
             'fuzzified_json' => [
                 'lingkungan' => $result['lingkungan']['fuzzified'] ?? [],
@@ -238,6 +249,13 @@ class PeternakanController extends Controller
 
         $lingkLabel = $lingkungan['label'] ?? 'Tidak Diketahui';
         $kesehatLabel = $kesehatan['label'] ?? 'Tidak Diketahui';
+        $lingkScore = round((float) ($lingkungan['value'] ?? 0), 1);
+        $kesehatScore = round((float) ($kesehatan['value'] ?? 0), 1);
+        $gabScore = round(max($lingkScore, $kesehatScore), 1);
+        $spkLink = route('spk.dashboard', array_filter([
+            'komoditas' => $this->peternakanService->getActiveKomoditasId(),
+            'coop_id' => $barn['id'] ?? null,
+        ]));
 
         $fuzzLingk = $lingkungan['fuzzified'] ?? [];
         $suhuPct  = isset($inputs['suhu'])      ? min(($inputs['suhu'] / 50) * 100, 100) : 0;
@@ -248,9 +266,9 @@ class PeternakanController extends Controller
         $amonia = $inputs['amonia']     ?? 0;
 
         $envSensors = [
-            ['label' => 'Suhu Udara',  'percent' => round($suhuPct),  'status' => $suhu > 30 ? 'warning' : 'normal', 'statusLabel' => round($suhu, 1) . '°C — ' . (isset($fuzzLingk['suhu']) && $fuzzLingk['suhu'] ? array_search(max($fuzzLingk['suhu']), $fuzzLingk['suhu']) : '-')],
-            ['label' => 'Kelembapan', 'percent' => round($humPct),   'status' => $humid > 80 ? 'warning' : 'normal', 'statusLabel' => round($humid, 1) . '% — ' . (isset($fuzzLingk['kelembapan']) && $fuzzLingk['kelembapan'] ? array_search(max($fuzzLingk['kelembapan']), $fuzzLingk['kelembapan']) : '-')],
-            ['label' => 'Amonia',     'percent' => round($ammoPct),  'status' => $amonia > 20 ? 'warning' : 'normal', 'statusLabel' => round($amonia, 1) . ' ppm — ' . (isset($fuzzLingk['amonia']) && $fuzzLingk['amonia'] ? array_search(max($fuzzLingk['amonia']), $fuzzLingk['amonia']) : '-')],
+            ['label' => 'Suhu Udara',  'percent' => round($suhuPct),  'status' => $suhu > 30 ? 'warning' : 'normal', 'statusLabel' => round($suhu, 1) . '°C - ' . (isset($fuzzLingk['suhu']) && $fuzzLingk['suhu'] ? array_search(max($fuzzLingk['suhu']), $fuzzLingk['suhu']) : '-')],
+            ['label' => 'Kelembapan', 'percent' => round($humPct),   'status' => $humid > 80 ? 'warning' : 'normal', 'statusLabel' => round($humid, 1) . '% - ' . (isset($fuzzLingk['kelembapan']) && $fuzzLingk['kelembapan'] ? array_search(max($fuzzLingk['kelembapan']), $fuzzLingk['kelembapan']) : '-')],
+            ['label' => 'Amonia',     'percent' => round($ammoPct),  'status' => $amonia > 20 ? 'warning' : 'normal', 'statusLabel' => round($amonia, 1) . ' ppm - ' . (isset($fuzzLingk['amonia']) && $fuzzLingk['amonia'] ? array_search(max($fuzzLingk['amonia']), $fuzzLingk['amonia']) : '-')],
         ];
 
         $prodData = $this->cachedProduktivitasData($barn['id'] ?? null);
@@ -264,23 +282,29 @@ class PeternakanController extends Controller
                 'lingkungan' => [
                     'status' => strtoupper($lingkLabel),
                     'statusColor' => $colorMap[$lingkLabel] ?? 'gray',
+                    'score' => $lingkScore,
+                    'scoreColor' => $this->scoreColor($lingkScore),
                     'title' => $lingkungan['dominant_rule']['diagnosis'] ?? 'Analisa Lingkungan',
-                    'description' => 'Score: ' . round((float) ($lingkungan['value'] ?? 0), 1) . '/100. ' . ($lingkungan['dominant_rule']['diagnosis'] ?? ''),
+                    'description' => 'Score: ' . $lingkScore . '/100. ' . ($lingkungan['dominant_rule']['diagnosis'] ?? ''),
                     'link' => '#',
                 ],
                 'produktivitas' => [
                     'status' => strtoupper($kesehatLabel),
                     'statusColor' => $colorMap[$kesehatLabel] ?? 'gray',
+                    'score' => $kesehatScore,
+                    'scoreColor' => $this->scoreColor($kesehatScore),
                     'title' => $kesehatan['dominant_rule']['diagnosis'] ?? 'Analisa Produktivitas',
-                    'description' => 'Score: ' . round((float) ($kesehatan['value'] ?? 0), 1) . '/100. ' . ($kesehatan['dominant_rule']['diagnosis'] ?? ''),
+                    'description' => 'Score: ' . $kesehatScore . '/100. ' . ($kesehatan['dominant_rule']['diagnosis'] ?? ''),
                     'link' => '#',
                 ],
                 'gabungan' => [
                     'status' => strtoupper($kausalitas['label'] ?? 'N/A'),
                     'statusColor' => $colorMap[$lingkLabel] ?? 'emerald',
+                    'score' => $gabScore,
+                    'scoreColor' => $this->scoreColor($gabScore),
                     'title' => $kausalitas['label'] ?? 'Diagnosis Kausalitas',
                     'description' => $result['narrative'] ?? ($kausalitas['diagnosis'] ?? '-'),
-                    'link' => route('spk.dashboard'),
+                    'link' => $spkLink,
                     'isMain' => true,
                 ],
             ],
@@ -321,6 +345,16 @@ class PeternakanController extends Controller
             60,
             fn () => $this->peternakanService->getProduktivitasData($coopId)
         );
+    }
+
+    private function scoreColor(float $score): string
+    {
+        return match (true) {
+            $score >= 85 => 'emerald',
+            $score >= 70 => 'blue',
+            $score >= 55 => 'amber',
+            default => 'red',
+        };
     }
 
     private function cacheKey(string $segment, ?string $coopId): string

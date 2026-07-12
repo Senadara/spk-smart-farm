@@ -15,15 +15,15 @@
 
     @if(! $userResolved)
         <div class="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-6 text-sm text-amber-950 shadow-sm mb-6">
-            <p class="font-extrabold text-base flex items-center gap-2 mb-3">⚠ Akun Anda belum bisa dipakai sebagai pemilik konfig DSS</p>
+            <p class="font-extrabold text-base flex items-center gap-2 mb-3">Akun Anda belum bisa dipakai sebagai pemilik konfig DSS</p>
             <p class="leading-relaxed text-amber-900/95 max-w-3xl">
                 Session login tidak memetakan Anda ke primary key pada tabel <code class="bg-white px-1 rounded border border-amber-200">users</code>
-                — dashboard SAW &amp; cache ranking tidak bisa diikat per pengguna sampai itu diperbaiki.
+                - dashboard SAW &amp; cache ranking tidak bisa diikat per pengguna sampai itu diperbaiki.
                 <span class="block mt-2 text-xs opacity-85">Konfigurasikan backend auth agar menyimpan ID numerik Laravel yang sama dengan <strong>users.id</strong>, atau pastikan ada baris <strong>users</strong> dengan email yang sama persis seperti di session Anda.</span>
             </p>
             <div class="mt-4 flex flex-wrap gap-2">
                 <a href="{{ route('spk.suppliers.dss.config') }}" class="inline-flex items-center rounded-xl bg-amber-800 px-4 py-2 text-xs font-black text-white hover:bg-amber-900">Pelajari di halaman AHP</a>
-                <a href="{{ route('settings.index') }}" class="inline-flex items-center rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100/80">← Kembali ke pengaturan</a>
+                <a href="{{ route('settings.index') }}" class="inline-flex items-center rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100/80">&larr; Kembali ke pengaturan</a>
             </div>
         </div>
     @endif
@@ -31,14 +31,14 @@
     <div class="rounded-3xl bg-gradient-to-r from-purple-950 via-indigo-900 to-emerald-900 px-6 py-8 sm:px-10 text-white shadow-xl shadow-indigo-900/30 mb-6">
         <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div class="min-w-0">
-                <p class="text-[10px] font-bold uppercase tracking-widest text-emerald-200/95">Operational · DSS</p>
-                <h1 class="mt-2 text-2xl sm:text-3xl font-black tracking-tight">Ranking supplier · SAW</h1>
+                <p class="text-[10px] font-bold uppercase tracking-widest text-emerald-200/95">Operational - DSS</p>
+                <h1 class="mt-2 text-2xl sm:text-3xl font-black tracking-tight">Ranking supplier - SAW</h1>
                 <p class="mt-3 text-sm text-indigo-100/95 leading-relaxed max-w-2xl">
                     Bobot dari langkah konfig AHP digunakan untuk menghitung skor gabungan setiap supplier secara real-time ketika Anda mengganti produk di bawah.
                 </p>
             </div>
             <div class="flex flex-shrink-0 flex-wrap gap-2">
-                <a href="{{ route('spk.suppliers.dss.config') }}" class="inline-flex items-center justify-center rounded-xl bg-emerald-400 px-5 py-2.5 text-sm font-black text-emerald-950 shadow-lg hover:bg-emerald-300 transition whitespace-nowrap">← Edit bobot · AHP</a>
+                <a href="{{ route('spk.suppliers.dss.config') }}" class="inline-flex items-center justify-center rounded-xl bg-emerald-400 px-5 py-2.5 text-sm font-black text-emerald-950 shadow-lg hover:bg-emerald-300 transition whitespace-nowrap">&larr; Edit bobot - AHP</a>
                 <a href="{{ route('spk.suppliers.products') }}" class="inline-flex items-center justify-center rounded-xl bg-white/10 px-5 py-2.5 text-sm font-bold ring-1 ring-white/25 hover:bg-white/15 transition whitespace-nowrap">Komparasi produk</a>
             </div>
         </div>
@@ -101,7 +101,7 @@
 
     @if($bobots->isEmpty())
     <div class="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-900">
-        Bobot AHP belum valid. <a href="{{ route('spk.suppliers.dss.config') }}" class="font-bold underline">Atur perbandingan kriteria</a> terlebih dahulu (CR harus ≤ 0.1).
+        Bobot AHP belum valid. <a href="{{ route('spk.suppliers.dss.config') }}" class="font-bold underline">Atur perbandingan kriteria</a> terlebih dahulu (CR harus <= 0.1).
     </div>
     @else
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -110,7 +110,7 @@
                 <h2 class="text-sm font-bold uppercase text-gray-600 mb-2">Status Konsistensi AHP</h2>
                 @if($latestConfig)
                 <p class="text-3xl font-black {{ $latestConfig->cr <= 0.1 ? 'text-emerald-600' : 'text-red-600' }}">{{ number_format($latestConfig->cr, 4) }}</p>
-                <p class="text-xs text-gray-500 mt-1">CR {{ $latestConfig->cr <= 0.1 ? '≤ 0.1 (Valid)' : '> 0.1 (Invalid)' }} · v{{ $latestConfig->version }}</p>
+                <p class="text-xs text-gray-500 mt-1">CR {{ $latestConfig->cr <= 0.1 ? '<= 0.1 (Valid)' : '> 0.1 (Invalid)' }} - v{{ $latestConfig->version }}</p>
                 @else
                 <p class="text-sm text-gray-500">Belum ada konfigurasi tersimpan.</p>
                 @endif

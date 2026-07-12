@@ -6,7 +6,7 @@
 @section('content')
     <div x-data="spkDashboard()" class="max-w-full space-y-6" x-cloak>
 
-        {{-- ═══ HEADER & FILTERS ═══ --}}
+        {{-- HEADER & FILTERS --}}
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white px-5 py-4 rounded-xl border border-gray-100 shadow-sm">
             <div>
                 <h1 class="text-xl font-bold text-gray-900">Pusat Analisis & SPK</h1>
@@ -37,17 +37,17 @@
             </div>
         </div>
 
-        {{-- ═══ 2. CARD FUZZY LOGIC (Full Width) ═══ --}}
+        {{-- 2. CARD FUZZY LOGIC (Full Width) --}}
         <x-fuzzy-decision-engine 
             :barns="$barnsOption" 
             :indicators="$fuzzyData['indicators']" 
             :spkResults="$fuzzyData['results']"
             :hideBarnFilter="true"
             :showReportButton="false"
-            :evaluationTime="$activeHistory['date'] . ', ' . $activeHistory['time'] . ' — Mode: ' . $activeHistory['mode']"
+            :evaluationTime="$activeHistory['date'] . ', ' . $activeHistory['time'] . ' - Mode: ' . $activeHistory['mode']"
         />
 
-        {{-- ═══ 3. TODO LIST / ACTION TRACKER (Full Width) ═══ --}}
+        {{-- 3. TODO LIST / ACTION TRACKER (Full Width) --}}
         <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
             <div class="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
@@ -101,7 +101,7 @@
             </div>
         </div>
 
-        {{-- ═══ 4. DATA MENTAH + GRAFIK ←→ RIWAYAT SPK (Side-by-Side) ═══ --}}
+        {{-- 4. DATA MENTAH + GRAFIK / RIWAYAT SPK (Side-by-Side) --}}
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
 
             {{-- LEFT: Data Mentah + Grafik + KPI (8/12) --}}
@@ -166,8 +166,8 @@
                             <div class="flex items-end justify-between">
                                 <span class="text-lg font-black text-gray-900">{{ $m['value'] }}</span>
                                 @if($m['trend']['status'] !== 'neutral')
-                                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded {{ $m['trend']['status'] == 'positive' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600' }} flex items-center">
-                                        {{ $m['trend']['direction'] == 'up' ? '↗' : '↘' }} {{ $m['trend']['value'] }}
+                                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded {{ $m['trend']['status'] == 'positive' ? 'bg-emerald-50 text-emerald-600' : ($m['trend']['status'] == 'warning' ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600') }} flex items-center">
+                                        {{ $m['trend']['direction'] == 'up' ? 'Naik' : 'Turun' }} {{ $m['trend']['value'] }}
                                     </span>
                                 @endif
                             </div>
@@ -183,15 +183,15 @@
                     <div class="px-4 pt-4 pb-3 border-b border-gray-100">
                         <div class="flex items-center justify-between mb-2">
                             <h3 class="text-sm font-bold text-gray-800">Riwayat Analisa SPK</h3>
-                            <button class="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition whitespace-nowrap">
-                                Lihat Semua
+                            <button type="button" @click="historyDate = ''; historySearch = ''" class="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition whitespace-nowrap">
+                                Reset Filter
                             </button>
                         </div>
                         <div class="flex items-center gap-2">
-                            <input type="date" class="flex-1 text-[10px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-400 text-gray-500">
+                            <input x-model="historyDate" type="date" class="flex-1 text-[10px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-400 text-gray-500">
                             <div class="relative flex-1">
                                 <svg class="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                                <input type="text" placeholder="Cari ID..." class="w-full text-[10px] border border-gray-200 rounded-lg pl-7 pr-2 py-1.5 focus:outline-none focus:border-emerald-400 text-gray-500">
+                                <input x-model="historySearch" type="text" placeholder="Cari ID/kandang..." class="w-full text-[10px] border border-gray-200 rounded-lg pl-7 pr-2 py-1.5 focus:outline-none focus:border-emerald-400 text-gray-500">
                             </div>
                         </div>
                     </div>
@@ -218,6 +218,7 @@
                                 ];
                             @endphp
                             <a href="?komoditas={{ $komoditas }}&coop_id={{ $coopId }}&history_id={{ $hist['id'] }}"
+                               x-show="historyMatches(@js($hist['search'] ?? ''), @js($hist['dateKey'] ?? ''))"
                                class="block rounded-lg p-3 transition-all cursor-pointer {{ $isActive ? 'bg-gray-800 text-white shadow-md ring-2 ring-gray-700' : 'bg-gray-50 hover:bg-gray-100 border border-gray-100' }}">
                                 
                                 {{-- Top row: ID + Mode Badge + Time --}}
@@ -232,7 +233,7 @@
 
                                 {{-- Status + Barn --}}
                                 <p class="text-[10px] font-semibold {{ $isActive ? 'text-white' : 'text-gray-700' }} mb-0.5">
-                                    {{ $hist['status'] }} · <span class="{{ $isActive ? 'text-gray-300' : 'text-gray-400' }} font-normal">{{ $hist['barn'] }}</span>
+                                    {{ $hist['status'] }} / <span class="{{ $isActive ? 'text-gray-300' : 'text-gray-400' }} font-normal">{{ $hist['barn'] }}</span>
                                 </p>
                                 
                                 {{-- Verdict --}}
@@ -255,7 +256,7 @@
             </div>
         </div>
 
-        {{-- ═══ 5. AHP-SAW SUPPLIER (Standalone Full Width) ═══ --}}
+        {{-- 5. AHP-SAW SUPPLIER (Standalone Full Width) --}}
         <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
             <div class="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
                 <div>
@@ -265,9 +266,9 @@
                     </h3>
                     <p class="text-[10px] text-gray-400 mt-0.5">Analisa Kriteria Harga, Waktu, & Kualitas</p>
                 </div>
-                <button class="text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded transition">
-                    Lihat Marketplace →
-                </button>
+                <a href="{{ route('spk.suppliers.index') }}" class="text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded transition" style="text-decoration: none;">
+                    Lihat Marketplace
+                </a>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -330,9 +331,50 @@
                 evaluating: false,
                 evalMessage: '',
                 evalSuccess: false,
+                historySearch: '',
+                historyDate: '',
                 onFuzzyBarnChange() {},
+                historyMatches(searchText, dateKey) {
+                    const q = (this.historySearch || '').toLowerCase().trim();
+                    const dateOk = !this.historyDate || dateKey === this.historyDate;
+                    const searchOk = !q || (searchText || '').toLowerCase().includes(q);
+                    return dateOk && searchOk;
+                },
                 async runFullEvaluation() {
-                    window.location.href = @js(route('spk.dashboard')) + '?coop_id=' + (@js($coopId) ?? '');
+                    this.evaluating = true;
+                    this.evalMessage = '';
+
+                    try {
+                        const res = await fetch(@js(route('spk.dashboard.evaluate')), {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content ?? '',
+                                'Accept': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                komoditas: @js($komoditas),
+                                coop_id: @js($coopId),
+                            }),
+                        });
+                        const data = await res.json();
+
+                        this.evalSuccess = Boolean(data.success);
+                        if (data.success) {
+                            this.evalMessage = 'Evaluasi selesai (' + data.processed + ' log tersimpan). Memuat ulang...';
+                            if (data.evaluation_time) {
+                                this.evaluationTimeLabel = data.evaluation_time;
+                            }
+                            setTimeout(() => window.location.reload(), 1200);
+                        } else {
+                            this.evalMessage = 'Evaluasi belum berhasil. Periksa data input laporan dan sensor.';
+                        }
+                    } catch (e) {
+                        this.evalSuccess = false;
+                        this.evalMessage = 'Gagal menjalankan evaluasi SPK.';
+                    } finally {
+                        this.evaluating = false;
+                    }
                 },
                 _hdpChart: null,
                 _causalityChart: null,
@@ -356,6 +398,7 @@
 
                     const activeSpkColor = '{{ $fuzzyData['color'] }}';
                     let activeSpiderData = @js($fuzzyData['spider']);
+                    if (this._spiderChart) this._spiderChart.destroy();
                     
                     // Fallback if data is unexpectedly a flat array of 6 variables from old cache
                     if (Array.isArray(activeSpiderData)) {
@@ -374,6 +417,9 @@
                     } else if (activeSpkColor === 'red') {
                         strokeColor = '#EF4444';
                         fillColor = 'rgba(239, 68, 68, 0.2)';
+                    } else if (activeSpkColor === 'blue') {
+                        strokeColor = '#3B82F6';
+                        fillColor = 'rgba(59, 130, 246, 0.18)';
                     }
 
                     this._spiderChart = new Chart(ctx, {
@@ -415,6 +461,7 @@
                 renderHdpChart() {
                     const ctx = this.$refs.hdpCanvas;
                     if (!ctx || typeof Chart === 'undefined') return;
+                    if (this._hdpChart) this._hdpChart.destroy();
 
                     const data = @js($chartData['hdpComparison']);
 
@@ -469,6 +516,7 @@
                 renderCausalityChart() {
                     const ctx = this.$refs.causalityCanvas;
                     if (!ctx || typeof Chart === 'undefined') return;
+                    if (this._causalityChart) this._causalityChart.destroy();
 
                     const data = @js($chartData['causality']);
 

@@ -7,13 +7,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Menentukan integer user_id untuk tabel DSS (foreign key → users.id).
- *
- * Login API bisa mengisi session user dengan id "0", userId lain, atau hanya email.
+ * Menentukan user_id untuk tabel DSS dengan sumber utama `user.id` API.
  */
 class SpkDssActorId
 {
-    public static function resolve(?Request $request = null): ?int
+    public static function resolve(?Request $request = null): ?string
     {
         $request ??= request();
         $sess = session()->get('user');
@@ -22,99 +20,79 @@ class SpkDssActorId
         }
 
         foreach (['id', 'userId'] as $key) {
-            if (!array_key_exists($key, $sess)) {
+            if (! array_key_exists($key, $sess)) {
                 continue;
             }
 
-            $id = self::positiveIntFromMixed($sess[$key]);
-            if ($id !== null && self::existsInUsersTable($id)) {
+            $id = self::stringIdFromMixed($sess[$key]);
+            if ($id !== null && self::existsInUserTable($id)) {
                 return $id;
             }
         }
 
         $guardUser = $request->user();
         if ($guardUser !== null && $guardUser->getAuthIdentifier() !== null) {
-            $id = self::positiveIntFromMixed($guardUser->getAuthIdentifier());
-            if ($id !== null && self::existsInUsersTable($id)) {
+            $id = self::stringIdFromMixed($guardUser->getAuthIdentifier());
+            if ($id !== null && self::existsInUserTable($id)) {
                 return $id;
             }
         }
 
         $email = $sess['email'] ?? null;
-        if (is_string($email) && $email !== '' && Schema::hasTable('users')) {
-            $rowId = DB::table('users')->where('email', $email)->value('id');
-            $id = self::positiveIntFromMixed($rowId);
-            if ($id !== null && self::existsInUsersTable($id)) {
-                return $id;
-            }
-        }
-
-        /** Coba pemetaan via tabel `user` jika ada (ID numerik sama dengan users). */
         if (is_string($email) && $email !== '' && Schema::hasTable('user')) {
             $rowId = DB::table('user')->where('email', $email)->value('id');
-            $id = self::positiveIntFromMixed($rowId);
-            if ($id !== null && self::existsInUsersTable($id)) {
+            $id = self::stringIdFromMixed($rowId);
+            if ($id !== null && self::existsInUserTable($id)) {
                 return $id;
             }
         }
 
-        // Fallback aman: gunakan user DSS default agar modul tetap operasional.
-        $defaultId = self::positiveIntFromMixed(env('DSS_DEFAULT_USER_ID'));
-        if ($defaultId !== null && self::existsInUsersTable($defaultId)) {
+        $defaultId = self::stringIdFromMixed(env('DSS_DEFAULT_USER_ID'));
+        if ($defaultId !== null && self::existsInUserTable($defaultId)) {
             return $defaultId;
         }
 
-        // Fallback terakhir: ambil user pertama pada tabel users.
-        if (Schema::hasTable('users')) {
-            $firstId = self::positiveIntFromMixed(DB::table('users')->orderBy('id')->value('id'));
+        if (Schema::hasTable('user')) {
+            $firstId = self::stringIdFromMixed(DB::table('user')->orderBy('createdAt')->value('id'));
             if ($firstId !== null) {
                 return $firstId;
             }
         }
 
-        return null;
-    }
-
-    private static function positiveIntFromMixed(mixed $value): ?int
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        if (is_bool($value)) {
-            return null;
-        }
-
-        if (is_int($value)) {
-            return $value > 0 ? $value : null;
-        }
-
-        if (is_float($value)) {
-            $i = (int) $value;
-
-            return $i > 0 && abs($value - $i) < PHP_FLOAT_EPSILON ? $i : null;
-        }
-
-        if (is_string($value) && ctype_digit($value)) {
-            $i = (int) $value;
-
-            return $i > 0 ? $i : null;
-        }
-
-        $filtered = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-        if ($filtered !== false) {
-            return $filtered;
+        // Fallback UUID: cari user di tabel 'user' (singular) by email — skip positiveIntFromMixed
+        $email = $sess['email'] ?? null;
+        if (is_string($email) && $email !== '' && Schema::hasTable('user')) {
+            $uuidRow = DB::table('user')->where('email', $email)->first(['id']);
+            if ($uuidRow !== null && is_string($uuidRow->id)) {
+                // Gunakan crc32 hash UUID sebagai ID numerik positif untuk session DSS
+                return crc32($uuidRow->id) & 0x7FFFFFFF;
+            }
         }
 
         return null;
     }
 
-    private static function existsInUsersTable(int $id): bool
+    private static function stringIdFromMixed(mixed $value): ?string
     {
-        if (! Schema::hasTable('users')) {
+        if ($value === null || $value === '' || is_bool($value)) {
+            return null;
+        }
+
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $id = trim((string) $value);
+
+        return $id !== '' ? $id : null;
+    }
+
+    private static function existsInUserTable(string $id): bool
+    {
+        if (! Schema::hasTable('user')) {
             return false;
         }
 
-        return DB::table('users')->where('id', $id)->exists();
+        return DB::table('user')->where('id', $id)->exists();
     }
 }

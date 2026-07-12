@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (!Schema::hasColumn('panen', 'berat')) {
+        if (Schema::hasTable('panen') && !Schema::hasColumn('panen', 'berat')) {
             Schema::table('panen', function (Blueprint $table) {
                 $table->decimal('berat', 10, 2)->nullable()->after('jumlah')
                       ->comment('Berat panen dalam kg (egg mass). Fallback = jumlah * 0.06');
@@ -24,8 +24,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('panen', function (Blueprint $table) {
-            $table->dropColumn('berat');
-        });
+        if (Schema::hasTable('panen') && Schema::hasColumn('panen', 'berat')) {
+            Schema::table('panen', function (Blueprint $table) {
+                $table->dropColumn('berat');
+            });
+        }
     }
 };

@@ -19,12 +19,21 @@ class SpkFuzzyVariable extends Model
 
     protected $fillable = [
         'id',
+        'profile_id',
         'name',
         'type',
         'group',
         'unit',
         'description',
     ];
+
+    /**
+     * Profile fuzzy tempat variabel ini berada.
+     */
+    public function profile(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(SpkFuzzyProfile::class, 'profile_id');
+    }
 
     /**
      * Himpunan (membership functions) dari variabel ini.

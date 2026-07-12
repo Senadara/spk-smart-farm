@@ -5,9 +5,16 @@
 
 @section('content')
 <div class="max-w-7xl mx-auto pb-10">
+    @if(session('success'))
+        <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
+    @endif
+    @if(session('error'))
+        <div class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{ session('error') }}</div>
+    @endif
+
     <div class="mb-6">
         <a href="{{ route('spk.suppliers.index') }}" class="text-sm font-semibold text-gray-500 bg-white border border-gray-200 px-4 py-2 rounded-xl hover:bg-gray-50 transition">
-            ← Kembali ke Katalog
+            &larr; Kembali ke Katalog
         </a>
     </div>
 
@@ -49,10 +56,16 @@
                     </a>
                     
                     {{-- Maps Button --}}
-                    <button class="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-6 py-3 rounded-xl font-bold shadow-sm transition">
-                        <svg class="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
-                        Google Maps
-                    </button>
+                    @if($supplier['maps_url'])
+                        <a href="{{ $supplier['maps_url'] }}" target="_blank" class="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-6 py-3 rounded-xl font-bold shadow-sm transition">
+                            <svg class="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+                            Google Maps
+                        </a>
+                    @else
+                        <span class="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-50 border border-gray-200 text-gray-400 px-6 py-3 rounded-xl font-bold shadow-sm">
+                            Google Maps
+                        </span>
+                    @endif
                 </div>
             </div>
 
@@ -95,6 +108,48 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    {{-- PEMESANAN SEDERHANA --}}
+    <div class="mb-8 bg-white rounded-3xl shadow-sm border border-emerald-50 p-8">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between border-b border-gray-100 pb-4 mb-6">
+            <div>
+                <h2 class="text-xl font-bold text-gray-900">Pemesanan Sederhana</h2>
+                <p class="text-sm text-gray-500 mt-1">Buat pesanan awal. Pembayaran dan konfirmasi dilakukan langsung dengan supplier di luar sistem.</p>
+            </div>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">Tanpa payment gateway</span>
+        </div>
+
+        @if($store && $storeProducts->isNotEmpty())
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                @foreach($storeProducts as $product)
+                    <form method="POST" action="{{ route('spk.suppliers.orders.store', $supplier['id']) }}" class="rounded-2xl border border-gray-100 p-5">
+                        @csrf
+                        <input type="hidden" name="product_id" value="{{ $product->id }}">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="font-bold text-gray-900">{{ $product->nama }}</h3>
+                                <p class="mt-1 text-xs text-gray-500 line-clamp-2">{{ $product->deskripsi }}</p>
+                            </div>
+                            <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">{{ $product->stok }} {{ $product->satuan }}</span>
+                        </div>
+                        <p class="mt-4 text-lg font-black text-gray-900">Rp {{ number_format($product->harga, 0, ',', '.') }}</p>
+                        <div class="mt-4 flex gap-2">
+                            <input name="quantity" type="number" min="1" max="{{ $product->stok }}" value="1" required
+                                class="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                            <button class="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700">
+                                Buat Pesanan
+                            </button>
+                        </div>
+                    </form>
+                @endforeach
+            </div>
+        @else
+            <div class="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+                <p class="font-semibold text-gray-700">Supplier ini belum mengaktifkan katalog pemesanan web.</p>
+                <p class="mt-1 text-sm text-gray-500">Gunakan kontak WhatsApp untuk pemesanan manual.</p>
+            </div>
+        @endif
     </div>
 
     {{-- KETERSEDIAAN BARANG --}}

@@ -1,0 +1,48 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class InventoryItem extends Model
+{
+    protected $fillable = [
+        'sku',
+        'name',
+        'category',
+        'stock',
+        'unit',
+        'daily_usage',
+        'minimum_stock',
+        'reorder_point',
+        'lead_time_days',
+        'supplier_id',
+        'unit_budidaya_id',
+        'photo_path',
+        'notes',
+        'last_restock_at',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'stock' => 'float',
+        'daily_usage' => 'float',
+        'minimum_stock' => 'float',
+        'reorder_point' => 'float',
+        'lead_time_days' => 'integer',
+        'last_restock_at' => 'datetime',
+        'is_active' => 'boolean',
+    ];
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(MasterSupplier::class, 'supplier_id');
+    }
+
+    public function movements(): HasMany
+    {
+        return $this->hasMany(InventoryMovement::class, 'inventory_item_id');
+    }
+}
