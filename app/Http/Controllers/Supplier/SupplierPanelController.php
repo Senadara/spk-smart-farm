@@ -8,6 +8,7 @@ use App\Models\MasterSupplier;
 use App\Models\SpkRanking;
 use App\Models\SupplierOrder;
 use App\Models\SupplierProduct;
+use App\Models\SupplierProductCategory;
 use App\Models\SupplierStore;
 use App\Services\ApiService;
 use Carbon\Carbon;
@@ -15,6 +16,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class SupplierPanelController extends Controller
@@ -91,6 +93,7 @@ class SupplierPanelController extends Controller
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
             'deskripsi' => 'nullable|string|max:2000',
+            'kategori' => 'nullable|string|max:120',
             'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
         ]);
 
@@ -116,6 +119,7 @@ class SupplierPanelController extends Controller
                 'latitude' => $validated['latitude'] ?? null,
                 'longitude' => $validated['longitude'] ?? null,
                 'deskripsi' => $validated['deskripsi'] ?? null,
+                'kategori' => $validated['kategori'] ?? null,
                 'logoToko' => $logoPath,
                 'tokoStatus' => $store?->tokoStatus ?? 'request',
                 'TypeToko' => $store?->TypeToko ?? 'umkm',
@@ -130,6 +134,7 @@ class SupplierPanelController extends Controller
                 'longitude' => $validated['longitude'] ?? null,
                 'kontak' => $validated['phone'],
                 'deskripsi' => $validated['deskripsi'] ?? $supplier->deskripsi,
+                'kategori' => $validated['kategori'] ?? $supplier->kategori,
             ]);
 
             SpkRanking::query()->where('supplier_id', $supplier->id)->update(['is_valid' => false]);
@@ -148,6 +153,7 @@ class SupplierPanelController extends Controller
             return $this->missingStoreRedirect();
         }
 
+        $categoryOptions = SupplierProductCategory::activeOptions();
         $query = $store->products()->where('isDeleted', false);
         if ($request->filled('search')) {
             $query->where('nama', 'like', '%'.$request->string('search').'%');
@@ -157,10 +163,15 @@ class SupplierPanelController extends Controller
         } elseif ($request->get('stock') === 'available') {
             $query->where('stok', '>', 10);
         }
+        $selectedCategory = trim((string) $request->string('category'));
+        if ($selectedCategory !== '' && $categoryOptions->contains($selectedCategory)) {
+            $query->where('kategori', $selectedCategory);
+        }
 
         return view('supplier.products', [
             'store' => $store,
             'products' => $query->latest('createdAt')->paginate(12)->withQueryString(),
+            'categoryOptions' => $categoryOptions,
         ]);
     }
 
@@ -177,6 +188,7 @@ class SupplierPanelController extends Controller
             'id' => Str::uuid()->toString(),
             'nama' => $validated['nama'],
             'deskripsi' => $validated['deskripsi'],
+            'kategori' => $validated['kategori'] ?? null,
             'gambar' => $imagePath,
             'stok' => $validated['stok'],
             'satuan' => $validated['satuan'],
@@ -206,6 +218,7 @@ class SupplierPanelController extends Controller
         $product->update([
             'nama' => $validated['nama'],
             'deskripsi' => $validated['deskripsi'],
+            'kategori' => $validated['kategori'] ?? null,
             'gambar' => $imagePath,
             'stok' => $validated['stok'],
             'satuan' => $validated['satuan'],
@@ -274,6 +287,7 @@ class SupplierPanelController extends Controller
             'diterima' => ['selesai'],
             'selesai' => [],
             'ditolak' => [],
+            'dibatalkan' => [],
             'expired' => [],
         ];
 
@@ -337,6 +351,7 @@ class SupplierPanelController extends Controller
         return $request->validate([
             'nama' => 'required|string|max:255',
             'deskripsi' => 'required|string|max:2000',
+            'kategori' => ['required', 'string', 'max:80', Rule::in(SupplierProductCategory::activeOptions()->all())],
             'stok' => 'required|integer|min:0|max:100000000',
             'satuan' => 'required|string|max:50',
             'harga' => 'required|integer|min:0|max:2000000000',

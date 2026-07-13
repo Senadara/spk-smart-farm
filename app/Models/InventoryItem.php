@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class InventoryItem extends Model
 {
@@ -44,5 +45,16 @@ class InventoryItem extends Model
     public function movements(): HasMany
     {
         return $this->hasMany(InventoryMovement::class, 'inventory_item_id');
+    }
+
+    public function supplierProductLinks(): HasMany
+    {
+        return $this->hasMany(InventorySupplierProductLink::class, 'inventory_item_id');
+    }
+
+    public function preferredSupplierProductLink(): HasOne
+    {
+        return $this->hasOne(InventorySupplierProductLink::class, 'inventory_item_id')
+            ->where('is_preferred', true);
     }
 }

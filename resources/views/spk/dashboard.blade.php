@@ -326,6 +326,7 @@
                     produktivitas: @js($fuzzyData['sensors']['produktivitas'])
                 },
                 activeIndicators: @js($fuzzyData['indicators']),
+                activeSpider: @js($fuzzyData['spider']),
                 activeSpkResults: @js($fuzzyData['results']),
                 evaluationTimeLabel: @js($activeHistory['date'] . ', ' . $activeHistory['time']),
                 evaluating: false,
@@ -397,7 +398,7 @@
                     if (!ctx || typeof Chart === 'undefined') return;
 
                     const activeSpkColor = '{{ $fuzzyData['color'] }}';
-                    let activeSpiderData = @js($fuzzyData['spider']);
+                    let activeSpiderData = this.activeSpider ?? @js($fuzzyData['spider']);
                     if (this._spiderChart) this._spiderChart.destroy();
                     
                     // Fallback if data is unexpectedly a flat array of 6 variables from old cache

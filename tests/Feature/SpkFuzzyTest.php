@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\SpkFuzzyProfile;
+use App\Models\SpkFuzzyVariable;
+use App\Services\Fuzzy\MamdaniEngine;
 use Illuminate\Foundation\Testing\WithoutMiddleware;
 use Tests\TestCase;
 
@@ -25,9 +28,7 @@ class SpkFuzzyTest extends TestCase
         $response->assertJsonStructure([
             'success',
             'log_id',
-            'inputs' => [
-                'suhu', 'kelembapan', 'amonia', 'hdp', 'pakan', 'mortalitas'
-            ],
+            'inputs',
             'result' => [
                 'status_lingkungan',
                 'score_lingkungan',
@@ -40,6 +41,19 @@ class SpkFuzzyTest extends TestCase
         ]);
 
         $this->assertTrue($response->json('success'));
+        $this->assertIsArray($response->json('inputs'));
+
+        $profile = SpkFuzzyProfile::resolveForContext();
+        $expectedInputs = SpkFuzzyVariable::query()
+            ->where('profile_id', $profile?->id)
+            ->where('type', 'input')
+            ->where('group', '!=', 'kausalitas')
+            ->pluck('name');
+
+        foreach ($expectedInputs as $inputName) {
+            $this->assertArrayHasKey($inputName, $response->json('inputs'));
+        }
+
         $this->assertNotNull($response->json('result.narrative'));
     }
 
@@ -66,5 +80,18 @@ class SpkFuzzyTest extends TestCase
         ]);
         
         $this->assertTrue($response->json('success'));
+    }
+
+    public function test_kausalitas_lookup_matches_labels_to_their_variables(): void
+    {
+        $profile = SpkFuzzyProfile::query()
+            ->where('name', 'like', '%Petelur%')
+            ->first();
+
+        $this->assertNotNull($profile);
+
+        $result = app(MamdaniEngine::class)->lookupKausalitas('Optimal', 'Buruk', $profile->id);
+
+        $this->assertSame('Anomali Medis', $result['label']);
     }
 }

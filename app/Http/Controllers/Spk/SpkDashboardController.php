@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\SpkActionTask;
 use App\Models\SpkFuzzyLog;
 use App\Models\SpkFuzzyProfile;
+use App\Services\Fuzzy\FuzzySensorCardMapper;
 use App\Services\Fuzzy\InputResolver;
 use App\Services\Fuzzy\MamdaniEngine;
 use App\Services\Fuzzy\NarrativeGenerator;
@@ -165,7 +166,7 @@ class SpkDashboardController extends Controller
             'status_lingkungan' => $result['lingkungan']['label'] ?? null,
             'status_kesehatan' => $result['kesehatan']['label'] ?? null,
             'diagnosis_kausalitas' => $result['kausalitas']['label'] ?? null,
-            'output_value' => $result['lingkungan']['value'] ?? 0,
+            'output_value' => min((float) ($result['lingkungan']['value'] ?? 0), (float) ($result['kesehatan']['value'] ?? 0)),
             'output_label' => $result['kausalitas']['label'] ?? null,
             'narrative' => $result['narrative'] ?? null,
             'recommendation' => $result['kausalitas']['recommendation'] ?? null,
@@ -237,7 +238,51 @@ class SpkDashboardController extends Controller
         $kesehatLabel = $kesehatan['label']   ?? 'Tidak Diketahui';
         $lingkScore   = round((float) ($lingkungan['value'] ?? 0), 1);
         $kesehatScore = round((float) ($kesehatan['value']  ?? 0), 1);
-        $gabScore = round(max($lingkScore, $kesehatScore), 1);
+        $gabScore = round(min($lingkScore, $kesehatScore), 1);
+        $sensorCardMapper = app(FuzzySensorCardMapper::class);
+        $sensorCards = $sensorCardMapper->fromResult($result);
+        $productivityCards = $sensorCards['produktivitas'] ?? [];
+
+        return [
+            'confidence' => $gabScore,
+            'spider'     => $sensorCardMapper->toSpider($productivityCards),
+            'color'      => $this->scoreColor($gabScore),
+            'sensors'    => [
+                'lingkungan' => $sensorCards['lingkungan'] ?? [],
+                'produktivitas' => $productivityCards,
+            ],
+            'indicators' => $sensorCardMapper->toIndicators($productivityCards),
+            'results' => [
+                'lingkungan' => [
+                    'status'      => strtoupper($lingkLabel),
+                    'statusColor' => $colorMap[$lingkLabel] ?? 'gray',
+                    'score'       => $lingkScore,
+                    'scoreColor'  => $this->scoreColor($lingkScore),
+                    'title'       => $lingkungan['dominant_rule']['diagnosis'] ?? 'Analisa Lingkungan',
+                    'description' => 'Score: ' . $lingkScore . '/100. ' . ($lingkungan['dominant_rule']['diagnosis'] ?? ''),
+                    'link'        => '#',
+                ],
+                'produktivitas' => [
+                    'status'      => strtoupper($kesehatLabel),
+                    'statusColor' => $colorMap[$kesehatLabel] ?? 'gray',
+                    'score'       => $kesehatScore,
+                    'scoreColor'  => $this->scoreColor($kesehatScore),
+                    'title'       => $kesehatan['dominant_rule']['diagnosis'] ?? 'Analisa Produktivitas',
+                    'description' => 'Score: ' . $kesehatScore . '/100. ' . ($kesehatan['dominant_rule']['diagnosis'] ?? ''),
+                    'link'        => '#',
+                ],
+                'gabungan' => [
+                    'status'      => strtoupper($kausalitas['label'] ?? 'N/A'),
+                    'statusColor' => $colorMap[$lingkLabel] ?? 'gray',
+                    'score'       => $gabScore,
+                    'scoreColor'  => $this->scoreColor($gabScore),
+                    'title'       => $kausalitas['label'] ?? 'Diagnosis Kausalitas',
+                    'description' => $result['narrative'] ?? ($kausalitas['diagnosis'] ?? '-'),
+                    'link'        => '#',
+                    'isMain'      => true,
+                ],
+            ],
+        ];
 
         // Sensor bars dari fuzzified (Engine 1)
         $fuzzLingk = $lingkungan['fuzzified'] ?? [];

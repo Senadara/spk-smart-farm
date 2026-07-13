@@ -31,6 +31,21 @@ class SupplierDistanceService
         );
     }
 
+    public function distanceToCoordinates(?float $latitude, ?float $longitude, ?string $userId): ?float
+    {
+        $farm = $this->farmProfileForUser($userId);
+        if (! $farm?->hasCoordinates() || $latitude === null || $longitude === null) {
+            return null;
+        }
+
+        return $this->haversineKm(
+            (float) $farm->latitude,
+            (float) $farm->longitude,
+            $latitude,
+            $longitude
+        );
+    }
+
     public function distanceLabel(?float $distanceKm): string
     {
         if ($distanceKm === null) {
@@ -38,6 +53,53 @@ class SupplierDistanceService
         }
 
         return number_format($distanceKm, 1, ',', '.').' km';
+    }
+
+    public function estimatedDeliveryMinutes(?float $distanceKm): ?int
+    {
+        if ($distanceKm === null) {
+            return null;
+        }
+
+        if ($distanceKm <= 0) {
+            return 30;
+        }
+
+        $averageSpeedKmh = match (true) {
+            $distanceKm <= 15 => 25,
+            $distanceKm <= 80 => 35,
+            $distanceKm <= 200 => 45,
+            default => 55,
+        };
+
+        $handlingMinutes = $distanceKm <= 15 ? 45 : 90;
+
+        return (int) max(30, ceil(($distanceKm / $averageSpeedKmh) * 60 + $handlingMinutes));
+    }
+
+    public function deliveryEstimateLabel(?float $distanceKm): string
+    {
+        $minutes = $this->estimatedDeliveryMinutes($distanceKm);
+        if ($minutes === null) {
+            return 'Estimasi pengiriman belum tersedia';
+        }
+
+        if ($minutes < 60) {
+            return "Estimasi {$minutes} menit";
+        }
+
+        $hours = intdiv($minutes, 60);
+        $remainingMinutes = $minutes % 60;
+
+        if ($hours < 24) {
+            return $remainingMinutes > 0
+                ? "Estimasi {$hours} jam {$remainingMinutes} menit"
+                : "Estimasi {$hours} jam";
+        }
+
+        $days = (int) ceil($hours / 24);
+
+        return "Estimasi {$days} hari";
     }
 
     public function haversineKm(float $originLat, float $originLng, float $targetLat, float $targetLng): float

@@ -3,15 +3,14 @@
 namespace App\Http\Controllers\Spk;
 
 use App\Http\Controllers\Controller;
-use App\Models\MasterProduk;
 use App\Models\MasterSupplier;
 use App\Models\SpkParameter;
 use App\Models\SpkSupplierParameterValue;
 use App\Models\SupplierOrder;
 use App\Models\SupplierOrderDetail;
 use App\Models\SupplierProduct;
+use App\Models\SupplierProductCategory;
 use App\Models\SupplierStore;
-use App\Services\SAWRecommenderService;
 use App\Services\SupplierDistanceService;
 use App\Support\SpkDssActorId;
 use Illuminate\Http\RedirectResponse;
@@ -22,7 +21,6 @@ use Illuminate\Support\Str;
 class SupplierRecommendationController extends Controller
 {
     public function __construct(
-        private SAWRecommenderService $sawService,
         private SupplierDistanceService $distanceService,
     ) {}
 
@@ -47,124 +45,174 @@ class SupplierRecommendationController extends Controller
         }
 
         $suppliers = $query->orderByDesc('rating')->get()->map(fn ($s) => $this->formatSupplierCard($s, $dssActorId));
+        $orderSummary = $this->orderSummary($dssActorId);
 
         return view('spk.suppliers.index', [
             'suppliers' => $suppliers,
             'category' => $category,
             'search' => $search,
+            'orderSummary' => $orderSummary,
         ]);
     }
 
     public function products(Request $request)
     {
         $search = $request->input('search');
-        $productId = (int) $request->input('product_id', 0);
-        $filterSort = $request->input('sort', 'saw');
+        $category = $request->input('category', 'all');
+        $filterSort = $request->input('sort', 'recommended');
         $filterStock = $request->input('stock', 'all');
-
-        $productsQuery = MasterProduk::withCount('suppliers')->orderBy('nama');
-        if ($search) {
-            $productsQuery->where('nama', 'like', "%{$search}%");
-        }
-        $products = $productsQuery->get();
-
-        if ($productId === 0 && $products->isNotEmpty()) {
-            $productId = $products->first()->id;
-        }
-
-        if ($search && ! $products->contains('id', $productId) && $products->isNotEmpty()) {
-            $productId = $products->first()->id;
-        }
-
-        $activeProduct = $products->firstWhere('id', $productId);
-        $comparison = [];
-        $sawRankings = collect();
-        $ahpReady = false;
-
         $dssActorId = SpkDssActorId::resolve($request);
+        $categoryOptions = SupplierProductCategory::activeOptions();
 
-        if ($activeProduct) {
-            $hargaParam = SpkParameter::where('nama_parameter', 'like', '%Harga%')->first();
-            $kecepatanParam = SpkParameter::where('nama_parameter', 'like', '%Kecepatan%')->first();
-            $kualitasParam = SpkParameter::where('nama_parameter', 'like', '%Kualitas%')->first();
-
-            $supplierIds = $activeProduct->suppliers()->pluck('master_suppliers.id');
-            $paramValues = SpkSupplierParameterValue::where('produk_id', $activeProduct->id)
-                ->whereIn('supplier_id', $supplierIds)
-                ->with('supplier')
-                ->get();
-
-            foreach ($paramValues->groupBy('supplier_id') as $vals) {
-                $supplier = $vals->first()->supplier;
-                $price = $vals->firstWhere('parameter_id', $hargaParam?->id)?->value ?? 0;
-                $quality = $vals->firstWhere('parameter_id', $kualitasParam?->id)?->value ?? 0;
-                $speedScore = $vals->firstWhere('parameter_id', $kecepatanParam?->id)?->value ?? 0;
-                $days = $speedScore > 0 ? round(100 / $speedScore) : 0;
-                $distance = $this->distanceService->distanceToSupplier($supplier, $dssActorId);
-                $distanceForSort = $distance ?? 9999;
-
-                $comparison[] = [
-                    'supplierId' => $supplier->id,
-                    'supplierName' => $supplier->nama,
-                    'price' => $price,
-                    'quality' => $quality,
-                    'distance' => round($distanceForSort, 1),
-                    'distanceKnown' => $distance !== null,
-                    'distanceLabel' => $this->distanceService->distanceLabel($distance),
-                    'stock' => (int) round($quality),
-                    'delivery' => $days <= 1 ? 'Dikirim hari yang sama' : "Estimasi {$days} hari",
-                ];
-            }
-
-            if ($filterStock === 'instock') {
-                $comparison = array_values(array_filter($comparison, fn ($c) => $c['stock'] > 0));
-            }
-
-            if ($filterSort === 'cheapest') {
-                usort($comparison, fn ($a, $b) => $a['price'] <=> $b['price']);
-            } elseif ($filterSort === 'closest') {
-                usort($comparison, fn ($a, $b) => $a['distance'] <=> $b['distance']);
-            }
-
-            if ($dssActorId !== null) {
-                $sawRankings = $this->sawService->getRecommendations($dssActorId, $activeProduct->id);
-                $sawRankings->load('supplier');
-                $ahpReady = $sawRankings->isNotEmpty();
-
-                if ($filterSort === 'saw' && $ahpReady) {
-                    $order = $sawRankings->pluck('supplier_id')->flip();
-                    usort($comparison, function ($a, $b) use ($order) {
-                        return ($order[$a['supplierId']] ?? 99) <=> ($order[$b['supplierId']] ?? 99);
-                    });
-                }
-            }
+        if ($category !== 'all' && ! $categoryOptions->contains($category)) {
+            $category = 'all';
         }
 
-        $productsForView = $products->map(fn ($p) => [
-            'id' => $p->id,
-            'name' => $p->nama,
-            'category' => $p->deskripsi ?? 'Umum',
-            'icon' => $this->productIcon($p->nama),
-        ]);
+        $productsQuery = SupplierProduct::query()
+            ->with('store')
+            ->where('isDeleted', false)
+            ->where('stok', '>', 0)
+            ->whereHas('store', fn ($query) => $query->where('isDeleted', false));
 
-        $activeForView = $activeProduct ? [
-            'id' => $activeProduct->id,
-            'name' => $activeProduct->nama,
-            'category' => $activeProduct->deskripsi ?? '',
-            'icon' => $this->productIcon($activeProduct->nama),
-        ] : null;
+        if ($search) {
+            $productsQuery->where(function ($query) use ($search) {
+                $query->where('nama', 'like', "%{$search}%")
+                    ->orWhere('deskripsi', 'like', "%{$search}%")
+                    ->orWhere('kategori', 'like', "%{$search}%")
+                    ->orWhereHas('store', fn ($storeQuery) => $storeQuery->where('nama', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($category !== 'all') {
+            $productsQuery->where(function ($query) use ($category) {
+                $query->where('kategori', $category)
+                    ->orWhere('nama', 'like', "%{$category}%")
+                    ->orWhere('deskripsi', 'like', "%{$category}%");
+            });
+        }
+
+        if ($filterStock === 'low') {
+            $productsQuery->where('stok', '<=', 10);
+        }
+
+        $products = $productsQuery->get()
+            ->map(fn (SupplierProduct $product) => $this->formatStoreProductCard($product, $dssActorId));
+
+        $products = match ($filterSort) {
+            'cheapest' => $products->sortBy('price')->values(),
+            'closest' => $products->sortBy('distance_sort')->values(),
+            default => $products->sortByDesc('score')->values(),
+        };
 
         return view('spk.suppliers.products', [
-            'products' => $productsForView,
-            'activeProduct' => $activeForView,
-            'comparison' => $comparison,
-            'sawRankings' => $sawRankings,
-            'ahpReady' => $ahpReady,
+            'products' => $products,
+            'categoryOptions' => $categoryOptions,
+            'category' => $category,
             'search' => $search,
             'filterSort' => $filterSort,
             'filterStock' => $filterStock,
-            'dssActorResolved' => $dssActorId !== null,
+            'cart' => $this->cartSummary($request),
         ]);
+    }
+
+    public function addToCart(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'product_id' => 'required|string|exists:produk,id',
+            'quantity' => 'required|integer|min:1|max:100000',
+        ]);
+
+        $product = SupplierProduct::query()
+            ->where('id', $validated['product_id'])
+            ->where('isDeleted', false)
+            ->where('stok', '>', 0)
+            ->firstOrFail();
+
+        $quantity = min((int) $validated['quantity'], (int) $product->stok);
+        $cart = $request->session()->get('supplier_cart', []);
+        $cart[$product->id] = min((int) ($cart[$product->id] ?? 0) + $quantity, (int) $product->stok);
+
+        $request->session()->put('supplier_cart', $cart);
+
+        return back()->with('success', 'Barang ditambahkan ke keranjang.');
+    }
+
+    public function removeFromCart(Request $request, SupplierProduct $product): RedirectResponse
+    {
+        $cart = $request->session()->get('supplier_cart', []);
+        unset($cart[$product->id]);
+        $request->session()->put('supplier_cart', $cart);
+
+        return back()->with('success', 'Barang dihapus dari keranjang.');
+    }
+
+    public function checkoutCart(Request $request): RedirectResponse
+    {
+        $userId = SpkDssActorId::resolve($request);
+        if (! $userId) {
+            return back()->with('error', 'User tidak dapat dipetakan untuk membuat pesanan.');
+        }
+
+        $cart = collect($request->session()->get('supplier_cart', []))
+            ->map(fn ($qty) => (int) $qty)
+            ->filter(fn ($qty) => $qty > 0);
+
+        if ($cart->isEmpty()) {
+            return back()->with('error', 'Keranjang masih kosong.');
+        }
+
+        $products = SupplierProduct::query()
+            ->with('store')
+            ->whereIn('id', $cart->keys())
+            ->where('isDeleted', false)
+            ->get();
+
+        if ($products->isEmpty()) {
+            $request->session()->forget('supplier_cart');
+
+            return back()->with('error', 'Barang di keranjang tidak tersedia.');
+        }
+
+        DB::transaction(function () use ($products, $cart, $userId) {
+            foreach ($products->groupBy('tokoId') as $storeId => $storeProducts) {
+                $total = $storeProducts->sum(fn (SupplierProduct $product) => $product->harga * min($cart[$product->id] ?? 0, $product->stok));
+
+                if ($total <= 0) {
+                    continue;
+                }
+
+                $order = SupplierOrder::query()->create([
+                    'id' => Str::uuid()->toString(),
+                    'userId' => $userId,
+                    'tokoId' => $storeId,
+                    'status' => 'menunggu',
+                    'totalHarga' => $total,
+                    'isDeleted' => false,
+                    'MidtransOrderId' => null,
+                ]);
+
+                foreach ($storeProducts as $product) {
+                    $quantity = min((int) ($cart[$product->id] ?? 0), (int) $product->stok);
+                    if ($quantity <= 0) {
+                        continue;
+                    }
+
+                    SupplierOrderDetail::query()->create([
+                        'id' => Str::uuid()->toString(),
+                        'pesananId' => $order->id,
+                        'produkId' => $product->id,
+                        'jumlah' => $quantity,
+                        'isDeleted' => false,
+                    ]);
+                }
+            }
+        });
+
+        $request->session()->forget('supplier_cart');
+
+        return redirect()
+            ->route('spk.suppliers.orders.index')
+            ->with('success', 'Pesanan dari keranjang dibuat. Hubungi supplier untuk konfirmasi pembayaran di luar sistem.');
     }
 
     public function show(Request $request, $id)
@@ -252,7 +300,65 @@ class SupplierRecommendationController extends Controller
             ]);
         });
 
-        return back()->with('success', 'Pesanan dibuat. Hubungi supplier untuk konfirmasi pembayaran di luar sistem.');
+        return redirect()
+            ->route('spk.suppliers.orders.index')
+            ->with('success', 'Pesanan dibuat. Hubungi supplier untuk konfirmasi pembayaran di luar sistem.');
+    }
+
+    public function orders(Request $request)
+    {
+        $userId = SpkDssActorId::resolve($request);
+        if (! $userId) {
+            return redirect()
+                ->route('spk.suppliers.index')
+                ->with('error', 'User tidak dapat dipetakan untuk melihat histori pesanan.');
+        }
+
+        $status = $request->input('status', 'all');
+        $allowedStatuses = ['all', 'menunggu', 'diterima', 'selesai', 'ditolak', 'dibatalkan', 'expired'];
+
+        $query = SupplierOrder::query()
+            ->with(['store', 'details.product'])
+            ->where('userId', $userId)
+            ->where('isDeleted', false);
+
+        if (in_array($status, $allowedStatuses, true) && $status !== 'all') {
+            $query->where('status', $status);
+        } else {
+            $status = 'all';
+        }
+
+        $orders = $query->latest('createdAt')->paginate(10)->withQueryString();
+
+        $statusCounts = SupplierOrder::query()
+            ->where('userId', $userId)
+            ->where('isDeleted', false)
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        return view('spk.suppliers.orders', [
+            'orders' => $orders,
+            'status' => $status,
+            'statusCounts' => $statusCounts,
+            'statusLabels' => $this->orderStatusLabels(),
+        ]);
+    }
+
+    public function cancelOrder(Request $request, SupplierOrder $order): RedirectResponse
+    {
+        $userId = SpkDssActorId::resolve($request);
+        if (! $userId || $order->userId !== $userId || $order->isDeleted) {
+            abort(404);
+        }
+
+        if ($order->status !== 'menunggu') {
+            return back()->with('error', 'Pesanan hanya bisa dibatalkan saat masih menunggu konfirmasi supplier.');
+        }
+
+        $order->update(['status' => 'dibatalkan']);
+
+        return back()->with('success', 'Pesanan berhasil dibatalkan.');
     }
 
     private function formatSupplierCard(MasterSupplier $s, ?string $userId = null): array
@@ -260,6 +366,7 @@ class SupplierRecommendationController extends Controller
         $categories = $s->kategori ? explode(',', $s->kategori) : [];
         $slugMap = ['pakan' => 'pakan', 'obat' => 'obat', 'alat' => 'alat', 'vaksin' => 'obat'];
         $distance = $this->distanceService->distanceToSupplier($s, $userId);
+        $store = $this->storeForSupplier($s);
         $mapsUrl = $s->latitude !== null && $s->longitude !== null
             ? 'https://www.google.com/maps/search/?api=1&query='.$s->latitude.','.$s->longitude
             : null;
@@ -270,6 +377,11 @@ class SupplierRecommendationController extends Controller
             'location' => $s->alamat ?? '-',
             'distance' => $this->distanceService->distanceLabel($distance),
             'distance_value' => $distance,
+            'delivery_estimate' => $this->distanceService->deliveryEstimateLabel($distance),
+            'has_store' => $store !== null,
+            'store_product_count' => $store
+                ? $store->products()->where('isDeleted', false)->where('stok', '>', 0)->count()
+                : 0,
             'maps_url' => $mapsUrl,
             'score' => (int) round(($s->rating ?? 0) * 20),
             'rating' => $s->rating ?? 0,
@@ -302,6 +414,129 @@ class SupplierRecommendationController extends Controller
             ->first();
     }
 
+    private function supplierForStore(SupplierStore $store): ?MasterSupplier
+    {
+        $phone = preg_replace('/[^0-9]/', '', (string) $store->phone);
+
+        return MasterSupplier::query()
+            ->where(function ($query) use ($store, $phone) {
+                $query->where('nama', $store->nama);
+
+                if ($phone !== '') {
+                    $query->orWhereRaw("REPLACE(REPLACE(REPLACE(kontak, '+', ''), '-', ''), ' ', '') = ?", [$phone]);
+                }
+            })
+            ->first();
+    }
+
+    private function formatStoreProductCard(SupplierProduct $product, ?string $userId): array
+    {
+        $store = $product->store;
+        $supplier = $store ? $this->supplierForStore($store) : null;
+        $distance = $store
+            ? $this->distanceService->distanceToCoordinates($store->latitude, $store->longitude, $userId)
+            : null;
+
+        $score = $supplier
+            ? (int) round(($supplier->rating ?? 0) * 20)
+            : (int) max(55, round(92 - min($distance ?? 80, 80) * 0.25));
+
+        return [
+            'id' => $product->id,
+            'name' => $product->nama,
+            'description' => $product->deskripsi,
+            'category' => $product->kategori ?: SupplierProductCategory::inferForProduct($product->nama.' '.$product->deskripsi),
+            'icon' => $this->productIcon($product->nama),
+            'image' => $this->imageUrl($product->gambar),
+            'price' => $product->harga,
+            'stock' => $product->stok,
+            'unit' => $product->satuan,
+            'store_id' => $store?->id,
+            'store_name' => $store?->nama ?? 'Toko supplier',
+            'store_location' => $store?->alamat ?? 'Alamat belum tersedia',
+            'store_logo' => $this->imageUrl($store?->logoToko),
+            'store_categories' => array_filter(array_map('trim', explode(',', (string) $store?->kategori))),
+            'supplier_id' => $supplier?->id,
+            'score' => $score,
+            'distance' => $this->distanceService->distanceLabel($distance),
+            'distance_sort' => $distance ?? 9999,
+            'delivery' => $this->distanceService->deliveryEstimateLabel($distance),
+        ];
+    }
+
+    private function cartSummary(Request $request): array
+    {
+        $cart = collect($request->session()->get('supplier_cart', []))
+            ->map(fn ($quantity) => (int) $quantity)
+            ->filter(fn ($quantity) => $quantity > 0);
+
+        if ($cart->isEmpty()) {
+            return [
+                'items' => [],
+                'total_quantity' => 0,
+                'subtotal' => 0,
+                'store_count' => 0,
+            ];
+        }
+
+        $products = SupplierProduct::with('store')
+            ->whereIn('id', $cart->keys())
+            ->where('isDeleted', false)
+            ->get();
+
+        $items = $products->map(function (SupplierProduct $product) use ($cart) {
+            $quantity = min((int) ($cart[$product->id] ?? 0), (int) $product->stok);
+
+            return [
+                'id' => $product->id,
+                'name' => $product->nama,
+                'store' => $product->store?->nama ?? 'Toko supplier',
+                'quantity' => $quantity,
+                'unit' => $product->satuan,
+                'price' => $product->harga,
+                'subtotal' => $product->harga * $quantity,
+            ];
+        })->filter(fn (array $item) => $item['quantity'] > 0)->values();
+
+        return [
+            'items' => $items->all(),
+            'total_quantity' => $items->sum('quantity'),
+            'subtotal' => $items->sum('subtotal'),
+            'store_count' => $items->pluck('store')->unique()->count(),
+        ];
+    }
+
+    private function orderSummary(?string $userId): array
+    {
+        if (! $userId) {
+            return [
+                'total' => 0,
+                'active' => 0,
+            ];
+        }
+
+        $query = SupplierOrder::query()
+            ->where('userId', $userId)
+            ->where('isDeleted', false);
+
+        return [
+            'total' => (clone $query)->count(),
+            'active' => (clone $query)->whereIn('status', ['menunggu', 'diterima'])->count(),
+        ];
+    }
+
+    private function orderStatusLabels(): array
+    {
+        return [
+            'menunggu' => 'Menunggu',
+            'diterima' => 'Diproses',
+            'selesai' => 'Selesai',
+            'ditolak' => 'Ditolak',
+            'dibatalkan' => 'Dibatalkan',
+            'expired' => 'Kedaluwarsa',
+        ];
+    }
+
     private function productIcon(string $nama): string
     {
         $lower = strtolower($nama);
@@ -322,5 +557,16 @@ class SupplierRecommendationController extends Controller
         }
 
         return 'PR';
+    }
+
+    private function imageUrl(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        return Str::startsWith($path, ['http://', 'https://'])
+            ? $path
+            : asset('storage/'.$path);
     }
 }

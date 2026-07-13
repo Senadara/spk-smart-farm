@@ -2,13 +2,15 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class PeternakanService
 {
     private ?string $activeKomoditasId = null;
+
     private ?string $activeJenisBudidayaId = null;
+
     private ?array $cachedBarnEnvironment = null;
 
     public function forKomoditas(?string $komoditasId): self
@@ -59,7 +61,7 @@ class PeternakanService
 
     public function getActiveCoopIds(bool $activeOnly = true): array
     {
-        if (!$this->activeJenisBudidayaId) {
+        if (! $this->activeJenisBudidayaId) {
             return [];
         }
 
@@ -161,16 +163,16 @@ class PeternakanService
     public function getCommodityThresholds(): array
     {
         $defaults = [
-            'TEMP'    => ['min' => 20, 'max' => 28],
-            'HUMID'   => ['min' => 50, 'max' => 70],
-            'AMMON'   => ['min' => 0,  'max' => 15],
+            'TEMP' => ['min' => 20, 'max' => 28],
+            'HUMID' => ['min' => 50, 'max' => 70],
+            'AMMON' => ['min' => 0,  'max' => 15],
             'AMMONIA' => ['min' => 0,  'max' => 15],
-            'AMMA'    => ['min' => 0,  'max' => 15],
-            'LUX'     => ['min' => 15, 'max' => 50],
-            'LIGHT'   => ['min' => 15, 'max' => 50],
+            'AMMA' => ['min' => 0,  'max' => 15],
+            'LUX' => ['min' => 15, 'max' => 50],
+            'LIGHT' => ['min' => 15, 'max' => 50],
         ];
 
-        if (!$this->activeKomoditasId) {
+        if (! $this->activeKomoditasId) {
             return $defaults;
         }
 
@@ -197,11 +199,13 @@ class PeternakanService
 
         if ($min !== null && $value < $min) {
             $gap = ($min - $value) / max(abs($min), 1);
+
             return $gap > 0.1 ? 'danger' : 'warning';
         }
 
         if ($max !== null && $value > $max) {
             $gap = ($value - $max) / max(abs($max), 1);
+
             return $gap > 0.1 ? 'danger' : 'warning';
         }
 
@@ -234,7 +238,7 @@ class PeternakanService
     public function getBarnDetail(array $barn): array
     {
         $coopId = $barn['id'] ?? null;
-        if (!$coopId || $coopId === 'no-data') {
+        if (! $coopId || $coopId === 'no-data') {
             return array_merge($barn, [
                 'flockAge' => '-',
                 'totalBirds' => '-',
@@ -242,7 +246,7 @@ class PeternakanService
                 'breed' => '-',
                 'startDate' => '-',
                 'location' => '-',
-                'photo' => asset('images/barn-placeholder.jpg')
+                'photo' => asset('images/barn-placeholder.jpg'),
             ]);
         }
 
@@ -252,15 +256,15 @@ class PeternakanService
             ->select('unitBudidaya.*', 'jenisBudidaya.nama as breedName')
             ->first();
 
-        if (!$coop) {
-             return array_merge($barn, [
+        if (! $coop) {
+            return array_merge($barn, [
                 'flockAge' => '-',
                 'totalBirds' => '-',
                 'capacity' => '-',
                 'breed' => '-',
                 'startDate' => '-',
                 'location' => '-',
-                'photo' => asset('images/barn-placeholder.jpg')
+                'photo' => asset('images/barn-placeholder.jpg'),
             ]);
         }
 
@@ -269,13 +273,13 @@ class PeternakanService
         $weeks = (int) floor($createdAt->diffInWeeks(now()));
 
         return array_merge($barn, [
-            'flockAge' => $weeks . ' Minggu',
-            'totalBirds' => number_format((float)($coop->jumlah ?? 0), 0, ',', '.'),
-            'capacity' => number_format((float)($coop->kapasitas ?? 0), 0, ',', '.'),
+            'flockAge' => $weeks.' Minggu',
+            'totalBirds' => number_format((float) ($coop->jumlah ?? 0), 0, ',', '.'),
+            'capacity' => number_format((float) ($coop->kapasitas ?? 0), 0, ',', '.'),
             'breed' => $coop->breedName ?? '-',
             'startDate' => $createdAt->format('Y-m-d'),
             'location' => $coop->lokasi ?? '-',
-            'photo' => $coop->gambar ? asset('storage/' . $coop->gambar) : asset('images/barn-placeholder.jpg'),
+            'photo' => $coop->gambar ? asset('storage/'.$coop->gambar) : asset('images/barn-placeholder.jpg'),
         ]);
     }
 
@@ -315,12 +319,12 @@ class PeternakanService
             $light[] = null;
         }
 
-        if (!$barnId || $barnId === 'no-data') {
-            return ['labels' => $labels, 'temperature' => array_map(fn() => 0, $temp), 'humidity' => array_map(fn() => 0, $hum), 'ammonia' => array_map(fn() => 0, $ammonia), 'light' => array_map(fn() => 0, $light)];
+        if (! $barnId || $barnId === 'no-data') {
+            return ['labels' => $labels, 'temperature' => array_map(fn () => 0, $temp), 'humidity' => array_map(fn () => 0, $hum), 'ammonia' => array_map(fn () => 0, $ammonia), 'light' => array_map(fn () => 0, $light)];
         }
 
         $devices = DB::table('iot_device')->where('unitBudidayaId', $barnId)->pluck('id')->toArray();
-        if (!empty($devices)) {
+        if (! empty($devices)) {
             $yesterday = now()->subHours(24);
             $logs = DB::table('iot_sensor_data')
                 ->join('iot_parameter', 'iot_parameter.id', '=', 'iot_sensor_data.parameterId')
@@ -335,14 +339,18 @@ class PeternakanService
                 // Find index
                 $idx = array_search($log->hour_label, $labels);
                 if ($idx !== false) {
-                    if ($log->code === 'TEMP')
+                    if ($log->code === 'TEMP') {
                         $temp[$idx] = round($log->avg_value, 1);
-                    if ($log->code === 'HUMID')
+                    }
+                    if ($log->code === 'HUMID') {
                         $hum[$idx] = round($log->avg_value, 1);
-                    if ($log->code === 'AMMON' || $log->code === 'AMMO' || $log->code === 'AMMA' || $log->code === 'AMMONIA')
+                    }
+                    if ($log->code === 'AMMON' || $log->code === 'AMMO' || $log->code === 'AMMA' || $log->code === 'AMMONIA') {
                         $ammonia[$idx] = round($log->avg_value, 1);
-                    if ($log->code === 'LIGHT' || $log->code === 'LUX')
+                    }
+                    if ($log->code === 'LIGHT' || $log->code === 'LUX') {
                         $light[$idx] = round($log->avg_value, 0);
+                    }
                 }
             }
 
@@ -352,10 +360,10 @@ class PeternakanService
             $ammonia = $this->interpolateArray($ammonia);
             $light = $this->interpolateArray($light);
         } else {
-             $temp = array_map(fn() => 0, $temp);
-             $hum = array_map(fn() => 0, $hum);
-             $ammonia = array_map(fn() => 0, $ammonia);
-             $light = array_map(fn() => 0, $light);
+            $temp = array_map(fn () => 0, $temp);
+            $hum = array_map(fn () => 0, $hum);
+            $ammonia = array_map(fn () => 0, $ammonia);
+            $light = array_map(fn () => 0, $light);
         }
 
         return ['labels' => $labels, 'temperature' => $temp, 'humidity' => $hum, 'ammonia' => $ammonia, 'light' => $light];
@@ -371,19 +379,20 @@ class PeternakanService
                 $arr[$k] = $lastVal;
             }
         }
+
         return $arr;
     }
 
     public function getBarnKpi(array $barn): array
     {
         $coopId = $barn['id'] ?? null;
-        if (!$coopId || $coopId === 'no-data') {
+        if (! $coopId || $coopId === 'no-data') {
             return ['hdp' => 0, 'hhep' => 0, 'feedIntake' => 0, 'fcr' => 0, 'gradeTelur' => ['A' => 0, 'B' => 0, 'C' => 0], 'mortalitas' => 0, 'afkir' => 0, 'usiaAwalBertelur' => '-', 'puncakProduksi' => 'Belum Produksi'];
         }
 
         $today = now()->toDateString();
         $coop = DB::table('unitBudidaya')->where('id', $coopId)->first(['jumlah', 'createdAt']);
-        if (!$coop) {
+        if (! $coop) {
             return ['hdp' => 0, 'hhep' => 0, 'feedIntake' => 0, 'fcr' => 0, 'gradeTelur' => ['A' => 0, 'B' => 0, 'C' => 0], 'mortalitas' => 0, 'afkir' => 0, 'usiaAwalBertelur' => '-', 'puncakProduksi' => 'Belum Produksi'];
         }
         $populasiAwal = $coop->jumlah ?? 0;
@@ -446,8 +455,8 @@ class PeternakanService
         $totalGradeC = $grades['Grade C'] ?? 0;
         $totalGrades = $totalGradeA + $totalGradeB + $totalGradeC;
 
-    	$gradeTelur = ['A' => 0, 'B' => 0, 'C' => 0];
-        if($totalGrades > 0) {
+        $gradeTelur = ['A' => 0, 'B' => 0, 'C' => 0];
+        if ($totalGrades > 0) {
             $gradeTelur = [
                 'A' => round(($totalGradeA / $totalGrades) * 100),
                 'B' => round(($totalGradeB / $totalGrades) * 100),
@@ -471,11 +480,12 @@ class PeternakanService
     public function getBarnProductionLog(array $barn): array
     {
         $coopId = $barn['id'] ?? null;
-        if (!$coopId || $coopId === 'no-data')
+        if (! $coopId || $coopId === 'no-data') {
             return [];
+        }
 
         $coop = DB::table('unitBudidaya')->where('id', $coopId)->first(['jumlah']);
-        $populasi = $coop ? (float)$coop->jumlah : 0;
+        $populasi = $coop ? (float) $coop->jumlah : 0;
 
         $log = [];
         // Populate exactly 7 days
@@ -516,26 +526,28 @@ class PeternakanService
                 ->whereRaw('LOWER(grade.nama) LIKE ?', ['%afkir%'])
                 ->sum('panenRincianGrade.jumlah');
 
-            $hdp = $populasi > 0 && $telur > 0 ? round(($telur / $populasi) * 100, 1) . '%' : '-';
+            $hdp = $populasi > 0 && $telur > 0 ? round(($telur / $populasi) * 100, 1).'%' : '-';
 
             $log[] = [
                 'date' => Carbon::parse($date)->format('d M Y'),
-                'eggs' => $telur > 0 ? number_format((float)$telur, 0, ',', '.') : '-',
-                'rejects' => $rejects > 0 ? number_format((float)$rejects, 0, ',', '.') : '-',
+                'eggs' => $telur > 0 ? number_format((float) $telur, 0, ',', '.') : '-',
+                'rejects' => $rejects > 0 ? number_format((float) $rejects, 0, ',', '.') : '-',
                 'feedKg' => $pakan > 0 ? round($pakan, 1) : '-',
                 'waterL' => '-', // No water count in schema
                 'mortality' => $mati > 0 ? $mati : '-',
                 'hdp' => $hdp,
             ];
         }
+
         return $log;
     }
 
     public function getBarnIotDevices(array $barn): array
     {
         $coopId = $barn['id'] ?? null;
-        if (!$coopId || $coopId === 'no-data')
+        if (! $coopId || $coopId === 'no-data') {
             return [];
+        }
 
         $devices = DB::table('iot_device')
             ->leftJoin('iot_connection_config', 'iot_device.connectionConfigId', '=', 'iot_connection_config.id')
@@ -575,6 +587,7 @@ class PeternakanService
             5 => ['status' => 'Alert', 'color' => 'red', 'title' => 'Suhu Kritis — Tindakan Segera', 'description' => 'Suhu kandang 27°C melebihi batas ideal. Ammonia 22ppm tinggi. Aktifkan ventilasi darurat dan monitor mortalitas.', 'score' => 52],
         ];
         $id = is_numeric($barn['id']) ? (int) $barn['id'] : 0;
+
         return $results[$id] ?? $results[0];
     }
 
@@ -591,7 +604,7 @@ class PeternakanService
                 ->exists()
             : false;
 
-        if (!$hasTodayReport) {
+        if (! $hasTodayReport) {
             return [
                 ['mode' => 'Data Harian', 'status' => 'warning', 'message' => 'Belum ada laporan panen atau pakan hari ini. Hasil SPK produktivitas belum lengkap.'],
                 ['mode' => 'Lingkungan', 'status' => $status === 'danger' ? 'danger' : ($status === 'warning' ? 'warning' : 'normal'), 'message' => $status === 'danger' ? 'Parameter lingkungan berada di zona kritis.' : ($status === 'warning' ? 'Parameter lingkungan perlu dipantau.' : 'Parameter lingkungan masih dalam batas aman.')],
@@ -616,7 +629,7 @@ class PeternakanService
         $coopId = $barn['id'] ?? null;
         $today = now()->toDateString();
 
-        if (!$coopId || $coopId === 'no-data') {
+        if (! $coopId || $coopId === 'no-data') {
             return [
                 'date' => Carbon::parse($today)->locale('id')->translatedFormat('d M Y'),
                 'available' => [],
@@ -671,15 +684,12 @@ class PeternakanService
                 ['label' => 'Rincian grade', 'status' => $hasGrade ? 'ready' : 'empty', 'source' => 'panenRincianGrade + grade'],
             ],
             'missing' => [
-                ['label' => 'Telur retak', 'source' => 'Belum ada kolom/field khusus di laporan panen'],
-                ['label' => 'Telur kotor', 'source' => 'Belum ada kolom/field khusus di laporan panen'],
-                ['label' => 'Air minum (liter)', 'source' => 'harianTernak belum menyimpan konsumsi air'],
-                ['label' => 'Afkir ayam harian', 'source' => 'Belum ada tabel/field afkir ayam; grade Afkir hanya dapat dibaca sebagai reject telur'],
+                ['label' => 'Air minum (liter)', 'source' => 'Belum dicatat pada laporan harian'],
+                ['label' => 'Afkir ayam harian', 'source' => 'Belum tersedia pada laporan hari ini'],
             ],
             'actions' => [
-                'Tambahkan field telur_retak dan telur_kotor pada payload laporan panen Node API jika metrik quality wajib ditampilkan.',
-                'Tambahkan konsumsi_air_liter pada laporan harian ternak jika kolom Air (L) tetap dipakai.',
-                'Gunakan grade Afkir sebagai reject telur sementara, bukan sebagai broken/dirty egg rate.',
+                'Lengkapi catatan konsumsi air bila data tersebut dibutuhkan untuk evaluasi kandang.',
+                'Gunakan catatan panen dan grade telur sebagai acuan kualitas produksi harian.',
             ],
         ];
     }
@@ -687,8 +697,9 @@ class PeternakanService
     public function getBarnActivityLog(array $barn): array
     {
         $coopId = $barn['id'] ?? null;
-        if (!$coopId || $coopId === 'no-data')
+        if (! $coopId || $coopId === 'no-data') {
             return [];
+        }
 
         $activities = DB::table('laporan')
             ->where('unitBudidayaId', $coopId)
@@ -701,16 +712,18 @@ class PeternakanService
         foreach ($activities as $act) {
             $type = 'info';
             $reportType = strtolower((string) $act->tipe);
-            if (in_array($reportType, ['panen', 'harian'], true))
+            if (in_array($reportType, ['panen', 'harian'], true)) {
                 $type = 'success';
-            if (in_array($reportType, ['kematian', 'sakit', 'hama'], true))
+            }
+            if (in_array($reportType, ['kematian', 'sakit', 'hama'], true)) {
                 $type = 'warning';
+            }
 
             $logs[] = [
                 'time' => Carbon::parse($act->createdAt)->diffForHumans(),
-                'title' => 'Laporan ' . ucfirst($reportType ?: 'harian'),
+                'title' => 'Laporan '.ucfirst($reportType ?: 'harian'),
                 'desc' => $act->judul ?? ($act->catatan ?? 'Telah ditambahkan'),
-                'type' => $type
+                'type' => $type,
             ];
         }
 
@@ -743,6 +756,7 @@ class PeternakanService
                 $feedIntake[] = 0;
                 $mortality[] = 0;
             }
+
             return ['labels' => $labels, 'hdp' => $hdp, 'hhep' => $hhep, 'fcr' => $fcr, 'feedIntake' => $feedIntake, 'mortality' => $mortality];
         }
 
@@ -825,17 +839,10 @@ class PeternakanService
             'gradeDistribution' => [],
             'rejectRate' => null,
             'rejectStatus' => 'missing',
-            'brokenRate' => null,
-            'brokenStatus' => 'missing',
-            'dirtyRate' => null,
-            'dirtyStatus' => 'missing',
-            'missingFields' => [
-                ['label' => 'Telur retak', 'description' => 'Belum tersedia sebagai field di laporan panen.'],
-                ['label' => 'Telur kotor', 'description' => 'Belum tersedia sebagai field di laporan panen.'],
-            ],
+            'missingFields' => [],
         ];
 
-        if (!$coopId || $coopId === 'no-data') {
+        if (! $coopId || $coopId === 'no-data') {
             return $empty;
         }
 
@@ -911,7 +918,7 @@ class PeternakanService
 
         return array_merge($empty, [
             'hasReport' => true,
-            'hasGradeDetail' => !empty($distribution),
+            'hasGradeDetail' => ! empty($distribution),
             'lastPanenAt' => $lastPanenAt
                 ? Carbon::parse($lastPanenAt)->locale('id')->translatedFormat('d M Y, H:i')
                 : null,
@@ -1021,12 +1028,12 @@ class PeternakanService
             ->whereIn('id', $activeCoopIds)
             ->orderBy('createdAt', 'asc')
             ->first();
-        $umurBiologis = $oldestCoop ? (int) floor(Carbon::parse($oldestCoop->createdAt)->diffInWeeks(now())) . ' Mgg' : '0 Mgg';
+        $umurBiologis = $oldestCoop ? (int) floor(Carbon::parse($oldestCoop->createdAt)->diffInWeeks(now())).' Mgg' : '0 Mgg';
 
         return [
             [
                 'label' => 'HDP %',
-                'value' => $hdpToday . '%',
+                'value' => $hdpToday.'%',
                 'trend' => $this->calcTrend($hdpToday, $hdpYesterday, 'higher_is_better'),
             ],
             [
@@ -1041,17 +1048,17 @@ class PeternakanService
             ],
             [
                 'label' => 'Feed Intake',
-                'value' => $feedIntakeToday . 'g',
+                'value' => $feedIntakeToday.'g',
                 'trend' => $this->calcTrend($feedIntakeToday, $feedIntakeYesterday, 'neutral'),
             ],
             [
                 'label' => 'Egg Mass',
-                'value' => round($totalEggMassToday, 1) . 'kg',
+                'value' => round($totalEggMassToday, 1).'kg',
                 'trend' => $this->calcTrend($totalEggMassToday, $totalEggMassYesterday, 'higher_is_better'),
             ],
             [
                 'label' => 'Mortality',
-                'value' => $mortalityPct . '%',
+                'value' => $mortalityPct.'%',
                 'trend' => $this->calcMortalityTrend($mortalityThisMonth, $mortalityLastMonth),
             ],
         ];
@@ -1093,7 +1100,7 @@ class PeternakanService
 
         return [
             'direction' => $diff > 0 ? 'up' : 'down',
-            'value' => abs($diff) . ' ekor',
+            'value' => abs($diff).' ekor',
             'status' => $diff > 0 ? 'warning' : 'positive',
         ];
     }
@@ -1213,7 +1220,7 @@ class PeternakanService
             $ammo = 0.0;
             $lux = 0.0;
 
-            if (!empty($devices)) {
+            if (! empty($devices)) {
                 $latestLogs = DB::table('iot_sensor_data')
                     ->join('iot_parameter', 'iot_sensor_data.parameterId', '=', 'iot_parameter.id')
                     ->whereIn('iot_sensor_data.deviceId', $devices)
@@ -1223,7 +1230,7 @@ class PeternakanService
 
                 $mapped = [];
                 foreach ($latestLogs as $l) {
-                    if (!isset($mapped[$l->parameterCode])) {
+                    if (! isset($mapped[$l->parameterCode])) {
                         $mapped[$l->parameterCode] = (float) $l->value;
                     }
                 }
@@ -1259,17 +1266,17 @@ class PeternakanService
                 'temp' => round($temp, 1),
                 'status' => $status,
                 'sensors' => [
-                    ['label' => 'Temperature (' . round($temp, 1) . '°C)', 'percent' => $temp > 0 ? min(($temp / max($tempThr['max'] ?? 40, 1)) * 100, 100) : 0, 'status' => $tempStatus, 'statusLabel' => $statusLabels[$tempStatus]],
-                    ['label' => 'Humidity (' . round($hum, 1) . '%)', 'percent' => min($hum, 100), 'status' => $humStatus, 'statusLabel' => $statusLabels[$humStatus]],
-                    ['label' => 'Ammonia (' . round($ammo, 1) . 'ppm)', 'percent' => min($ammo * 2, 100), 'status' => $ammoStatus, 'statusLabel' => $statusLabels[$ammoStatus]],
-                    ['label' => 'Light (' . round($lux, 1) . ' lx)', 'percent' => min($lux, 100), 'status' => $luxStatus, 'statusLabel' => $statusLabels[$luxStatus]],
+                    ['label' => 'Temperature ('.round($temp, 1).'°C)', 'percent' => $temp > 0 ? min(($temp / max($tempThr['max'] ?? 40, 1)) * 100, 100) : 0, 'status' => $tempStatus, 'statusLabel' => $statusLabels[$tempStatus]],
+                    ['label' => 'Humidity ('.round($hum, 1).'%)', 'percent' => min($hum, 100), 'status' => $humStatus, 'statusLabel' => $statusLabels[$humStatus]],
+                    ['label' => 'Ammonia ('.round($ammo, 1).'ppm)', 'percent' => min($ammo * 2, 100), 'status' => $ammoStatus, 'statusLabel' => $statusLabels[$ammoStatus]],
+                    ['label' => 'Light ('.round($lux, 1).' lx)', 'percent' => min($lux, 100), 'status' => $luxStatus, 'statusLabel' => $statusLabels[$luxStatus]],
                 ],
                 'summary' => [
-                    'avg_temp' => round($temp, 1) . '°C',
-                    'humidity' => round($hum, 1) . '%',
-                    'ammonia' => round($ammo, 1) . 'ppm',
+                    'avg_temp' => round($temp, 1).'°C',
+                    'humidity' => round($hum, 1).'%',
+                    'ammonia' => round($ammo, 1).'ppm',
                     'ammonia_ok' => $ammoStatus === 'normal',
-                    'lux' => round($lux, 1) . ' lx',
+                    'lux' => round($lux, 1).' lx',
                     'temp_status' => $tempStatus,
                     'humidity_status' => $humStatus,
                     'ammonia_status' => $ammoStatus,
@@ -1345,7 +1352,7 @@ class PeternakanService
         $mortality = $coopSum > 0 ? ($mati / $coopSum) * 100 : 0;
 
         $avgWeeks = 0;
-        if (!empty($activeCoops)) {
+        if (! empty($activeCoops)) {
             $coops = DB::table('unitBudidaya')->whereIn('id', $activeCoops)->get(['createdAt']);
             $weeks = $coops->map(fn ($c) => (int) floor(Carbon::parse($c->createdAt)->diffInWeeks(now())));
             $avgWeeks = $weeks->isEmpty() ? 0 : (int) round($weeks->avg());
@@ -1362,22 +1369,22 @@ class PeternakanService
                 'values' => [$hdpScore, $ageScore, $feedScore, $mortScore],
             ],
             'indicators' => [
-                ['label' => 'HDP', 'value' => round($hdp, 1) . '%', 'color' => $hdp > 85 ? 'emerald' : ($hdp > 70 ? 'amber' : 'red'), 'detail' => $hdp > 85 ? 'Optimal' : ($hdp > 70 ? 'Cukup' : 'Rendah'), 'score' => $hdpScore],
-                ['label' => 'Umur Biologis', 'value' => $avgWeeks > 0 ? $avgWeeks . ' mg' : '-', 'color' => 'blue', 'detail' => 'Rata-rata flock', 'score' => $ageScore],
-                ['label' => 'Feed Consumption', 'value' => round($fi, 0) . ' g', 'color' => $fi >= 100 && $fi <= 130 ? 'emerald' : 'amber', 'detail' => 'Per ekor/hari', 'score' => $feedScore],
-                ['label' => 'Mortalitas', 'value' => round($mortality, 2) . '%', 'color' => $mortality < 1 ? 'emerald' : ($mortality < 3 ? 'amber' : 'red'), 'detail' => 'Bulan ini', 'score' => $mortScore],
+                ['label' => 'HDP', 'value' => round($hdp, 1).'%', 'color' => $hdp > 85 ? 'emerald' : ($hdp > 70 ? 'amber' : 'red'), 'detail' => $hdp > 85 ? 'Optimal' : ($hdp > 70 ? 'Cukup' : 'Rendah'), 'score' => $hdpScore],
+                ['label' => 'Umur Biologis', 'value' => $avgWeeks > 0 ? $avgWeeks.' mg' : '-', 'color' => 'blue', 'detail' => 'Rata-rata flock', 'score' => $ageScore],
+                ['label' => 'Feed Consumption', 'value' => round($fi, 0).' g', 'color' => $fi >= 100 && $fi <= 130 ? 'emerald' : 'amber', 'detail' => 'Per ekor/hari', 'score' => $feedScore],
+                ['label' => 'Mortalitas', 'value' => round($mortality, 2).'%', 'color' => $mortality < 1 ? 'emerald' : ($mortality < 3 ? 'amber' : 'red'), 'detail' => 'Bulan ini', 'score' => $mortScore],
             ],
             'productivitySensors' => [
-                ['label' => 'HDP (Hen-Day)', 'percent' => $hdpScore, 'status' => $hdp >= 85 ? 'normal' : ($hdp >= 70 ? 'warning' : 'danger'), 'statusLabel' => round($hdp, 1) . '%'],
-                ['label' => 'Feed Consumption', 'percent' => $feedScore, 'status' => $fi >= 100 && $fi <= 130 ? 'normal' : 'warning', 'statusLabel' => round($fi, 0) . ' g/ekor'],
-                ['label' => 'Mortalitas', 'percent' => $mortScore, 'status' => $mortality < 1 ? 'normal' : ($mortality < 3 ? 'warning' : 'danger'), 'statusLabel' => round($mortality, 2) . '%'],
+                ['label' => 'HDP (Hen-Day)', 'percent' => $hdpScore, 'status' => $hdp >= 85 ? 'normal' : ($hdp >= 70 ? 'warning' : 'danger'), 'statusLabel' => round($hdp, 1).'%'],
+                ['label' => 'Feed Consumption', 'percent' => $feedScore, 'status' => $fi >= 100 && $fi <= 130 ? 'normal' : 'warning', 'statusLabel' => round($fi, 0).' g/ekor'],
+                ['label' => 'Mortalitas', 'percent' => $mortScore, 'status' => $mortality < 1 ? 'normal' : ($mortality < 3 ? 'warning' : 'danger'), 'statusLabel' => round($mortality, 2).'%'],
             ],
         ];
     }
 
     public function getListKandang(): array
     {
-        if (!$this->activeJenisBudidayaId) {
+        if (! $this->activeJenisBudidayaId) {
             return [];
         }
 
@@ -1427,7 +1434,7 @@ class PeternakanService
 
         $query = DB::table('spk_fuzzy_logs')->orderByDesc('createdAt');
 
-        if (!empty($coopIds)) {
+        if (! empty($coopIds)) {
             $query->where(function ($q) use ($coopIds) {
                 $q->whereIn('unit_budidaya_id', $coopIds)->orWhereNull('unit_budidaya_id');
             });
@@ -1448,7 +1455,7 @@ class PeternakanService
                 'scoreColor' => 'blue',
                 'title' => 'Decision: Check Ventilation.',
                 'description' => 'Environment score is 76.4/100. Humidity is ideal, but elevated temperature and ammonia levels suggest reduced airflow efficiency.',
-                'link' => '#'
+                'link' => '#',
             ],
             'produktivitas' => [
                 'status' => 'Maintain',
@@ -1457,7 +1464,7 @@ class PeternakanService
                 'scoreColor' => 'emerald',
                 'title' => 'Decision: Keep Current Rations.',
                 'description' => 'Health score is 92.5/100. Birds are performing optimally. Feed quality dip is negligible given high HDP output.',
-                'link' => '#'
+                'link' => '#',
             ],
             'gabungan' => [
                 'status' => 'Excellent',
@@ -1467,8 +1474,8 @@ class PeternakanService
                 'title' => 'Decision: Expand Phase 2.',
                 'description' => 'Combined weighted score indicates peak performance. Current environmental stress is minor compared to productivity gains.',
                 'link' => '#',
-                'isMain' => true
-            ]
+                'isMain' => true,
+            ],
         ];
     }
 
@@ -1496,16 +1503,16 @@ class PeternakanService
             $reject = DB::table('kematian')->where('laporanId', $l->id)->where('isDeleted', 0)->count();
 
             $b = $coops[$l->unitBudidayaId];
-            $age = (int) floor(Carbon::parse($b->createdAt)->diffInWeeks(now())) . ' Wks';
+            $age = (int) floor(Carbon::parse($b->createdAt)->diffInWeeks(now())).' Wks';
 
             $logs[] = [
                 'date' => Carbon::parse($l->createdAt)->format('M d, Y'),
                 'barn' => $b->nama,
                 'flock_age' => $age,
-                'birds' => number_format((float)($b->jumlah ?? 0), 0, ',', '.'),
-                'eggs' => strtolower($l->tipe) === 'panen' ? number_format((float)($panen ?? 0), 0, ',', '.') : '-',
+                'birds' => number_format((float) ($b->jumlah ?? 0), 0, ',', '.'),
+                'eggs' => strtolower($l->tipe) === 'panen' ? number_format((float) ($panen ?? 0), 0, ',', '.') : '-',
                 'rejects' => strtolower($l->tipe) === 'kematian' ? $reject : '-',
-                'status' => strtolower($l->tipe) === 'panen' ? 'Optimal' : 'Attention'
+                'status' => strtolower($l->tipe) === 'panen' ? 'Optimal' : 'Attention',
             ];
         }
 

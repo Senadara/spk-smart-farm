@@ -23,6 +23,7 @@ class SupplierProduct extends Model
         'tokoId',
         'nama',
         'deskripsi',
+        'kategori',
         'gambar',
         'stok',
         'satuan',
@@ -47,5 +48,10 @@ class SupplierProduct extends Model
     public function orderDetails(): HasMany
     {
         return $this->hasMany(SupplierOrderDetail::class, 'produkId');
+    }
+
+    public function inventoryLinks(): HasMany
+    {
+        return $this->hasMany(InventorySupplierProductLink::class, 'supplier_product_id');
     }
 }

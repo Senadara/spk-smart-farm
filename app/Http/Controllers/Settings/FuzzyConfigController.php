@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Models\Komoditas;
+use App\Models\IotParameter;
 use App\Models\SpkFuzzyProfile;
 use App\Models\SpkFuzzyVariable;
 use App\Models\SpkFuzzySet;
@@ -56,6 +57,9 @@ class FuzzyConfigController extends Controller
             ->groupBy('variable_id');
 
         $commodities = Komoditas::where('isDeleted', 0)->orderBy('nama')->get(['id', 'nama']);
+        $iotParameters = IotParameter::orderBy('parameterCode')->get(['id', 'parameterCode', 'parameterName', 'unit']);
+        $availableFunctions = $this->availableSourceFunctions();
+        $databaseSources = $this->allowedDatabaseFields();
 
         // Summary stats
         $stats = [
@@ -75,7 +79,10 @@ class FuzzyConfigController extends Controller
             'profiles',
             'activeProfile',
             'activeProfileId',
-            'commodities'
+            'commodities',
+            'iotParameters',
+            'availableFunctions',
+            'databaseSources'
         ));
     }
 
@@ -444,7 +451,225 @@ class FuzzyConfigController extends Controller
             ->with('success', 'Rule berhasil dihapus.');
     }
 
+    public function storeSource(Request $request)
+    {
+        [$validated, $payload] = $this->validateAndBuildSourcePayload($request);
+
+        $existing = SpkFuzzyInputSource::where('variable_id', $validated['variable_id'])->first();
+        if ($existing) {
+            $existing->update($payload);
+            MamdaniEngine::clearCache($payload['profile_id']);
+
+            return redirect()->route('settings.fuzzy.index', ['profile_id' => $payload['profile_id'], 'tab' => 'sources'])
+                ->with('success', 'Sumber data input berhasil diperbarui.');
+        }
+
+        SpkFuzzyInputSource::create($payload);
+        MamdaniEngine::clearCache($payload['profile_id']);
+
+        return redirect()->route('settings.fuzzy.index', ['profile_id' => $payload['profile_id'], 'tab' => 'sources'])
+            ->with('success', 'Sumber data input berhasil ditambahkan.');
+    }
+
+    public function updateSource(Request $request, string $id)
+    {
+        $source = SpkFuzzyInputSource::findOrFail($id);
+        [$validated, $payload] = $this->validateAndBuildSourcePayload($request, $source);
+
+        $source->update($payload);
+        MamdaniEngine::clearCache($payload['profile_id']);
+
+        return redirect()->route('settings.fuzzy.index', ['profile_id' => $payload['profile_id'], 'tab' => 'sources'])
+            ->with('success', 'Sumber data input berhasil diperbarui.');
+    }
+
+    public function destroySource(string $id)
+    {
+        $source = SpkFuzzyInputSource::findOrFail($id);
+        $profileId = $source->profile_id ?: $source->variable?->profile_id;
+        $source->delete();
+        MamdaniEngine::clearCache($profileId);
+
+        return redirect()->route('settings.fuzzy.index', ['profile_id' => $profileId, 'tab' => 'sources'])
+            ->with('success', 'Sumber data input berhasil dihapus.');
+    }
+
+    private function validateAndBuildSourcePayload(Request $request, ?SpkFuzzyInputSource $existing = null): array
+    {
+        $validated = $request->validate([
+            'profile_id' => 'required|exists:spk_fuzzy_profiles,id',
+            'variable_id' => 'required|exists:spk_fuzzy_variables,id',
+            'source_type' => 'required|in:iot,report_metric,function,database',
+            'parameter_code' => 'nullable|string|max:50',
+            'metric_code' => ['nullable', 'string', 'max:100', 'regex:/^[a-zA-Z0-9_]+$/'],
+            'function_name' => 'nullable|string|max:200',
+            'source_name' => 'nullable|string|max:150',
+            'field_name' => 'nullable|string|max:100',
+            'aggregation' => 'nullable|in:sum,avg,average,latest,count',
+            'date_scope' => 'nullable|in:today,week,month,all',
+            'max_age_minutes' => 'nullable|integer|min:1|max:10080',
+            'offline_after_misses' => 'nullable|integer|min:1|max:20',
+        ], [
+            'metric_code.regex' => 'Kode metric hanya boleh huruf, angka, dan underscore.',
+        ]);
+
+        $variable = SpkFuzzyVariable::where('id', $validated['variable_id'])
+            ->where('profile_id', $validated['profile_id'])
+            ->where('type', 'input')
+            ->first();
+
+        if (! $variable || $variable->group === 'kausalitas') {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'variable_id' => 'Sumber data hanya bisa dipasang ke variabel input non-kausalitas pada profile yang sama.',
+            ]);
+        }
+
+        if ($existing && $existing->variable_id !== $validated['variable_id']) {
+            $duplicate = SpkFuzzyInputSource::where('variable_id', $validated['variable_id'])
+                ->where('id', '!=', $existing->id)
+                ->exists();
+
+            if ($duplicate) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'variable_id' => 'Variabel tersebut sudah memiliki sumber data.',
+                ]);
+            }
+        }
+
+        $extra = [];
+        $payload = [
+            'profile_id' => $validated['profile_id'],
+            'variable_id' => $validated['variable_id'],
+            'source_type' => $validated['source_type'],
+            'source_name' => null,
+            'field_name' => null,
+            'function_name' => null,
+            'extra_config' => null,
+        ];
+
+        if ($validated['source_type'] === 'iot') {
+            if (empty($validated['parameter_code'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['parameter_code' => 'Parameter IoT wajib dipilih.']);
+            }
+
+            $exists = IotParameter::where('parameterCode', $validated['parameter_code'])->exists();
+            if (! $exists) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['parameter_code' => 'Parameter IoT tidak ditemukan.']);
+            }
+
+            $extra = [
+                'parameterCode' => $validated['parameter_code'],
+                'maxAgeMinutes' => (int) ($validated['max_age_minutes'] ?? 30),
+                'offlineAfterMisses' => (int) ($validated['offline_after_misses'] ?? 3),
+            ];
+
+            $payload['source_name'] = 'iot_sensor_data';
+            $payload['field_name'] = 'value';
+        }
+
+        if ($validated['source_type'] === 'report_metric') {
+            if (empty($validated['metric_code'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['metric_code' => 'Kode metric laporan wajib diisi.']);
+            }
+
+            $extra = [
+                'metricCode' => strtolower($validated['metric_code']),
+                'aggregation' => $validated['aggregation'] ?? 'sum',
+                'dateScope' => $validated['date_scope'] ?? 'today',
+            ];
+
+            $payload['source_name'] = 'daily_report_metrics';
+            $payload['field_name'] = 'value';
+        }
+
+        if ($validated['source_type'] === 'function') {
+            $functions = array_keys($this->availableSourceFunctions());
+            if (empty($validated['function_name']) || ! in_array($validated['function_name'], $functions, true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['function_name' => 'Function source tidak valid.']);
+            }
+
+            $payload['function_name'] = $validated['function_name'];
+        }
+
+        if ($validated['source_type'] === 'database') {
+            $allowed = $this->allowedDatabaseFields();
+            $sourceName = $validated['source_name'] ?? '';
+            $fieldName = $validated['field_name'] ?? '';
+
+            if (! isset($allowed[$sourceName]) || ! in_array($fieldName, $allowed[$sourceName], true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['source_name' => 'Sumber database tidak termasuk daftar aman.']);
+            }
+
+            $extra = [
+                'aggregation' => $validated['aggregation'] ?? 'sum',
+                'dateScope' => $validated['date_scope'] ?? 'today',
+            ];
+
+            $payload['source_name'] = $sourceName;
+            $payload['field_name'] = $fieldName;
+        }
+
+        $payload['extra_config'] = empty($extra) ? null : $extra;
+
+        return [$validated, $payload];
+    }
+
+    private function availableSourceFunctions(): array
+    {
+        return [
+            'App\\Services\\Fuzzy\\CalculateHdp' => 'HDP - Hen Day Production',
+            'App\\Services\\Fuzzy\\CalculatePakan' => 'Pakan per ekor per hari',
+            'App\\Services\\Fuzzy\\CalculateMortalitas' => 'Mortalitas bulan berjalan',
+            'App\\Services\\Fuzzy\\CalculateFcr' => 'FCR - Feed Conversion Ratio',
+        ];
+    }
+
+    private function allowedDatabaseFields(): array
+    {
+        return [
+            'harianTernak' => ['pakan'],
+            'panen' => ['jumlah', 'berat'],
+            'kematian' => ['id'],
+            'laporan' => ['id'],
+        ];
+    }
+
     // ── RESET ───────────────────────────────────────────────────
+
+    private function ruleBelongsToProfile(?string $profileId, string $outputSetId, array $conditions): bool
+    {
+        if (! $profileId) {
+            return false;
+        }
+
+        $outputSetProfileId = SpkFuzzySet::query()
+            ->join('spk_fuzzy_variables', 'spk_fuzzy_variables.id', '=', 'spk_fuzzy_sets.variable_id')
+            ->where('spk_fuzzy_sets.id', $outputSetId)
+            ->value('spk_fuzzy_variables.profile_id');
+
+        if ($outputSetProfileId !== $profileId) {
+            return false;
+        }
+
+        $variableIds = collect($conditions)->pluck('variable_id')->filter()->unique()->values();
+        $setIds = collect($conditions)->pluck('set_id')->filter()->unique()->values();
+
+        $validVariableCount = SpkFuzzyVariable::where('profile_id', $profileId)
+            ->whereIn('id', $variableIds)
+            ->count();
+
+        if ($validVariableCount !== $variableIds->count()) {
+            return false;
+        }
+
+        $validSetCount = SpkFuzzySet::query()
+            ->join('spk_fuzzy_variables', 'spk_fuzzy_variables.id', '=', 'spk_fuzzy_sets.variable_id')
+            ->where('spk_fuzzy_variables.profile_id', $profileId)
+            ->whereIn('spk_fuzzy_sets.id', $setIds)
+            ->count();
+
+        return $validSetCount === $setIds->count();
+    }
 
     /**
      * Reset seluruh konfigurasi fuzzy ke default (jalankan seeder).
@@ -452,8 +677,11 @@ class FuzzyConfigController extends Controller
     public function resetToDefault()
     {
         Artisan::call('db:seed', ['--class' => 'SpkFuzzySeeder', '--force' => true]);
+        MamdaniEngine::clearCache();
 
-        return redirect()->route('settings.fuzzy.index')
+        $profileId = SpkFuzzyProfile::where('name', 'Ayam Petelur - RFC v1')->value('id');
+
+        return redirect()->route('settings.fuzzy.index', ['profile_id' => $profileId])
             ->with('success', 'Konfigurasi fuzzy berhasil di-reset ke default.');
     }
 }

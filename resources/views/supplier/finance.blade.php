@@ -40,7 +40,9 @@
             <h2 class="font-bold text-gray-900">Omzet Bulanan</h2>
             <p class="text-xs text-gray-500 mt-1">Perbandingan pendapatan sepanjang tahun {{ $year }}</p>
         </div>
-        @php($maxRevenue = max($monthly->max('revenue'), 1))
+        @php
+            $maxRevenue = max($monthly->max('revenue'), 1);
+        @endphp
         <div class="h-64 flex items-end gap-2 border-b border-gray-200 overflow-x-auto">
             @foreach($monthly as $month)
                 <div class="flex-1 min-w-10 h-full flex flex-col justify-end items-center gap-2">

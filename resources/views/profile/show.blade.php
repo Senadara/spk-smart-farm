@@ -80,6 +80,18 @@
             @error('address')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
         </div>
 
+        <div class="md:col-span-2">
+            <x-location-picker
+                id="farm-location-picker"
+                lat-input-id="latitude"
+                lng-input-id="longitude"
+                address-input-id="address"
+                initial-query="{{ old('address', $farmProfile?->address) }}"
+                title="Pilih titik peternakan"
+                help="Cari wilayah peternakan, contoh: Ngantang, Malang. Setelah memilih hasil, pin bisa dikoreksi dengan klik atau geser pada peta."
+            />
+        </div>
+
         <div>
             <label for="latitude" class="mb-1 block text-sm font-semibold text-[var(--color-gray-700)]">Latitude</label>
             <input id="latitude" name="latitude" type="number" step="0.0000001" value="{{ old('latitude', $farmProfile?->latitude) }}"
@@ -97,7 +109,7 @@
         </div>
 
         <div class="md:col-span-2 flex flex-col gap-3 rounded-lg bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <p class="text-xs text-gray-500">Ambil koordinat dari Google Maps dengan klik kanan pada lokasi peternakan, lalu salin angka latitude dan longitude.</p>
+            <p class="text-xs text-gray-500">Gunakan pencarian peta agar koordinat lebih mudah diisi. Field latitude dan longitude tetap dapat dikoreksi manual bila diperlukan.</p>
             <button class="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">Simpan Lokasi</button>
         </div>
     </form>

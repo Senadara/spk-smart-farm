@@ -11,8 +11,8 @@
         <p class="text-sm text-gray-500 mt-1">Pesanan dicatat di sistem, sedangkan pembayaran dan bukti transfer dikonfirmasi langsung di luar sistem.</p>
     </div>
 
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        @foreach(['menunggu' => 'Menunggu', 'diterima' => 'Diproses', 'selesai' => 'Selesai', 'ditolak' => 'Ditolak', 'expired' => 'Kedaluwarsa'] as $key => $label)
+    <div class="grid grid-cols-2 lg:grid-cols-6 gap-3">
+        @foreach(['menunggu' => 'Menunggu', 'diterima' => 'Diproses', 'selesai' => 'Selesai', 'ditolak' => 'Ditolak', 'dibatalkan' => 'Dibatalkan', 'expired' => 'Kedaluwarsa'] as $key => $label)
             <a href="{{ route('supplier.orders.index', ['status' => $key]) }}"
                 class="bg-white border rounded-lg p-4 no-underline {{ request('status') === $key ? 'border-emerald-500 ring-2 ring-emerald-100' : 'border-gray-200' }}">
                 <p class="text-xs text-gray-500">{{ $label }}</p>
@@ -26,7 +26,7 @@
             class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm">
         <select name="status" class="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white">
             <option value="">Semua status</option>
-            @foreach(['menunggu', 'diterima', 'selesai', 'ditolak', 'expired'] as $status)
+            @foreach(['menunggu', 'diterima', 'selesai', 'ditolak', 'dibatalkan', 'expired'] as $status)
                 <option value="{{ $status }}" @selected(request('status') === $status)>{{ ucfirst($status) }}</option>
             @endforeach
         </select>
@@ -41,6 +41,7 @@
                     'diterima' => 'bg-blue-50 text-blue-700',
                     'selesai' => 'bg-emerald-50 text-emerald-700',
                     'ditolak' => 'bg-red-50 text-red-700',
+                    'dibatalkan' => 'bg-gray-100 text-gray-600',
                     default => 'bg-gray-100 text-gray-600',
                 };
             @endphp

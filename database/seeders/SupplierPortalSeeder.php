@@ -78,6 +78,7 @@ class SupplierPortalSeeder extends Seeder
             [
                 'nama' => 'Pakan Layer Premium 50 kg',
                 'deskripsi' => 'Pakan lengkap ayam petelur dengan protein seimbang.',
+                'kategori' => 'Pakan',
                 'stok' => 48,
                 'satuan' => 'Karung',
                 'harga' => 378000,
@@ -85,6 +86,7 @@ class SupplierPortalSeeder extends Seeder
             [
                 'nama' => 'Vitamin Ternak 1 kg',
                 'deskripsi' => 'Suplemen vitamin untuk menjaga performa dan daya tahan ternak.',
+                'kategori' => 'Vitamin',
                 'stok' => 8,
                 'satuan' => 'Paket',
                 'harga' => 52000,
@@ -92,6 +94,7 @@ class SupplierPortalSeeder extends Seeder
             [
                 'nama' => 'Egg Tray Plastik',
                 'deskripsi' => 'Tray telur plastik kapasitas 30 butir yang dapat digunakan kembali.',
+                'kategori' => 'Kemasan',
                 'stok' => 120,
                 'satuan' => 'Pcs',
                 'harga' => 12500,

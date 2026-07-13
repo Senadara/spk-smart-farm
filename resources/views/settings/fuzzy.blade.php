@@ -27,6 +27,79 @@
         </div>
     </div>
 
+    {{-- Active Profile --}}
+    <div class="bg-white rounded-2xl p-5 space-y-4" style="box-shadow: var(--shadow-sm);">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-2">
+                    <h2 class="text-base font-semibold text-gray-900">Profile Fuzzy Komoditas</h2>
+                    @if($activeProfile)
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase
+                            {{ $activeProfile->status === 'active' ? 'bg-emerald-50 text-emerald-700' : ($activeProfile->status === 'review' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600') }}">
+                            {{ $activeProfile->status }}
+                        </span>
+                    @endif
+                </div>
+                <p class="text-sm text-gray-500 mt-1">
+                    Konfigurasi parameter, membership function, sumber data, dan rule dipisahkan per komoditas.
+                </p>
+            </div>
+            <button type="button" @click="modal = 'addProfile'"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-[var(--color-primary)] border-none cursor-pointer hover:opacity-90 transition-opacity">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                Tambah Profile
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end">
+            <form method="GET" action="{{ route('settings.fuzzy.index') }}" class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Profile aktif di halaman</label>
+                    <select name="profile_id" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all" onchange="this.form.submit()">
+                        @foreach($profiles as $profile)
+                            <option value="{{ $profile->id }}" {{ $profile->id === $activeProfileId ? 'selected' : '' }}>
+                                {{ $profile->name }} {{ $profile->version ? '(' . $profile->version . ')' : '' }} - {{ $profile->commodity->nama ?? 'Tanpa komoditas' }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <noscript>
+                    <button type="submit" class="px-4 py-2.5 rounded-xl text-sm font-medium bg-gray-900 text-white">Pilih</button>
+                </noscript>
+            </form>
+
+            @if($activeProfile && ! $activeProfile->is_active)
+                <form action="{{ route('settings.fuzzy.profiles.activate', $activeProfile->id) }}" method="POST" onsubmit="return confirm('Jadikan profile ini sebagai konfigurasi aktif untuk komoditas terkait?');">
+                    @csrf @method('PATCH')
+                    <button type="submit" class="w-full lg:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors">
+                        Aktifkan Profile
+                    </button>
+                </form>
+            @endif
+        </div>
+
+        @if($activeProfile)
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+                <div class="rounded-xl bg-gray-50 px-3 py-2">
+                    <div class="text-[11px] text-gray-400 uppercase font-semibold">Nama</div>
+                    <div class="text-sm font-semibold text-gray-800 truncate">{{ $activeProfile->name }}</div>
+                </div>
+                <div class="rounded-xl bg-gray-50 px-3 py-2">
+                    <div class="text-[11px] text-gray-400 uppercase font-semibold">Komoditas</div>
+                    <div class="text-sm font-semibold text-gray-800 truncate">{{ $activeProfile->commodity->nama ?? '-' }}</div>
+                </div>
+                <div class="rounded-xl bg-gray-50 px-3 py-2">
+                    <div class="text-[11px] text-gray-400 uppercase font-semibold">Versi</div>
+                    <div class="text-sm font-semibold text-gray-800">{{ $activeProfile->version }}</div>
+                </div>
+                <div class="rounded-xl bg-gray-50 px-3 py-2">
+                    <div class="text-[11px] text-gray-400 uppercase font-semibold">Review</div>
+                    <div class="text-sm font-semibold text-gray-800 truncate">{{ $activeProfile->reviewed_by ?: 'Belum ditetapkan' }}</div>
+                </div>
+            </div>
+        @endif
+    </div>
+
     {{-- Summary Stats --}}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="bg-white rounded-xl p-4 flex items-center gap-3" style="box-shadow: var(--shadow-sm);">
@@ -113,11 +186,13 @@
 <script>
 function fuzzyConfig() {
     return {
-        tab: 'variables',
+        tab: @json(request('tab', 'variables')),
         modal: null,
         editVar: {},
         editSet: {},
         editRule: {},
+        editSource: {},
+        sourceFormMode: 'create',
         ruleConditions: [{ variable_id: '', set_id: '' }],
         expandedVars: {},
         // Filters
@@ -169,6 +244,43 @@ function fuzzyConfig() {
                 set_id: c.set_id,
             }));
             this.modal = 'editRule';
+        },
+
+        openAddSource() {
+            this.sourceFormMode = 'create';
+            this.editSource = {
+                id: null,
+                variable_id: '',
+                source_type: 'iot',
+                parameter_code: '',
+                metric_code: '',
+                function_name: '',
+                source_name: '',
+                field_name: '',
+                aggregation: 'sum',
+                date_scope: 'today',
+                max_age_minutes: 30,
+                offline_after_misses: 3,
+            };
+            this.modal = 'sourceForm';
+        },
+
+        openEditSource(source) {
+            this.sourceFormMode = source.id ? 'edit' : 'create';
+            this.editSource = {
+                source_type: 'iot',
+                aggregation: 'sum',
+                date_scope: 'today',
+                max_age_minutes: 30,
+                offline_after_misses: 3,
+                ...source,
+            };
+            this.modal = 'sourceForm';
+        },
+
+        dbFieldsForSource(sourceName) {
+            const sources = @json($databaseSources);
+            return sources[sourceName] || [];
         },
 
         getSetsForVariable(variableId) {

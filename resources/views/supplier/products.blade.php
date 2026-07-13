@@ -28,6 +28,12 @@
             <option value="available" @selected(request('stock') === 'available')>Stok tersedia</option>
             <option value="low" @selected(request('stock') === 'low')>Stok menipis</option>
         </select>
+        <select name="category" class="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white">
+            <option value="">Semua kategori</option>
+            @foreach($categoryOptions ?? [] as $category)
+                <option value="{{ $category }}" @selected(request('category') === $category)>{{ $category }}</option>
+            @endforeach
+        </select>
         <button class="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold">Terapkan</button>
     </form>
 
@@ -53,6 +59,7 @@
                         <div class="min-w-0">
                             <h2 class="font-bold text-gray-900 truncate">{{ $product->nama }}</h2>
                             <p class="text-sm font-semibold text-emerald-700 mt-1">Rp {{ number_format($product->harga, 0, ',', '.') }}</p>
+                            <p class="mt-1 text-xs text-gray-500">{{ $product->kategori ?: 'Tanpa kategori' }}</p>
                         </div>
                         <span class="shrink-0 h-fit px-2 py-1 rounded-full text-xs font-semibold {{ $product->stok <= 10 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700' }}">
                             {{ $product->stok }} {{ $product->satuan }}
@@ -66,6 +73,11 @@
                             @csrf
                             @method('PUT')
                             <input name="nama" value="{{ $product->nama }}" required class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" aria-label="Nama produk">
+                            <select name="kategori" required class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white" aria-label="Kategori produk">
+                                @foreach($categoryOptions ?? [] as $category)
+                                    <option value="{{ $category }}" @selected(old('kategori', $product->kategori) === $category)>{{ $category }}</option>
+                                @endforeach
+                            </select>
                             <textarea name="deskripsi" rows="3" required class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" aria-label="Deskripsi">{{ $product->deskripsi }}</textarea>
                             <div class="grid grid-cols-2 gap-2">
                                 <input name="harga" type="number" min="0" value="{{ $product->harga }}" required class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" aria-label="Harga">
@@ -113,6 +125,16 @@
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-1">Deskripsi</label>
                     <textarea name="deskripsi" rows="4" required class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm">{{ old('deskripsi') }}</textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Kategori produk</label>
+                    <select name="kategori" required class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm">
+                        <option value="" disabled @selected(!old('kategori'))>Pilih kategori produk</option>
+                        @foreach($categoryOptions ?? [] as $category)
+                            <option value="{{ $category }}" @selected(old('kategori') === $category)>{{ $category }}</option>
+                        @endforeach
+                    </select>
+                    <p class="mt-1 text-xs text-gray-400">Kategori berasal dari data master agar katalog owner tetap konsisten.</p>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>

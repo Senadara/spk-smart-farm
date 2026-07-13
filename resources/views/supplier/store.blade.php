@@ -55,10 +55,28 @@
                 @error('phone')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
             </div>
             <div class="md:col-span-2">
+                <label for="kategori" class="block text-sm font-semibold text-gray-700 mb-2">Kategori toko</label>
+                <input id="kategori" name="kategori" value="{{ old('kategori', $store?->kategori) }}" placeholder="Contoh: Pakan, Obat, Vaksin, Peralatan"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                <p class="mt-1 text-xs text-gray-400">Pisahkan beberapa kategori dengan koma.</p>
+                @error('kategori')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            </div>
+            <div class="md:col-span-2">
                 <label for="alamat" class="block text-sm font-semibold text-gray-700 mb-2">Alamat operasional</label>
                 <textarea id="alamat" name="alamat" rows="3" required
                     class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">{{ old('alamat', $store?->alamat) }}</textarea>
                 @error('alamat')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            </div>
+            <div class="md:col-span-2">
+                <x-location-picker
+                    id="supplier-store-location-picker"
+                    lat-input-id="latitude"
+                    lng-input-id="longitude"
+                    address-input-id="alamat"
+                    initial-query="{{ old('alamat', $store?->alamat) }}"
+                    title="Pilih titik toko supplier"
+                    help="Cari wilayah toko, contoh: Ngantang, Malang. Titik ini dipakai untuk menghitung jarak dan estimasi pengiriman ke peternak."
+                />
             </div>
             <div>
                 <label for="latitude" class="block text-sm font-semibold text-gray-700 mb-2">Latitude toko</label>

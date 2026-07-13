@@ -64,6 +64,12 @@ class SupplierPanelFeatureTest extends TestCase
             ->assertSee('Ringkasan Keuangan');
 
         $this->withSession($this->supplierSession())
+            ->get('/supplier/store')
+            ->assertOk()
+            ->assertSee('supplier-store-location-picker-map')
+            ->assertSee('Cari lokasi');
+
+        $this->withSession($this->supplierSession())
             ->get('/dashboard')
             ->assertForbidden();
 
@@ -81,6 +87,7 @@ class SupplierPanelFeatureTest extends TestCase
             ->post('/supplier/products', [
                 'nama' => 'Pakan Uji Supplier',
                 'deskripsi' => 'Produk dibuat melalui feature test.',
+                'kategori' => 'Pakan',
                 'stok' => 25,
                 'satuan' => 'Karung',
                 'harga' => 350000,
@@ -98,6 +105,7 @@ class SupplierPanelFeatureTest extends TestCase
 
         Storage::disk('public')->assertExists($product->gambar);
         $this->assertSame(25, $product->stok);
+        $this->assertSame('Pakan', $product->kategori);
 
         $otherSupplier = $this->createUser('supplier');
         $otherStore = SupplierStore::query()->create([
@@ -132,6 +140,34 @@ class SupplierPanelFeatureTest extends TestCase
             ->assertNotFound();
 
         $this->assertSame('Produk Milik Toko Lain', $otherProduct->fresh()->nama);
+    }
+
+    public function test_supplier_product_category_must_use_master_data(): void
+    {
+        $this->withSession($this->supplierSession())
+            ->get('/supplier/products')
+            ->assertOk()
+            ->assertSee('Pakan')
+            ->assertSee('Vitamin')
+            ->assertSee('Kategori berasal dari data master');
+
+        $this->withSession($this->supplierSession())
+            ->from('/supplier/products')
+            ->post('/supplier/products', [
+                'nama' => 'Produk Kategori Bebas',
+                'deskripsi' => 'Kategori ini tidak boleh dibuat sembarangan.',
+                'kategori' => 'Kategori Buatan Sendiri',
+                'stok' => 10,
+                'satuan' => 'Pcs',
+                'harga' => 10000,
+            ])
+            ->assertRedirect('/supplier/products')
+            ->assertSessionHasErrors('kategori');
+
+        $this->assertDatabaseMissing('produk', [
+            'tokoId' => $this->store->id,
+            'nama' => 'Produk Kategori Bebas',
+        ]);
     }
 
     public function test_order_status_uses_store_api_and_rejects_cross_store_access(): void

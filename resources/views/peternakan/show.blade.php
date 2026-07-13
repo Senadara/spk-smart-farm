@@ -4,6 +4,37 @@
 @section('breadcrumb', 'Peternakan › ' . $barn['name'])
 
 @section('content')
+    @php
+        $detailKpiHints = [
+            'HDP %' => ['body' => 'Hen Day Production kandang ini, yaitu persentase telur hari ini dibanding populasi ayam hidup.', 'formula' => '(telur hari ini / populasi hidup) x 100%', 'source' => 'panen, unitBudidaya'],
+            'HHEP %' => ['body' => 'Hen Housed Egg Production, persentase telur dibanding populasi awal kandang.', 'formula' => '(telur hari ini / populasi awal) x 100%', 'source' => 'panen, unitBudidaya'],
+            'Feed Intake' => ['body' => 'Rata-rata pakan yang dikonsumsi per ekor per hari.', 'formula' => '(pakan hari ini / populasi hidup) x 1000 gram', 'source' => 'harianTernak, unitBudidaya'],
+            'FCR' => ['body' => 'Feed Conversion Ratio kandang ini. Semakin kecil biasanya semakin efisien.', 'formula' => 'pakan hari ini / egg mass', 'source' => 'harianTernak, panen'],
+            'Mortalitas' => ['body' => 'Persentase kematian ayam pada kandang ini.', 'formula' => '(jumlah kematian / populasi awal) x 100%', 'source' => 'kematian, laporan'],
+            'Afkir' => ['body' => 'Persentase telur/ayam afkir yang tercatat pada laporan kualitas atau operasional.', 'formula' => '(jumlah afkir / total terkait) x 100%', 'source' => 'panenRincianGrade, laporan'],
+        ];
+        $barnOverviewHints = [
+            'Lokasi' => ['body' => 'Lokasi fisik kandang untuk membantu identifikasi unit budidaya.', 'source' => 'unitBudidaya'],
+            'Breed' => ['body' => 'Jenis/strain ayam yang dipelihara pada kandang.', 'source' => 'unitBudidaya / komoditas'],
+            'Tanggal Masuk' => ['body' => 'Tanggal awal flock masuk kandang, dipakai untuk menghitung umur biologis.', 'source' => 'unitBudidaya.createdAt'],
+            'Populasi' => ['body' => 'Jumlah ayam aktif yang dipakai sebagai pembagi HDP dan feed intake.', 'source' => 'unitBudidaya.jumlah'],
+            'Kapasitas' => ['body' => 'Batas kapasitas kandang agar populasi dapat dibandingkan dengan daya tampung.', 'source' => 'unitBudidaya.kapasitas'],
+            'Umur Flock' => ['body' => 'Umur flock berdasarkan tanggal masuk sampai hari ini.', 'formula' => 'hari ini - tanggal masuk', 'source' => 'unitBudidaya.createdAt'],
+        ];
+        $sensorHints = [
+            'Suhu' => ['body' => 'Suhu kandang terbaru dari sensor. Nilai dibandingkan dengan rentang ideal komoditas.', 'source' => 'iot_sensor_data'],
+            'Kelembapan' => ['body' => 'Kelembapan kandang terbaru dari sensor, berpengaruh pada kenyamanan ayam.', 'source' => 'iot_sensor_data'],
+            'Amonia' => ['body' => 'Kadar amonia kandang. Nilai tinggi dapat menjadi sinyal ventilasi atau litter perlu dicek.', 'source' => 'iot_sensor_data'],
+            'Cahaya' => ['body' => 'Intensitas cahaya kandang dari sensor lux.', 'source' => 'iot_sensor_data'],
+        ];
+        $eggMetricHints = [
+            'Total Telur' => ['body' => 'Jumlah telur yang dipanen dari kandang ini pada laporan hari ini.', 'formula' => 'SUM(panen.jumlah)', 'source' => 'panen'],
+            'Egg Mass' => ['body' => 'Berat total telur kandang hari ini.', 'formula' => 'SUM(panen.berat) atau panen.jumlah x 0.06 kg', 'source' => 'panen'],
+            'Berat Rata-rata' => ['body' => 'Rata-rata berat telur berdasarkan total berat dan jumlah telur.', 'formula' => 'egg mass / total telur', 'source' => 'panen'],
+            'Reject/Afkir' => ['body' => 'Persentase telur reject atau afkir dari total panen.', 'formula' => '(jumlah reject / total telur) x 100%', 'source' => 'panenRincianGrade, grade'],
+        ];
+    @endphp
+
     <div x-data="{
         sensorFilter: 'all',
         sensorRange: '24h',
@@ -114,6 +145,7 @@
                 </p>
             </div>
             <div class="flex items-center gap-3">
+                <x-dashboard-hint-toggle />
                 <a href="{{ route('peternakan', array_filter(['komoditas' => $activeKomoditasId])) }}" class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition flex items-center gap-2 no-underline">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
                     Kembali
@@ -141,7 +173,15 @@
                         ['l'=>'Umur Flock','v'=>$barn['flockAge']],
                     ] as $f)
                         <div>
-                            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-0.5">{{ $f['l'] }}</p>
+                            @php
+                                $hint = $barnOverviewHints[$f['l']] ?? null;
+                            @endphp
+                            <div class="mb-0.5 flex items-center gap-1">
+                                <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">{{ $f['l'] }}</p>
+                                @if($hint)
+                                    <x-metric-hint :title="$f['l']" :body="$hint['body']" :formula="$hint['formula'] ?? null" :source="$hint['source'] ?? null" />
+                                @endif
+                            </div>
                             <p class="text-sm font-bold text-gray-900">{{ $f['v'] }}</p>
                         </div>
                     @endforeach
@@ -159,7 +199,17 @@
                 ['label'=>'Mortalitas','value'=>$kpi['mortalitas'].'%','trend'=>['direction'=>$kpi['mortalitas']>0.05?'up':'stable','value'=>$kpi['mortalitas']>0.05?'+0.01%':'Stable','status'=>$kpi['mortalitas']>0.05?'warning':'neutral']],
                 ['label'=>'Afkir','value'=>$kpi['afkir'].'%','trend'=>['direction'=>'stable','value'=>'Stable','status'=>'neutral']],
             ] as $m)
-                <x-peternakan.kpi-card :label="$m['label']" :value="$m['value']" :trend="$m['trend']" />
+                @php
+                    $hint = $detailKpiHints[$m['label']] ?? null;
+                @endphp
+                <x-peternakan.kpi-card
+                    :label="$m['label']"
+                    :value="$m['value']"
+                    :trend="$m['trend']"
+                    :hint="$hint['body'] ?? null"
+                    :formula="$hint['formula'] ?? null"
+                    :source="$hint['source'] ?? null"
+                />
             @endforeach
         </div>
 
@@ -167,7 +217,10 @@
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
             <div class="lg:col-span-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
                 <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                    <h3 class="text-base font-semibold text-gray-800">Tren Sensor</h3>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-base font-semibold text-gray-800">Tren Sensor</h3>
+                        <x-metric-hint title="Tren Sensor" body="Grafik ini menampilkan histori sensor kandang berdasarkan rentang jam yang dipilih." formula="AVG(sensor value) per jam" source="iot_sensor_data, iot_parameter" />
+                    </div>
                     <div class="flex items-center gap-2">
                         <div class="flex bg-gray-100 rounded-lg p-0.5">
                             <template x-for="r in [{v:'6h',l:'6J'},{v:'12h',l:'12J'},{v:'24h',l:'24J'}]">
@@ -191,7 +244,10 @@
             {{-- Live Sensors + IoT Device --}}
             <div class="lg:col-span-2 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-base font-semibold text-gray-800">Sensor & Perangkat</h3>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-base font-semibold text-gray-800">Sensor & Perangkat</h3>
+                        <x-metric-hint title="Sensor & Perangkat" body="Card ini menampilkan nilai sensor terbaru dan status device. Device dapat dianggap offline jika tidak mengirim data melewati batas konfigurasi." source="iot_device, iot_sensor_data, iot_device_log" />
+                    </div>
                     <span class="flex h-2 w-2 relative">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -214,7 +270,15 @@
                                 <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">{!! $sIcons[$i] !!}</svg>
                                 <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full {{ $statusMap[$s['status']] ?? $statusMap['normal'] }}">{{ $statusLabel[$s['status']] ?? 'OK' }}</span>
                             </div>
-                            <p class="text-xs text-gray-400 uppercase tracking-wider">{{ $s['label'] }}</p>
+                            @php
+                                $hint = $sensorHints[$s['label']] ?? null;
+                            @endphp
+                            <div class="flex items-center gap-1">
+                                <p class="text-xs text-gray-400 uppercase tracking-wider">{{ $s['label'] }}</p>
+                                @if($hint)
+                                    <x-metric-hint :title="$s['label']" :body="$hint['body']" :source="$hint['source']" />
+                                @endif
+                            </div>
                             <p class="text-lg font-bold text-gray-900">{{ $s['value'] }}<span class="text-xs font-normal text-gray-400">{{ $s['unit'] }}</span></p>
                         </div>
                     @endforeach
@@ -241,7 +305,10 @@
         <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <div>
-                    <h3 class="text-base font-semibold text-gray-800">Tren Produktivitas</h3>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-base font-semibold text-gray-800">Tren Produktivitas</h3>
+                        <x-metric-hint title="Tren Produktivitas" body="Grafik ini memperlihatkan perkembangan HDP, HHEP, FCR, feed intake, dan mortalitas pada kandang ini." formula="agregasi laporan harian per tanggal" source="laporan, panen, harianTernak, kematian" />
+                    </div>
                     <p class="text-xs text-gray-400 mt-0.5">HDP, HHEP, FCR, Feed Intake, Mortalitas</p>
                 </div>
                 <div class="flex items-center gap-2">
@@ -271,11 +338,15 @@
             $gradeDistribution = $eggQuality['gradeDistribution'] ?? [];
             $hasGradeDetail = $eggQuality['hasGradeDetail'] ?? false;
             $rejectRate = $eggQuality['rejectRate'] ?? null;
+            $hasMissingEggFields = !empty($eggQuality['missingFields'] ?? []);
         @endphp
         <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
             <div class="flex flex-wrap items-start justify-between gap-3 mb-5">
                 <div>
-                    <h3 class="text-base font-semibold text-gray-800">Detail Produksi Telur</h3>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-base font-semibold text-gray-800">Detail Produksi Telur</h3>
+                        <x-metric-hint title="Detail Produksi Telur" body="Bagian ini membaca laporan panen hari ini untuk menampilkan distribusi grade, total telur, egg mass, berat rata-rata, dan reject." source="laporan, panen, panenRincianGrade, grade" />
+                    </div>
                     <p class="text-xs text-gray-400 mt-0.5">Sumber hari ini: laporan panen, panen, dan rincian grade - {{ $eggQuality['sourceDate'] }}</p>
                 </div>
                 <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold {{ $hasEggReport ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">
@@ -295,9 +366,12 @@
                 </div>
             @endif
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 {{ $hasMissingEggFields ? 'md:grid-cols-3' : 'md:grid-cols-2' }} gap-6">
                 <div>
-                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Distribusi Grade</p>
+                    <div class="mb-3 flex items-center gap-1">
+                        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Distribusi Grade</p>
+                        <x-metric-hint title="Distribusi Grade" body="Distribusi grade menunjukkan komposisi hasil panen berdasarkan grade telur yang dicatat pada laporan." formula="jumlah grade / total telur x 100%" source="panenRincianGrade, grade" />
+                    </div>
                     @if($hasGradeDetail)
                         <div class="h-4 w-full rounded-full overflow-hidden flex mb-4 bg-gray-100">
                             @foreach ($gradeDistribution as $grade)
@@ -325,70 +399,77 @@
                 <div>
                     <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Ringkasan Panen</p>
                     <div class="grid grid-cols-2 gap-3">
-                        <div class="rounded-xl border border-gray-100 p-3">
-                            <p class="text-[10px] text-gray-400 uppercase font-semibold">Total Telur</p>
-                            <p class="mt-1 text-xl font-black text-gray-900">{{ number_format((float)($eggQuality['totalEggs'] ?? 0), 0, ',', '.') }}</p>
-                        </div>
-                        <div class="rounded-xl border border-gray-100 p-3">
-                            <p class="text-[10px] text-gray-400 uppercase font-semibold">Egg Mass</p>
-                            <p class="mt-1 text-xl font-black text-gray-900">{{ number_format((float)($eggQuality['totalWeightKg'] ?? 0), 2, ',', '.') }} kg</p>
-                        </div>
-                        <div class="rounded-xl border border-gray-100 p-3">
-                            <p class="text-[10px] text-gray-400 uppercase font-semibold">Berat Rata-rata</p>
-                            <p class="mt-1 text-xl font-black text-gray-900">{{ $eggQuality['avgWeightGram'] !== null ? number_format((float)$eggQuality['avgWeightGram'], 1, ',', '.') . 'g' : '-' }}</p>
-                        </div>
-                        <div class="rounded-xl border border-gray-100 p-3">
-                            <p class="text-[10px] text-gray-400 uppercase font-semibold">Reject/Afkir</p>
-                            <p class="mt-1 text-xl font-black {{ $rejectRate !== null && $rejectRate > 5 ? 'text-amber-600' : 'text-gray-900' }}">{{ $rejectRate !== null ? number_format((float)$rejectRate, 2, ',', '.') . '%' : '-' }}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Data Belum Tersedia</p>
-                    <div class="space-y-2">
-                        @foreach (($eggQuality['missingFields'] ?? []) as $missing)
-                            <div class="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-2">
-                                <p class="text-xs font-semibold text-gray-700">{{ $missing['label'] }}</p>
-                                <p class="text-[11px] text-gray-500 mt-0.5">{{ $missing['description'] }}</p>
+                        @foreach([
+                            ['label' => 'Total Telur', 'value' => number_format((float)($eggQuality['totalEggs'] ?? 0), 0, ',', '.'), 'class' => 'text-gray-900'],
+                            ['label' => 'Egg Mass', 'value' => number_format((float)($eggQuality['totalWeightKg'] ?? 0), 2, ',', '.') . ' kg', 'class' => 'text-gray-900'],
+                            ['label' => 'Berat Rata-rata', 'value' => $eggQuality['avgWeightGram'] !== null ? number_format((float)$eggQuality['avgWeightGram'], 1, ',', '.') . 'g' : '-', 'class' => 'text-gray-900'],
+                            ['label' => 'Reject/Afkir', 'value' => $rejectRate !== null ? number_format((float)$rejectRate, 2, ',', '.') . '%' : '-', 'class' => $rejectRate !== null && $rejectRate > 5 ? 'text-amber-600' : 'text-gray-900'],
+                        ] as $metric)
+                            @php
+                                $hint = $eggMetricHints[$metric['label']];
+                            @endphp
+                            <div class="rounded-xl border border-gray-100 p-3">
+                                <div class="flex items-center gap-1">
+                                    <p class="text-[10px] text-gray-400 uppercase font-semibold">{{ $metric['label'] }}</p>
+                                    <x-metric-hint :title="$metric['label']" :body="$hint['body']" :formula="$hint['formula']" :source="$hint['source']" />
+                                </div>
+                                <p class="mt-1 text-xl font-black {{ $metric['class'] }}">{{ $metric['value'] }}</p>
                             </div>
                         @endforeach
                     </div>
                 </div>
+
+                @if($hasMissingEggFields)
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Data Belum Tersedia</p>
+                        <div class="space-y-2">
+                            @foreach (($eggQuality['missingFields'] ?? []) as $missing)
+                                <div class="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-2">
+                                    <p class="text-xs font-semibold text-gray-700">{{ $missing['label'] }}</p>
+                                    <p class="text-[11px] text-gray-500 mt-0.5">{{ $missing['description'] }}</p>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
             </div>
 
-            <div class="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
-                <div class="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
-                    <p class="text-xs font-bold text-gray-700 mb-2">Ketersediaan data laporan harian</p>
-                    <div class="flex flex-wrap gap-2">
-                        @foreach (($dailyDataAudit['available'] ?? []) as $item)
-                            @php
-                                $auditCls = [
-                                    'ready' => 'bg-emerald-50 text-emerald-700 border-emerald-100',
-                                    'empty' => 'bg-amber-50 text-amber-700 border-amber-100',
-                                    'fallback' => 'bg-sky-50 text-sky-700 border-sky-100',
-                                ][$item['status']] ?? 'bg-gray-50 text-gray-600 border-gray-100';
-                            @endphp
-                            <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold {{ $auditCls }}" title="{{ $item['source'] }}">
-                                {{ $item['label'] }}
-                            </span>
-                        @endforeach
+            <div class="mt-5 rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div>
+                        <p class="text-xs font-bold text-gray-700">Status data harian</p>
+                        <p class="text-[11px] text-gray-500 mt-0.5">Ringkasan kelengkapan data yang dipakai untuk membaca kondisi kandang hari ini.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <x-metric-hint title="Status data harian" body="Audit ini memberi tahu data mana yang tersedia, kosong, atau memakai estimasi agar hasil dashboard tidak disalahartikan." source="laporan, panen, harianTernak, kematian, sensor" />
+                        <span class="text-[11px] font-semibold text-gray-400">{{ $dailyDataAudit['date'] ?? '' }}</span>
                     </div>
                 </div>
-                <div class="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
-                    <p class="text-xs font-bold text-gray-700 mb-2">Opsi tindakan</p>
-                    <ul class="space-y-1 text-[11px] text-gray-500 leading-relaxed">
-                        @foreach (array_slice($dailyDataAudit['actions'] ?? [], 0, 3) as $action)
-                            <li class="flex gap-2"><span class="mt-1 h-1 w-1 rounded-full bg-gray-400 shrink-0"></span><span>{{ $action }}</span></li>
-                        @endforeach
-                    </ul>
+                <div class="flex flex-wrap gap-2">
+                    @foreach (($dailyDataAudit['available'] ?? []) as $item)
+                        @php
+                            $auditCls = [
+                                'ready' => 'bg-emerald-50 text-emerald-700 border-emerald-100',
+                                'empty' => 'bg-amber-50 text-amber-700 border-amber-100',
+                                'fallback' => 'bg-sky-50 text-sky-700 border-sky-100',
+                            ][$item['status']] ?? 'bg-gray-50 text-gray-600 border-gray-100';
+                            $statusText = [
+                                'ready' => 'tersedia',
+                                'empty' => 'belum ada',
+                                'fallback' => 'estimasi',
+                            ][$item['status']] ?? 'dicek';
+                        @endphp
+                        <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold {{ $auditCls }}">
+                            {{ $item['label'] }}: {{ $statusText }}
+                        </span>
+                    @endforeach
                 </div>
             </div>
         </div>
 
         @if(false)
         <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-            <h3 class="text-base font-semibold text-gray-800 mb-5">Egg Production Details (Today)</h3>
+            <h3 class="text-base font-semibold text-gray-800 mb-5">Legacy Egg Production Details (Disabled)</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {{-- Size Distribution --}}
                 <div>
@@ -418,37 +499,6 @@
                     </div>
                 </div>
 
-                {{-- Broken Egg Rate --}}
-                @php
-                    $brokenOk = $eggQuality['brokenStatus'] === 'normal';
-                @endphp
-                <div>
-                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Broken Egg Rate</p>
-                    <div class="flex items-end gap-2 mb-2">
-                        <span class="text-3xl font-bold text-gray-900">{{ $eggQuality['brokenRate'] }}%</span>
-                        <span class="text-xs font-semibold px-1.5 py-0.5 rounded {{ $brokenOk ? 'text-emerald-600 bg-emerald-50' : 'text-amber-600 bg-amber-50' }} mb-1">{{ $brokenOk ? 'Optimal' : 'Warning' }}</span>
-                    </div>
-                    <div class="h-1.5 w-full rounded-full overflow-hidden bg-gray-100 mb-2">
-                        <div class="h-full rounded-full {{ $brokenOk ? 'bg-blue-500' : 'bg-amber-500' }}" style="width: {{ min($eggQuality['brokenRate'] / 4 * 100, 100) }}%"></div>
-                    </div>
-                    <p class="text-[10px] text-gray-400">Target: < 2.0%</p>
-                </div>
-
-                {{-- Dirty Egg Rate --}}
-                @php
-                    $dirtyOk = $eggQuality['dirtyStatus'] === 'normal';
-                @endphp
-                <div>
-                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Dirty Egg Rate</p>
-                    <div class="flex items-end gap-2 mb-2">
-                        <span class="text-3xl font-bold text-gray-900">{{ $eggQuality['dirtyRate'] }}%</span>
-                        <span class="text-xs font-semibold px-1.5 py-0.5 rounded {{ $dirtyOk ? 'text-emerald-600 bg-emerald-50' : 'text-amber-600 bg-amber-50' }} mb-1">{{ $dirtyOk ? 'Optimal' : 'Warning' }}</span>
-                    </div>
-                    <div class="h-1.5 w-full rounded-full overflow-hidden bg-gray-100 mb-2">
-                        <div class="h-full rounded-full {{ $dirtyOk ? 'bg-blue-500' : 'bg-amber-500' }}" style="width: {{ min($eggQuality['dirtyRate'] / 6 * 100, 100) }}%"></div>
-                    </div>
-                    <p class="text-[10px] text-gray-400">Target: < 3.0%</p>
-                </div>
             </div>
         </div>
 
@@ -456,7 +506,10 @@
         @endif
 
         <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-            <h3 class="text-base font-semibold text-gray-800 mb-4">Log Produksi 7 Hari</h3>
+            <div class="mb-4 flex items-center gap-2">
+                <h3 class="text-base font-semibold text-gray-800">Log Produksi 7 Hari</h3>
+                <x-metric-hint title="Log Produksi 7 Hari" body="Tabel ini menampilkan ringkasan laporan produksi kandang selama tujuh hari terakhir." source="laporan, panen, harianTernak, kematian" />
+            </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
@@ -507,7 +560,10 @@
                         <h3 class="text-base font-semibold text-gray-800">Analisis SPK</h3>
                         <p class="text-xs text-gray-400 mt-0.5">Ringkasan cepat untuk {{ $barn['name'] }}</p>
                     </div>
-                    <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $spkBadge['cls'] }}">{{ $spkBadge['label'] }}</span>
+                    <div class="flex items-center gap-2">
+                        <x-metric-hint title="Analisis SPK Kandang" body="Ringkasan ini mengambil hasil SPK terbaru untuk kandang terpilih dan menampilkan mode analisis yang relevan." source="spk_fuzzy_logs" />
+                        <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $spkBadge['cls'] }}">{{ $spkBadge['label'] }}</span>
+                    </div>
                 </div>
                 <p class="mt-4 text-sm text-gray-600 leading-relaxed">
                     {{ $spkIssue['message'] ?? 'Belum ada ringkasan SPK untuk kandang ini.' }}
@@ -535,7 +591,10 @@
                         <h3 class="text-base font-semibold text-gray-800">Aktivitas Petugas</h3>
                         <p class="text-xs text-gray-400 mt-0.5">Laporan terbaru dari kandang ini</p>
                     </div>
-                    <a href="{{ $taskLink }}" class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition no-underline">Penugasan</a>
+                    <div class="flex items-center gap-2">
+                        <x-metric-hint title="Aktivitas Petugas" body="Aktivitas ini merangkum laporan atau tindakan terbaru yang berkaitan dengan kandang." source="laporan, spk_action_tasks, spk_action_reports" />
+                        <a href="{{ $taskLink }}" class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition no-underline">Penugasan</a>
+                    </div>
                 </div>
                 <div class="space-y-2">
                     @foreach (array_slice($activityLog, 0, 4) as $act)

@@ -71,7 +71,7 @@ class FuzzyController extends Controller
                 'status_lingkungan'   => $result['lingkungan']['label'] ?? null,
                 'status_kesehatan'    => $result['kesehatan']['label'] ?? null,
                 'diagnosis_kausalitas'=> $result['kausalitas']['label'] ?? null,
-                'output_value'        => $result['lingkungan']['value'] ?? 0,
+                'output_value'        => min((float) ($result['lingkungan']['value'] ?? 0), (float) ($result['kesehatan']['value'] ?? 0)),
                 'output_label'        => $result['kausalitas']['label'] ?? null,
                 'narrative'           => $narrative,
                 'recommendation'      => $result['kausalitas']['recommendation'] ?? null,

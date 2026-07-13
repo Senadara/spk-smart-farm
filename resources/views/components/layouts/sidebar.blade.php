@@ -5,7 +5,9 @@
 </div>
 
 {{-- Sidebar --}}
-@php($isSupplier = session('user.role') === 'supplier')
+@php
+    $isSupplier = session('user.role') === 'supplier';
+@endphp
 
 <aside id="sidebar" class="fixed top-0 left-0 z-50 h-full w-[var(--sidebar-width)]
               bg-white flex flex-col border-r border-[var(--color-gray-200)]
@@ -119,15 +121,9 @@
                         </x-sidebar.menu-item>
                     </li>
                     <li>
-                        <x-sidebar.menu-item :href="route('iot.dashboard')" :active="request()->routeIs('iot.dashboard')"
+                        <x-sidebar.menu-item :href="route('iot.dashboard')" :active="request()->routeIs('iot.*')"
                             icon="iot">
-                            Dashboard IoT
-                        </x-sidebar.menu-item>
-                    </li>
-                    <li>
-                        <x-sidebar.menu-item :href="route('iot.monitoring')" :active="request()->routeIs('iot.monitoring')"
-                            icon="chart">
-                            Monitoring
+                            IoT
                         </x-sidebar.menu-item>
                     </li>
                 </ul>

@@ -15,6 +15,7 @@ use App\Models\Komoditas;
 use App\Models\UnitBudidaya;
 use App\Events\IotSensorDataReceived;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class IotController extends Controller
 {
@@ -464,6 +465,62 @@ class IotController extends Controller
             'message' => "Proses Webhook PUSH berhasil. ($insertedCount parameter tercatat)"
         ]);
 
+        if ($insertedCount > 0) {
+            $this->markDeviceOnline($device->id);
+        } else {
+            $this->markDeviceMiss($device->id, 'Webhook diterima tetapi tidak ada payload yang cocok dengan mapping parameter.');
+        }
+
         return response()->json(['message' => 'Data diterima', 'inserted' => $insertedCount]);
+    }
+
+    private function markDeviceOnline(string $deviceId): void
+    {
+        if (! Schema::hasColumn('iot_device', 'lastSeenAt')) {
+            return;
+        }
+
+        $device = IotDevice::find($deviceId);
+        if (! $device) {
+            return;
+        }
+
+        $payload = [
+            'lastSeenAt' => now(),
+            'missedCount' => 0,
+        ];
+
+        if ($device->status !== 'maintenance') {
+            $payload['status'] = 'active';
+        }
+
+        $device->update($payload);
+    }
+
+    private function markDeviceMiss(string $deviceId, string $reason): void
+    {
+        if (! Schema::hasColumn('iot_device', 'missedCount')) {
+            return;
+        }
+
+        $device = IotDevice::find($deviceId);
+        if (! $device || $device->status === 'maintenance') {
+            return;
+        }
+
+        $missedCount = ((int) ($device->missedCount ?? 0)) + 1;
+        $threshold = max(1, (int) ($device->offlineAfterMisses ?? 3));
+
+        $device->update([
+            'missedCount' => $missedCount,
+            'lastMissedAt' => now(),
+            'status' => $missedCount >= $threshold ? 'inactive' : $device->status,
+        ]);
+
+        IotDeviceLog::create([
+            'deviceId' => $device->id,
+            'logType' => $missedCount >= $threshold ? 'WARNING' : 'INFO',
+            'message' => "{$reason} Miss {$missedCount}/{$threshold}.",
+        ]);
     }
 }
