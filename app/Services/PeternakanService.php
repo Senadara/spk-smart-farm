@@ -824,7 +824,7 @@ class PeternakanService
         ];
     }
 
-    public function getBarnProductivityHistoryReport(array $barn): array
+    public function getBarnProductivityHistoryReport(array $barn, ?string $startDate = null, ?string $endDate = null): array
     {
         $coopId = $barn['id'] ?? null;
         $generatedAt = now();
@@ -840,6 +840,10 @@ class PeternakanService
                 'capacity' => 0,
                 'start_date' => '-',
                 'flock_age' => '-',
+            ],
+            'filters' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
             ],
             'summary' => [
                 'period_start' => '-',
@@ -882,9 +886,18 @@ class PeternakanService
             return $empty;
         }
 
-        $reportRows = DB::table('laporan')
+        $reportQuery = DB::table('laporan')
             ->where('unitBudidayaId', $coopId)
-            ->where('isDeleted', 0)
+            ->where('isDeleted', 0);
+
+        if ($startDate) {
+            $reportQuery->whereDate('createdAt', '>=', $startDate);
+        }
+        if ($endDate) {
+            $reportQuery->whereDate('createdAt', '<=', $endDate);
+        }
+
+        $reportRows = $reportQuery
             ->orderBy('createdAt')
             ->get(['id', 'tipe', 'judul', 'catatan', 'createdAt']);
 
@@ -899,31 +912,58 @@ class PeternakanService
                     ->implode('; ');
             });
 
-        $panens = DB::table('panen')
+        $panenQuery = DB::table('panen')
             ->join('laporan', 'panen.laporanId', '=', 'laporan.id')
             ->where('laporan.unitBudidayaId', $coopId)
             ->where('laporan.isDeleted', 0)
-            ->where('panen.isDeleted', 0)
+            ->where('panen.isDeleted', 0);
+
+        if ($startDate) {
+            $panenQuery->whereDate('laporan.createdAt', '>=', $startDate);
+        }
+        if ($endDate) {
+            $panenQuery->whereDate('laporan.createdAt', '<=', $endDate);
+        }
+
+        $panens = $panenQuery
             ->selectRaw('DATE(laporan.createdAt) as dt, SUM(panen.jumlah) as totalTelur, SUM(COALESCE(panen.berat, panen.jumlah * 0.06)) as totalMass')
             ->groupBy('dt')
             ->get()
             ->keyBy('dt');
 
-        $feeds = DB::table('harianTernak')
+        $feedQuery = DB::table('harianTernak')
             ->join('laporan', 'harianTernak.laporanId', '=', 'laporan.id')
             ->where('laporan.unitBudidayaId', $coopId)
             ->where('laporan.isDeleted', 0)
-            ->where('harianTernak.isDeleted', 0)
+            ->where('harianTernak.isDeleted', 0);
+
+        if ($startDate) {
+            $feedQuery->whereDate('laporan.createdAt', '>=', $startDate);
+        }
+        if ($endDate) {
+            $feedQuery->whereDate('laporan.createdAt', '<=', $endDate);
+        }
+
+        $feeds = $feedQuery
             ->selectRaw('DATE(laporan.createdAt) as dt, SUM(harianTernak.pakan) as totalPakan')
             ->groupBy('dt')
             ->get()
             ->keyBy('dt');
 
-        $deaths = DB::table('kematian')
+        $deathQuery = DB::table('kematian')
             ->join('laporan', 'kematian.laporanId', '=', 'laporan.id')
             ->where('laporan.unitBudidayaId', $coopId)
             ->where('laporan.isDeleted', 0)
-            ->where('kematian.isDeleted', 0)
+            ->where('kematian.isDeleted', 0);
+
+        if ($startDate) {
+            $deathQuery->whereRaw('DATE(COALESCE(kematian.tanggal, laporan.createdAt)) >= ?', [$startDate]);
+        }
+        if ($endDate) {
+            $deathQuery->whereRaw('DATE(COALESCE(kematian.tanggal, laporan.createdAt)) <= ?', [$endDate]);
+        }
+
+        $deaths = $deathQuery
             ->selectRaw('DATE(COALESCE(kematian.tanggal, laporan.createdAt)) as dt, COUNT(kematian.id) as totalMati')
             ->groupBy('dt')
             ->get()
@@ -1012,6 +1052,10 @@ class PeternakanService
                 'capacity' => (float) ($coop->kapasitas ?? 0),
                 'start_date' => $createdAt ? $createdAt->locale('id')->translatedFormat('d M Y') : '-',
                 'flock_age' => $createdAt ? ((int) floor($createdAt->diffInWeeks(now()))).' Minggu' : '-',
+            ],
+            'filters' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
             ],
             'summary' => [
                 'period_start' => $firstRow['date_label'] ?? '-',

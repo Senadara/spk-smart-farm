@@ -41,8 +41,6 @@
         sensorRange: '24h',
         prodFilter: 'all',
         prodRange: '30d',
-        downloadingPdf: false,
-        exportPdfError: '',
         _trendChart: null,
         _prodChart: null,
         init() {
@@ -50,53 +48,6 @@
                 this.renderTrend();
                 this.renderProd();
             });
-        },
-        async downloadProductivityPdf(url) {
-            this.exportPdfError = '';
-            this.downloadingPdf = true;
-
-            try {
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/pdf',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin',
-                });
-
-                if (!response.ok) {
-                    throw new Error('PDF belum bisa dibuat. Silakan coba lagi.');
-                }
-
-                const blob = await response.blob();
-                const disposition = response.headers.get('content-disposition') || '';
-                const marker = 'filename=';
-                const markerIndex = disposition.toLowerCase().indexOf(marker);
-                let filename = 'laporan-produktivitas-kandang.pdf';
-
-                if (markerIndex >= 0) {
-                    filename = disposition.slice(markerIndex + marker.length).split(';')[0].trim();
-                    filename = filename
-                        .replaceAll(String.fromCharCode(34), '')
-                        .replaceAll(String.fromCharCode(39), '');
-                }
-
-                const blobUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-                const link = document.createElement('a');
-
-                link.href = blobUrl;
-                link.download = filename;
-                link.style.display = 'none';
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                window.setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-            } catch (error) {
-                this.exportPdfError = error?.message || 'Download PDF gagal. Silakan coba lagi.';
-            } finally {
-                this.downloadingPdf = false;
-            }
         },
         renderTrend() {
             const ctx = this.$refs.trendCanvas;
@@ -202,18 +153,14 @@
                 </a>
                 @if($canExportProductivity)
                     <a
-                        href="{{ route('peternakan.export-productivity', array_filter(['id' => $barn['id'], 'komoditas' => $activeKomoditasId])) }}"
+                        href="{{ route('peternakan.settlement', array_filter(['id' => $barn['id'], 'komoditas' => $activeKomoditasId])) }}"
                         class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition flex items-center gap-2 shadow-sm no-underline"
-                        :class="downloadingPdf ? 'opacity-70 pointer-events-none' : ''"
-                        :aria-busy="downloadingPdf.toString()"
-                        @click.prevent="downloadProductivityPdf($el.href)"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                        <span x-text="downloadingPdf ? 'Menyiapkan PDF...' : 'Export PDF'">Export PDF</span>
+                        Settlement / PDF
                     </a>
                 @endif
             </div>
-            <p x-show="exportPdfError" x-text="exportPdfError" class="basis-full text-right text-xs font-medium text-red-600" style="display:none;"></p>
         </div>
 
         {{-- ═══ BARN OVERVIEW — COMPACT ═══ --}}

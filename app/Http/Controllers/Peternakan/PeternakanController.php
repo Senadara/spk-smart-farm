@@ -12,7 +12,7 @@ use App\Services\Fuzzy\InputResolver;
 use App\Services\Fuzzy\MamdaniEngine;
 use App\Services\Fuzzy\NarrativeGenerator;
 use App\Services\PeternakanService;
-use App\Services\ProductivityHistoryPdf;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -27,7 +27,6 @@ class PeternakanController extends Controller
         protected MamdaniEngine $mamdaniEngine,
         protected FuzzySensorCardMapper $sensorCardMapper,
         protected NarrativeGenerator $narrativeGenerator,
-        protected ProductivityHistoryPdf $productivityHistoryPdf,
     ) {}
 
     /**
@@ -116,11 +115,22 @@ class PeternakanController extends Controller
 
     public function exportProductivity(Request $request, $id)
     {
+        return redirect()->route('peternakan.settlement', array_filter([
+            'id' => $id,
+            'komoditas' => $request->query('komoditas'),
+            'start_date' => $request->query('start_date'),
+            'end_date' => $request->query('end_date'),
+        ]));
+    }
+
+    public function settlement(Request $request, $id)
+    {
         if (! in_array(session('user.role'), ['pjawab', 'owner', 'admin'], true)) {
-            abort(403, 'Export laporan produktivitas hanya tersedia untuk owner/admin.');
+            abort(403, 'Settlement laporan produktivitas hanya tersedia untuk owner/admin.');
         }
 
         $this->peternakanService->forKomoditas($request->query('komoditas'));
+        $activeKomoditasId = $this->peternakanService->getActiveKomoditasId();
 
         $barns = $this->peternakanService->getBarnEnvironment()['barns'];
         $barn = collect($barns)->first(fn ($b) => ($b['id'] ?? null) == $id);
@@ -129,16 +139,35 @@ class PeternakanController extends Controller
         }
 
         $barn = $this->peternakanService->getBarnDetail($barn);
-        $report = $this->peternakanService->getBarnProductivityHistoryReport($barn);
-        $pdf = $this->productivityHistoryPdf->make($report);
-        $filename = 'laporan-produktivitas-'.Str::slug($report['barn']['name'] ?? $barn['name'] ?? 'kandang').'-'.now()->format('Ymd-His').'.pdf';
+        $start = $this->parseReportDate($request->query('start_date'), now()->subDays(30));
+        $end = $this->parseReportDate($request->query('end_date'), now());
 
-        return response($pdf, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.$filename.'"',
-            'Content-Length' => strlen($pdf),
-            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+        if ($start->gt($end)) {
+            [$start, $end] = [$end, $start];
+        }
+
+        $report = $this->peternakanService->getBarnProductivityHistoryReport(
+            $barn,
+            $start->toDateString(),
+            $end->toDateString()
+        );
+
+        return view('peternakan.settlement', [
+            'barn' => $barn,
+            'report' => $report,
+            'startDate' => $start->toDateString(),
+            'endDate' => $end->toDateString(),
+            'activeKomoditasId' => $activeKomoditasId,
         ]);
+    }
+
+    private function parseReportDate(mixed $value, Carbon $fallback): Carbon
+    {
+        try {
+            return $value ? Carbon::parse((string) $value) : $fallback->copy();
+        } catch (\Throwable) {
+            return $fallback->copy();
+        }
     }
 
     /**
