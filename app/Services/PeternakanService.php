@@ -436,7 +436,13 @@ class PeternakanService
         $fcr = $totalEggMass > 0 ? $pakanToday / $totalEggMass : 0;
 
         // Fetch valid grades for chart
-        $grades = DB::table('panenRincianGrade')
+        $hasGradeWeight = DB::getSchemaBuilder()->hasColumn('panenRincianGrade', 'berat');
+        $gradeSelect = 'grade.nama as grade_name, SUM(COALESCE(panenRincianGrade.jumlah, 0)) as total_jumlah';
+        if ($hasGradeWeight) {
+            $gradeSelect .= ', SUM(COALESCE(panenRincianGrade.berat, 0)) as total_berat';
+        }
+
+        $gradeRows = DB::table('panenRincianGrade')
             ->join('panen', 'panen.id', '=', 'panenRincianGrade.panenId')
             ->join('laporan', 'panen.laporanId', '=', 'laporan.id')
             ->join('grade', 'panenRincianGrade.gradeId', '=', 'grade.id')
@@ -446,13 +452,26 @@ class PeternakanService
             ->where('panenRincianGrade.isDeleted', 0)
             ->where('grade.isDeleted', 0)
             ->whereDate('laporan.createdAt', $today)
-            ->selectRaw('grade.nama as grade_name, SUM(panenRincianGrade.jumlah) as total')
+            ->selectRaw($gradeSelect)
             ->groupBy('grade.nama')
-            ->pluck('total', 'grade_name')->toArray();
+            ->get()
+            ->keyBy('grade_name');
 
-        $totalGradeA = $grades['Grade A'] ?? 0;
-        $totalGradeB = $grades['Grade B'] ?? 0;
-        $totalGradeC = $grades['Grade C'] ?? 0;
+        $totalGradeJumlah = (float) $gradeRows->sum(fn ($row) => (float) ($row->total_jumlah ?? 0));
+        $totalGradeBerat = $hasGradeWeight
+            ? (float) $gradeRows->sum(fn ($row) => (float) ($row->total_berat ?? 0))
+            : 0.0;
+        $useGradeWeight = $totalGradeJumlah <= 0 && $totalGradeBerat > 0;
+
+        $gradeValue = fn (string $name): float => (float) (
+            $useGradeWeight
+                ? ($gradeRows->get($name)->total_berat ?? 0)
+                : ($gradeRows->get($name)->total_jumlah ?? 0)
+        );
+
+        $totalGradeA = $gradeValue('Grade A');
+        $totalGradeB = $gradeValue('Grade B');
+        $totalGradeC = $gradeValue('Grade C');
         $totalGrades = $totalGradeA + $totalGradeB + $totalGradeC;
 
         $gradeTelur = ['A' => 0, 'B' => 0, 'C' => 0];
@@ -1129,15 +1148,21 @@ class PeternakanService
         $totalEggs = (float) $panens->sum('jumlah');
         $totalWeightKg = (float) $panens->sum(fn ($p) => $p->berat !== null ? (float) $p->berat : ((float) $p->jumlah * 0.06));
 
-        $grades = DB::table('panenRincianGrade')
+        $hasGradeWeight = DB::getSchemaBuilder()->hasColumn('panenRincianGrade', 'berat');
+        $gradeSelect = 'grade.nama as grade_name, SUM(COALESCE(panenRincianGrade.jumlah, 0)) as total_jumlah';
+        if ($hasGradeWeight) {
+            $gradeSelect .= ', SUM(COALESCE(panenRincianGrade.berat, 0)) as total_berat';
+        }
+
+        $gradeRows = DB::table('panenRincianGrade')
             ->join('grade', 'panenRincianGrade.gradeId', '=', 'grade.id')
             ->whereIn('panenRincianGrade.panenId', $panenIds)
             ->where('panenRincianGrade.isDeleted', 0)
             ->where('grade.isDeleted', 0)
-            ->selectRaw('grade.nama as grade_name, SUM(panenRincianGrade.jumlah) as total')
+            ->selectRaw($gradeSelect)
             ->groupBy('grade.nama')
-            ->pluck('total', 'grade_name')
-            ->toArray();
+            ->get()
+            ->keyBy('grade_name');
 
         $gradeColors = [
             'Grade AA' => 'bg-emerald-900',
@@ -1147,26 +1172,45 @@ class PeternakanService
             'Afkir' => 'bg-red-500',
         ];
         $orderedGrades = ['Grade AA', 'Grade A', 'Grade B', 'Grade C', 'Afkir'];
-        $gradeTotal = array_sum($grades);
-        $denominator = max($gradeTotal, $totalEggs, 1);
+        $gradeJumlahTotal = (float) $gradeRows->sum(fn ($row) => (float) ($row->total_jumlah ?? 0));
+        $gradeBeratTotal = $hasGradeWeight
+            ? (float) $gradeRows->sum(fn ($row) => (float) ($row->total_berat ?? 0))
+            : 0.0;
+        $useWeightDistribution = $gradeJumlahTotal <= 0 && $gradeBeratTotal > 0;
+        $denominator = $useWeightDistribution
+            ? max($gradeBeratTotal, $totalWeightKg, 1)
+            : max($gradeJumlahTotal, $totalEggs, 1);
         $distribution = [];
 
         foreach ($orderedGrades as $gradeName) {
-            $count = (float) ($grades[$gradeName] ?? 0);
-            if ($count <= 0) {
+            $gradeRow = $gradeRows->get($gradeName);
+            $amount = (float) (
+                $useWeightDistribution
+                    ? ($gradeRow->total_berat ?? 0)
+                    : ($gradeRow->total_jumlah ?? 0)
+            );
+
+            if ($amount <= 0) {
                 continue;
             }
 
             $distribution[] = [
                 'label' => $gradeName,
-                'count' => $count,
-                'pct' => round(($count / $denominator) * 100),
+                'count' => $amount,
+                'unit' => $useWeightDistribution ? 'kg' : 'butir',
+                'pct' => round(($amount / $denominator) * 100),
                 'color' => $gradeColors[$gradeName],
             ];
         }
 
-        $rejectCount = (float) ($grades['Afkir'] ?? 0);
-        $rejectRate = $totalEggs > 0 ? round(($rejectCount / $totalEggs) * 100, 2) : null;
+        $rejectRow = $gradeRows->get('Afkir');
+        $rejectAmount = (float) (
+            $useWeightDistribution
+                ? ($rejectRow->total_berat ?? 0)
+                : ($rejectRow->total_jumlah ?? 0)
+        );
+        $rejectDenominator = $useWeightDistribution ? $totalWeightKg : $totalEggs;
+        $rejectRate = $rejectDenominator > 0 ? round(($rejectAmount / $rejectDenominator) * 100, 2) : null;
 
         return array_merge($empty, [
             'hasReport' => true,

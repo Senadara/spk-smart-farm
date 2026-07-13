@@ -376,7 +376,7 @@
                 <div>
                     <div class="mb-3 flex items-center gap-1">
                         <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Distribusi Grade</p>
-                        <x-metric-hint title="Distribusi Grade" body="Distribusi grade menunjukkan komposisi hasil panen berdasarkan grade telur yang dicatat pada laporan." formula="jumlah grade / total telur x 100%" source="panenRincianGrade, grade" />
+                        <x-metric-hint title="Distribusi Grade" body="Distribusi grade menunjukkan komposisi hasil panen berdasarkan grade telur yang dicatat pada laporan." formula="jumlah grade / total telur x 100% atau berat grade / total berat telur x 100%" source="panenRincianGrade, grade" />
                     </div>
                     @if($hasGradeDetail)
                         <div class="h-4 w-full rounded-full overflow-hidden flex mb-4 bg-gray-100">
@@ -391,7 +391,14 @@
                                         <div class="w-2 h-2 rounded-full {{ $grade['color'] }}"></div>
                                         <span class="text-gray-600">{{ $grade['label'] }}</span>
                                     </div>
-                                    <span class="font-bold text-gray-900">{{ $grade['pct'] }}% <span class="font-normal text-gray-400">({{ number_format((float)$grade['count'], 0, ',', '.') }})</span></span>
+                                    @php
+                                        $gradeUnit = $grade['unit'] ?? 'butir';
+                                        $gradeDecimals = $gradeUnit === 'kg' ? 2 : 0;
+                                    @endphp
+                                    <span class="font-bold text-gray-900">
+                                        {{ $grade['pct'] }}%
+                                        <span class="font-normal text-gray-400">({{ number_format((float)$grade['count'], $gradeDecimals, ',', '.') }} {{ $gradeUnit }})</span>
+                                    </span>
                                 </div>
                             @endforeach
                         </div>
