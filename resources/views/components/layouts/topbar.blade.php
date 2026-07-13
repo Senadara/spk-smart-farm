@@ -93,15 +93,7 @@ $icons = [
 ?>
 
 <header
-    x-data="{
-        minimized: localStorage.getItem('smartfarm.navbarMinimized') === '1',
-        setMinimized(value) {
-            this.minimized = value;
-            localStorage.setItem('smartfarm.navbarMinimized', value ? '1' : '0');
-        }
-    }"
-    :class="minimized ? 'min-h-[42px] px-3 md:px-4 py-1.5' : 'min-h-[60px] px-4 md:px-6 py-3'"
-    class="bg-white border-b border-[var(--color-gray-200)] flex justify-between items-center sticky top-0 z-30 transition-all duration-200"
+    class="bg-white border-b border-[var(--color-gray-200)] px-4 md:px-6 py-3 flex justify-between items-center min-h-[60px] sticky top-0 z-30"
     style="box-shadow: var(--shadow-sm);">
     <div class="flex items-center gap-3">
         {{-- Hamburger (Mobile) --}}
@@ -115,7 +107,7 @@ $icons = [
         </button>
 
         {{-- Breadcrumb --}}
-        <nav class="flex min-w-0 items-center gap-2" :class="minimized ? 'text-xs' : 'text-sm'">
+        <nav class="flex min-w-0 items-center gap-2 text-sm">
             <a href="{{ session('user.role') === 'supplier' ? route('supplier.dashboard') : route('dashboard') }}"
                 class="hidden text-[var(--color-gray-400)] hover:text-[var(--color-primary)] no-underline transition-colors sm:inline">Smart
                 Farm</a>
@@ -125,7 +117,7 @@ $icons = [
     </div>
     <div class="flex items-center gap-3">
         {{-- User Info --}}
-        <div x-data="{ showProfileMenu: false }" x-show="!minimized" class="relative flex items-center gap-3">
+        <div x-data="{ showProfileMenu: false }" class="relative flex items-center gap-3">
             <div class="text-right hidden sm:block">
                 <div class="text-sm font-semibold text-[var(--color-gray-900)]">
                     {{ $authUser['name'] ?? 'User' }}
@@ -165,7 +157,7 @@ $icons = [
         </div>
 
         {{-- Notification --}}
-        <div x-data="{ showNotifications: false }" x-show="!minimized" class="relative">
+        <div x-data="{ showNotifications: false }" class="relative">
             <button @click="showNotifications = !showNotifications"
                 class="relative p-2 rounded-full hover:bg-gray-100 transition">
                 <!-- <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"
@@ -246,20 +238,5 @@ $icons = [
                 </div>
             </div>
         </div>
-
-        <button
-            type="button"
-            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-            :aria-label="minimized ? 'Tampilkan navbar' : 'Minimize navbar'"
-            :title="minimized ? 'Tampilkan navbar' : 'Minimize navbar'"
-            @click="setMinimized(!minimized)"
-        >
-            <svg x-show="!minimized" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
-            </svg>
-            <svg x-show="minimized" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="display:none;">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-        </button>
     </div>
 </header>

@@ -23,14 +23,16 @@
         'wallet' => '<path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM4 8h16m-5 5h3"/>',
     ];
     $iconPath = $icons[$icon] ?? $icons['home'];
+    $label = trim(strip_tags((string) $slot));
 @endphp
 
 <a href="{{ $href }}"
    {{ $attributes->merge([
        'class' => 'sidebar-menu-link' . ($active ? ' active' : '')
-   ]) }}>
+   ]) }}
+   title="{{ $label }}">
     <svg class="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         {!! $iconPath !!}
     </svg>
-    <span>{{ $slot }}</span>
+    <span class="sidebar-copy sidebar-menu-label truncate">{{ $slot }}</span>
 </a>
