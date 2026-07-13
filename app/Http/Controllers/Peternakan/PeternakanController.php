@@ -135,7 +135,7 @@ class PeternakanController extends Controller
 
         return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
             'Content-Length' => strlen($pdf),
             'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
         ]);
