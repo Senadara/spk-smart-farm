@@ -12,6 +12,7 @@ use App\Services\Fuzzy\InputResolver;
 use App\Services\Fuzzy\MamdaniEngine;
 use App\Services\Fuzzy\NarrativeGenerator;
 use App\Services\PeternakanService;
+use App\Services\ProductivityHistoryPdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -26,6 +27,7 @@ class PeternakanController extends Controller
         protected MamdaniEngine $mamdaniEngine,
         protected FuzzySensorCardMapper $sensorCardMapper,
         protected NarrativeGenerator $narrativeGenerator,
+        protected ProductivityHistoryPdf $productivityHistoryPdf,
     ) {}
 
     /**
@@ -109,6 +111,33 @@ class PeternakanController extends Controller
             'eggQuality' => $this->peternakanService->getEggQuality($barn),
             'dailyDataAudit' => $this->peternakanService->getBarnDailyDataAudit($barn),
             'activeKomoditasId' => $this->peternakanService->getActiveKomoditasId(),
+        ]);
+    }
+
+    public function exportProductivity(Request $request, $id)
+    {
+        if (! in_array(session('user.role'), ['pjawab', 'owner', 'admin'], true)) {
+            abort(403, 'Export laporan produktivitas hanya tersedia untuk owner/admin.');
+        }
+
+        $this->peternakanService->forKomoditas($request->query('komoditas'));
+
+        $barns = $this->peternakanService->getBarnEnvironment()['barns'];
+        $barn = collect($barns)->first(fn ($b) => ($b['id'] ?? null) == $id);
+        if (! $barn || ($barn['id'] ?? null) === 'no-data') {
+            abort(404, 'Kandang tidak ditemukan untuk komoditas aktif.');
+        }
+
+        $barn = $this->peternakanService->getBarnDetail($barn);
+        $report = $this->peternakanService->getBarnProductivityHistoryReport($barn);
+        $pdf = $this->productivityHistoryPdf->make($report);
+        $filename = 'laporan-produktivitas-'.Str::slug($report['barn']['name'] ?? $barn['name'] ?? 'kandang').'-'.now()->format('Ymd-His').'.pdf';
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Content-Length' => strlen($pdf),
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
         ]);
     }
 

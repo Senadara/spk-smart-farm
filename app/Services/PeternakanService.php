@@ -824,6 +824,214 @@ class PeternakanService
         ];
     }
 
+    public function getBarnProductivityHistoryReport(array $barn): array
+    {
+        $coopId = $barn['id'] ?? null;
+        $generatedAt = now();
+        $empty = [
+            'generated_at' => $generatedAt,
+            'barn' => [
+                'id' => $coopId,
+                'name' => $barn['name'] ?? '-',
+                'location' => $barn['location'] ?? '-',
+                'breed' => $barn['breed'] ?? '-',
+                'current_population' => 0,
+                'initial_population' => 0,
+                'capacity' => 0,
+                'start_date' => '-',
+                'flock_age' => '-',
+            ],
+            'summary' => [
+                'period_start' => '-',
+                'period_end' => '-',
+                'report_days' => 0,
+                'total_reports' => 0,
+                'total_eggs' => 0,
+                'total_egg_mass_kg' => 0,
+                'total_feed_kg' => 0,
+                'total_mortality' => 0,
+                'avg_hdp' => 0,
+                'avg_hhep' => 0,
+                'avg_feed_intake' => 0,
+                'avg_fcr' => 0,
+            ],
+            'rows' => [],
+            'warnings' => ['Belum ada data histori produktivitas untuk kandang ini.'],
+        ];
+
+        if (! $coopId || $coopId === 'no-data') {
+            return $empty;
+        }
+
+        $coop = DB::table('unitBudidaya')
+            ->leftJoin('jenisBudidaya', 'unitBudidaya.jenisBudidayaId', '=', 'jenisBudidaya.id')
+            ->where('unitBudidaya.id', $coopId)
+            ->where('unitBudidaya.isDeleted', 0)
+            ->select(
+                'unitBudidaya.id',
+                'unitBudidaya.nama',
+                'unitBudidaya.lokasi',
+                'unitBudidaya.jumlah',
+                'unitBudidaya.kapasitas',
+                'unitBudidaya.createdAt',
+                'jenisBudidaya.nama as breedName'
+            )
+            ->first();
+
+        if (! $coop) {
+            return $empty;
+        }
+
+        $reportRows = DB::table('laporan')
+            ->where('unitBudidayaId', $coopId)
+            ->where('isDeleted', 0)
+            ->orderBy('createdAt')
+            ->get(['id', 'tipe', 'judul', 'catatan', 'createdAt']);
+
+        $notesByDate = $reportRows
+            ->groupBy(fn ($report) => Carbon::parse($report->createdAt)->toDateString())
+            ->map(function ($items) {
+                return $items
+                    ->map(fn ($report) => trim((string) ($report->catatan ?: $report->judul ?: $report->tipe ?: '')))
+                    ->filter()
+                    ->unique()
+                    ->take(2)
+                    ->implode('; ');
+            });
+
+        $panens = DB::table('panen')
+            ->join('laporan', 'panen.laporanId', '=', 'laporan.id')
+            ->where('laporan.unitBudidayaId', $coopId)
+            ->where('laporan.isDeleted', 0)
+            ->where('panen.isDeleted', 0)
+            ->selectRaw('DATE(laporan.createdAt) as dt, SUM(panen.jumlah) as totalTelur, SUM(COALESCE(panen.berat, panen.jumlah * 0.06)) as totalMass')
+            ->groupBy('dt')
+            ->get()
+            ->keyBy('dt');
+
+        $feeds = DB::table('harianTernak')
+            ->join('laporan', 'harianTernak.laporanId', '=', 'laporan.id')
+            ->where('laporan.unitBudidayaId', $coopId)
+            ->where('laporan.isDeleted', 0)
+            ->where('harianTernak.isDeleted', 0)
+            ->selectRaw('DATE(laporan.createdAt) as dt, SUM(harianTernak.pakan) as totalPakan')
+            ->groupBy('dt')
+            ->get()
+            ->keyBy('dt');
+
+        $deaths = DB::table('kematian')
+            ->join('laporan', 'kematian.laporanId', '=', 'laporan.id')
+            ->where('laporan.unitBudidayaId', $coopId)
+            ->where('laporan.isDeleted', 0)
+            ->where('kematian.isDeleted', 0)
+            ->selectRaw('DATE(COALESCE(kematian.tanggal, laporan.createdAt)) as dt, COUNT(kematian.id) as totalMati')
+            ->groupBy('dt')
+            ->get()
+            ->keyBy('dt');
+
+        $dates = collect()
+            ->merge($panens->keys())
+            ->merge($feeds->keys())
+            ->merge($deaths->keys())
+            ->unique()
+            ->sort()
+            ->values();
+
+        $currentPopulation = (float) ($coop->jumlah ?? 0);
+        $totalDeaths = (float) $deaths->sum(fn ($item) => (float) ($item->totalMati ?? 0));
+        $initialPopulation = $currentPopulation + $totalDeaths;
+        $cumulativeDeaths = 0.0;
+        $rows = [];
+
+        foreach ($dates as $dt) {
+            $panen = $panens->get($dt);
+            $feed = $feeds->get($dt);
+            $death = $deaths->get($dt);
+
+            $totalEggs = (float) ($panen->totalTelur ?? 0);
+            $eggMassKg = (float) ($panen->totalMass ?? 0);
+            $feedKg = (float) ($feed->totalPakan ?? 0);
+            $deathCount = (float) ($death->totalMati ?? 0);
+            $populationAtDate = max($initialPopulation - $cumulativeDeaths, $currentPopulation, 0);
+
+            $hdp = $populationAtDate > 0 ? ($totalEggs / $populationAtDate) * 100 : 0;
+            $hhep = $initialPopulation > 0 ? ($totalEggs / $initialPopulation) * 100 : 0;
+            $feedIntake = $populationAtDate > 0 ? ($feedKg / $populationAtDate) * 1000 : 0;
+            $fcr = $eggMassKg > 0 ? $feedKg / $eggMassKg : 0;
+            $mortalityRate = $populationAtDate > 0 ? ($deathCount / $populationAtDate) * 100 : 0;
+
+            $rows[] = [
+                'date_iso' => $dt,
+                'date_label' => Carbon::parse($dt)->locale('id')->translatedFormat('d M Y'),
+                'eggs' => round($totalEggs),
+                'egg_mass_kg' => round($eggMassKg, 2),
+                'feed_kg' => round($feedKg, 2),
+                'feed_intake' => round($feedIntake, 1),
+                'mortality' => round($deathCount),
+                'mortality_rate' => round($mortalityRate, 2),
+                'hdp' => round($hdp, 1),
+                'hhep' => round($hhep, 1),
+                'fcr' => round($fcr, 2),
+                'note' => $notesByDate->get($dt, ''),
+            ];
+
+            $cumulativeDeaths += $deathCount;
+        }
+
+        $rowCollection = collect($rows);
+        $activeRows = $rowCollection->filter(fn ($row) => ($row['eggs'] ?? 0) > 0 || ($row['feed_kg'] ?? 0) > 0);
+        $avgRows = $activeRows->isNotEmpty() ? $activeRows : $rowCollection;
+        $warnings = [];
+
+        if ($rowCollection->isEmpty()) {
+            $warnings[] = 'Belum ada data panen, pakan, atau mortalitas historis untuk kandang ini.';
+        }
+        if ($currentPopulation <= 0) {
+            $warnings[] = 'Populasi kandang belum tersedia, sehingga HDP, HHEP, dan feed intake tidak bisa dihitung akurat.';
+        }
+        if ($rowCollection->contains(fn ($row) => ($row['hdp'] ?? 0) > 120)) {
+            $warnings[] = 'Ada nilai HDP di atas 120%. Periksa kesesuaian jumlah panen dan populasi kandang.';
+        }
+        if ($rowCollection->sum('feed_kg') <= 0 && $rowCollection->sum('eggs') > 0) {
+            $warnings[] = 'Data panen tersedia, tetapi konsumsi pakan belum tercatat pada histori yang sama.';
+        }
+
+        $createdAt = $coop->createdAt ? Carbon::parse($coop->createdAt) : null;
+        $firstRow = $rowCollection->first();
+        $lastRow = $rowCollection->last();
+
+        return [
+            'generated_at' => $generatedAt,
+            'barn' => [
+                'id' => $coop->id,
+                'name' => $coop->nama ?? ($barn['name'] ?? '-'),
+                'location' => $coop->lokasi ?? '-',
+                'breed' => $coop->breedName ?? '-',
+                'current_population' => $currentPopulation,
+                'initial_population' => $initialPopulation,
+                'capacity' => (float) ($coop->kapasitas ?? 0),
+                'start_date' => $createdAt ? $createdAt->locale('id')->translatedFormat('d M Y') : '-',
+                'flock_age' => $createdAt ? ((int) floor($createdAt->diffInWeeks(now()))).' Minggu' : '-',
+            ],
+            'summary' => [
+                'period_start' => $firstRow['date_label'] ?? '-',
+                'period_end' => $lastRow['date_label'] ?? '-',
+                'report_days' => $rowCollection->count(),
+                'total_reports' => $reportRows->count(),
+                'total_eggs' => round($rowCollection->sum('eggs')),
+                'total_egg_mass_kg' => round($rowCollection->sum('egg_mass_kg'), 2),
+                'total_feed_kg' => round($rowCollection->sum('feed_kg'), 2),
+                'total_mortality' => round($rowCollection->sum('mortality')),
+                'avg_hdp' => round((float) $avgRows->avg('hdp'), 1),
+                'avg_hhep' => round((float) $avgRows->avg('hhep'), 1),
+                'avg_feed_intake' => round((float) $avgRows->avg('feed_intake'), 1),
+                'avg_fcr' => round((float) $avgRows->filter(fn ($row) => ($row['fcr'] ?? 0) > 0)->avg('fcr'), 2),
+            ],
+            'rows' => $rows,
+            'warnings' => $warnings,
+        ];
+    }
+
     public function getEggQuality(array $barn): array
     {
         $coopId = $barn['id'] ?? null;

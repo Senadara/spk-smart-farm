@@ -56,6 +56,7 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
     // Peternakan
     Route::get('/peternakan', [PeternakanController::class, 'index'])->name('peternakan');
     Route::post('/peternakan/evaluate-all', [PeternakanController::class, 'evaluateAll'])->name('peternakan.evaluate-all');
+    Route::get('/peternakan/{id}/export-productivity', [PeternakanController::class, 'exportProductivity'])->name('peternakan.export-productivity');
     Route::get('/peternakan/{id}', [PeternakanController::class, 'show'])->name('peternakan.show');
 
     // Analisa SPK
