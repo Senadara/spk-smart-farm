@@ -14,6 +14,35 @@ use Illuminate\Support\Facades\Schema;
 
 class IotPayloadIngestor
 {
+    private const DEVICE_CODE_KEYS = [
+        'deviceCode',
+        'device_code',
+        'deviceId',
+        'device_id',
+        'device',
+        'code',
+        'device.code',
+        'device.id',
+        'metadata.deviceCode',
+        'metadata.device_code',
+        'meta.deviceCode',
+        'data.deviceCode',
+        'payload.deviceCode',
+    ];
+
+    private const PARAMETER_ALIASES = [
+        'TEMP' => ['temperature', 'temp', 'suhu', 'suhu_c', 'temperature_c'],
+        'HUMID' => ['humidity', 'humid', 'kelembapan', 'kelembaban', 'rh', 'relative_humidity'],
+        'AMMON' => ['amonia', 'ammonia', 'amoniak', 'nh3'],
+        'AMMO' => ['amonia', 'ammonia', 'amoniak', 'nh3'],
+        'AMMA' => ['amonia', 'ammonia', 'amoniak', 'nh3'],
+        'AMMONIA' => ['amonia', 'ammonia', 'amoniak', 'nh3'],
+        'LIGHT' => ['light', 'lux', 'cahaya', 'ldr'],
+        'LUX' => ['light', 'lux', 'cahaya', 'ldr'],
+    ];
+
+    private const PAYLOAD_CONTAINERS = ['data', 'payload', 'values', 'value', 'sensor', 'sensors', 'readings'];
+
     public function ingest(IotDevice $device, mixed $payload, string $source = 'iot', mixed $timestamp = null): array
     {
         $device->loadMissing('parameterMappings.parameter');
@@ -150,7 +179,7 @@ class IotPayloadIngestor
             return null;
         }
 
-        foreach (['deviceCode', 'device_code', 'device', 'code'] as $key) {
+        foreach (self::DEVICE_CODE_KEYS as $key) {
             $value = data_get($data, $key);
             if (is_string($value) && trim($value) !== '') {
                 return trim($value);
@@ -166,7 +195,67 @@ class IotPayloadIngestor
             return $data;
         }
 
-        return data_get($data, $mapping->payloadKey);
+        foreach ($this->candidatePayloadKeys($mapping) as $key) {
+            $value = data_get($data, $key);
+            if ($value !== null) {
+                return $value;
+            }
+
+            foreach (self::PAYLOAD_CONTAINERS as $container) {
+                $value = data_get($data, "{$container}.{$key}");
+                if ($value !== null) {
+                    return $value;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function candidatePayloadKeys(IotParameterMapping $mapping): array
+    {
+        $keys = [];
+        $this->appendKeyVariants($keys, (string) $mapping->payloadKey);
+
+        $parameter = $mapping->parameter;
+        $code = strtoupper((string) ($parameter->parameterCode ?? ''));
+        $name = strtolower((string) ($parameter->parameterName ?? ''));
+
+        foreach (self::PARAMETER_ALIASES[$code] ?? [] as $alias) {
+            $this->appendKeyVariants($keys, $alias);
+        }
+
+        if (str_contains($name, 'suhu')) {
+            foreach (self::PARAMETER_ALIASES['TEMP'] as $alias) {
+                $this->appendKeyVariants($keys, $alias);
+            }
+        } elseif (str_contains($name, 'lembap')) {
+            foreach (self::PARAMETER_ALIASES['HUMID'] as $alias) {
+                $this->appendKeyVariants($keys, $alias);
+            }
+        } elseif (str_contains($name, 'amonia') || str_contains($name, 'ammonia')) {
+            foreach (self::PARAMETER_ALIASES['AMMON'] as $alias) {
+                $this->appendKeyVariants($keys, $alias);
+            }
+        } elseif (str_contains($name, 'cahaya') || str_contains($name, 'lux')) {
+            foreach (self::PARAMETER_ALIASES['LIGHT'] as $alias) {
+                $this->appendKeyVariants($keys, $alias);
+            }
+        }
+
+        return array_values(array_unique(array_filter($keys, fn (string $key) => trim($key) !== '')));
+    }
+
+    private function appendKeyVariants(array &$keys, string $key): void
+    {
+        $key = trim($key);
+        if ($key === '') {
+            return;
+        }
+
+        $keys[] = $key;
+        $keys[] = strtolower($key);
+        $keys[] = strtoupper($key);
     }
 
     private function resolveTimestamp(mixed $timestamp, mixed $data): Carbon
@@ -174,7 +263,7 @@ class IotPayloadIngestor
         $candidate = $timestamp;
 
         if ($candidate === null && is_array($data)) {
-            foreach (['sensorTimestamp', 'timestamp', 'time', 'createdAt', 'created_at'] as $key) {
+            foreach (['sensorTimestamp', 'sensor_timestamp', 'timestamp', 'time', 'createdAt', 'created_at', 'data.timestamp', 'payload.timestamp'] as $key) {
                 $value = data_get($data, $key);
                 if ($value !== null) {
                     $candidate = $value;

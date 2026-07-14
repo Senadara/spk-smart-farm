@@ -29,6 +29,7 @@ class ListenMqttDevices extends Command
             $stats = $mqtt->listen($connection, [
                 'once' => (bool) $this->option('once'),
                 'timeout' => (int) $this->option('timeout'),
+                'client_suffix' => $this->clientSuffix(),
             ]);
 
             $this->info("Listener selesai. Pesan: {$stats['messages']}, tersimpan: {$stats['inserted']}, skip: {$stats['skipped']}.");
@@ -47,6 +48,12 @@ class ListenMqttDevices extends Command
     private function resolveConnection(): ?IotConnectionConfig
     {
         $query = IotConnectionConfig::with('protocol')
+            ->withCount(['devices' => function ($query) {
+                $query->where(function ($deviceQuery) {
+                    $deviceQuery->whereNull('status')
+                        ->orWhere('status', '<>', 'maintenance');
+                });
+            }])
             ->whereNotNull('mqttBrokerUrl')
             ->where('mqttBrokerUrl', '<>', '');
 
@@ -60,22 +67,35 @@ class ListenMqttDevices extends Command
         }
 
         $connections = $query->get();
+        $connectionsWithDevices = $connections->filter(fn (IotConnectionConfig $connection) => (int) ($connection->devices_count ?? 0) > 0)->values();
 
         if ($connections->isEmpty()) {
             $this->error('Belum ada konfigurasi MQTT aktif.');
             return null;
         }
 
+        if ($connectionsWithDevices->count() === 1) {
+            return $connectionsWithDevices->first();
+        }
+
         if ($connections->count() > 1) {
-            $this->warn('Ada lebih dari satu koneksi MQTT. Jalankan satu listener per koneksi:');
+            $this->warn('Ada lebih dari satu koneksi MQTT yang perlu listener. Jalankan satu listener per koneksi:');
             foreach ($connections as $connection) {
                 $label = $connection->protocol->protocolName ?? 'MQTT';
-                $this->line("php artisan iot:mqtt-listen {$connection->id}  # {$label} {$connection->mqttBrokerUrl}");
+                $deviceCount = (int) ($connection->devices_count ?? 0);
+                $this->line("php artisan iot:mqtt-listen {$connection->id}  # {$label} {$connection->mqttBrokerUrl} ({$deviceCount} device)");
             }
 
             return null;
         }
 
         return $connections->first();
+    }
+
+    private function clientSuffix(): string
+    {
+        $host = preg_replace('/[^A-Za-z0-9_-]/', '', gethostname() ?: 'host');
+
+        return 'listener-'.$host.'-'.getmypid();
     }
 }

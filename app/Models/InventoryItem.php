@@ -11,6 +11,7 @@ class InventoryItem extends Model
 {
     protected $fillable = [
         'sku',
+        'mobile_inventaris_id',
         'name',
         'category',
         'stock',
@@ -24,6 +25,7 @@ class InventoryItem extends Model
         'photo_path',
         'notes',
         'last_restock_at',
+        'synced_from_mobile_at',
         'is_active',
     ];
 
@@ -34,6 +36,7 @@ class InventoryItem extends Model
         'reorder_point' => 'float',
         'lead_time_days' => 'integer',
         'last_restock_at' => 'datetime',
+        'synced_from_mobile_at' => 'datetime',
         'is_active' => 'boolean',
     ];
 

@@ -104,9 +104,9 @@
             @endforeach
         </div>
 
-        <div class="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
-            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <div class="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
+        <div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <div class="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+                <div class="min-w-0 rounded-xl border border-slate-100 bg-white p-4 shadow-sm md:p-5">
                     <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
                         <div>
                             <h3 class="text-sm font-bold text-slate-800">Tren Pemakaian Stok</h3>
@@ -121,7 +121,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="relative h-[220px]">
+                    <div class="relative h-[210px] md:h-[220px]">
                         <canvas x-ref="consumptionCanvas"></canvas>
                         <div x-show="!chartReady" class="absolute inset-0 flex items-center justify-center rounded-lg bg-slate-50 text-xs font-semibold text-slate-500">
                             Grafik siap setelah Chart.js termuat.
@@ -129,7 +129,7 @@
                     </div>
                 </div>
 
-                <div class="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
+                <div class="min-w-0 rounded-xl border border-slate-100 bg-white p-4 shadow-sm md:p-5">
                     <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
                         <div>
                             <h3 class="text-sm font-bold text-slate-800">Distribusi Pemakaian</h3>
@@ -144,7 +144,7 @@
                             </select>
                         </div>
                     </div>
-                    <div class="relative h-[220px]">
+                    <div class="relative h-[210px] md:h-[220px]">
                         <canvas x-ref="usageCanvas"></canvas>
                         <div x-show="!chartReady" class="absolute inset-0 flex items-center justify-center rounded-lg bg-slate-50 text-xs font-semibold text-slate-500">
                             Grafik siap setelah Chart.js termuat.
@@ -153,50 +153,51 @@
                 </div>
             </div>
 
-            <div class="flex h-full flex-col rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
-                <div class="mb-3 flex items-center justify-between border-b border-slate-100 pb-3">
-                    <div>
+            <div class="flex min-h-0 flex-col rounded-xl border border-emerald-100 bg-white p-4 shadow-sm xl:h-[312px]">
+                <div class="mb-3 flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div class="min-w-0">
                         <h3 class="text-sm font-bold text-slate-900">Rekomendasi Restock</h3>
-                        <p class="mt-0.5 text-[11px] text-slate-500">SPK memilih item prioritas dari stok, sisa hari, dan lead time.</p>
+                        <p class="mt-0.5 text-[11px] text-slate-500">Prioritas stok, sisa hari, dan lead time.</p>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex shrink-0 items-center gap-2">
                         <x-metric-hint title="Rekomendasi Restock" body="Daftar ini diurutkan berdasarkan skor prioritas restock. Critical lebih tinggi dari Warning, lalu dipengaruhi sisa hari dan lead time." formula="status_weight + days_weight + lead_time_weight" source="inventory_items, supplier product link" />
-                        <span class="rounded border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold tracking-wide text-emerald-600">SPK</span>
+                        <span class="rounded border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold tracking-wide text-emerald-600">{{ count($recommendedRestocks) }}</span>
                     </div>
                 </div>
 
-                <div class="custom-scrollbar max-h-[620px] flex-1 space-y-3 overflow-y-auto pr-1">
+                <div class="custom-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                     @forelse ($recommendedRestocks as $item)
                         @php
                             $pColor = ['Critical' => 'bg-rose-50 text-rose-700 border-rose-100', 'Warning' => 'bg-amber-50 text-amber-700 border-amber-100', 'Safe' => 'bg-slate-50 text-slate-600 border-slate-100'][$item['priority']] ?? 'bg-slate-50 text-slate-600 border-slate-100';
                             $linked = $item['linked_product'];
                         @endphp
-                        <div class="rounded-lg border border-slate-100 bg-white p-3">
-                            <div class="mb-1.5 flex items-start justify-between gap-2">
-                                <h4 class="pr-2 text-xs font-bold text-slate-900">{{ $item['name'] }}</h4>
-                                <span class="whitespace-nowrap rounded border px-1.5 py-0.5 text-[9px] font-semibold {{ $pColor }}">{{ $item['priority'] }}</span>
-                            </div>
-                            <div class="mb-3 flex items-center justify-between text-[10px] text-slate-500">
-                                <span>{{ $item['current_stock'] }}</span>
-                                <span class="{{ ($item['days_remaining'] ?? 999) <= 3 ? 'font-bold text-rose-600' : '' }}">{{ $item['days_label'] }}</span>
+                        <div class="rounded-lg border border-slate-100 bg-white p-2.5">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <h4 class="line-clamp-1 text-xs font-bold text-slate-900" title="{{ $item['name'] }}">{{ $item['name'] }}</h4>
+                                    <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
+                                        <span>{{ $item['current_stock'] }}</span>
+                                        <span class="h-1 w-1 rounded-full bg-slate-300"></span>
+                                        <span class="{{ ($item['days_remaining'] ?? 999) <= 3 ? 'font-bold text-rose-600' : '' }}">{{ $item['days_label'] }}</span>
+                                    </div>
+                                </div>
+                                <span class="shrink-0 whitespace-nowrap rounded border px-1.5 py-0.5 text-[9px] font-semibold {{ $pColor }}">{{ $item['priority'] }}</span>
                             </div>
 
                             @if($linked)
-                                <div class="rounded-lg bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800">
-                                    <p class="font-bold">{{ $linked['name'] }}</p>
-                                    <p class="mt-0.5">{{ $linked['store'] }} - rekomendasi {{ $linked['recommended_label'] }}</p>
-                                    <p class="mt-0.5 text-emerald-700">Konversi: 1 {{ $linked['product_unit'] }} = {{ $linked['conversion_qty'] }} {{ $linked['conversion_unit'] }}</p>
+                                <div class="mt-2 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[10px] text-emerald-800">
+                                    <p class="line-clamp-1 font-bold">{{ $linked['name'] }}</p>
+                                    <p class="mt-0.5 line-clamp-1">{{ $linked['store'] }} - rekomendasi {{ $linked['recommended_label'] }}</p>
                                 </div>
                             @else
-                                <div class="rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                                    <p class="font-bold">Belum terhubung ke produk supplier.</p>
-                                    <p class="mt-0.5">Hubungkan satu kali agar restock berikutnya bisa langsung dipesan.</p>
+                                <div class="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[10px] text-amber-800">
+                                    <p class="font-bold">Belum terhubung produk supplier.</p>
                                 </div>
                             @endif
 
-                            <div class="mt-3 flex items-center justify-between border-t border-slate-50 pt-2">
+                            <div class="mt-2 flex items-center justify-between gap-2 border-t border-slate-50 pt-2">
                                 <span class="rounded border border-slate-100 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">Score {{ $item['score'] }}</span>
-                                <div class="flex gap-1">
+                                <div class="flex shrink-0 gap-1">
                                     @if($linked)
                                         <form method="POST" action="{{ $item['order_url'] }}">
                                             @csrf

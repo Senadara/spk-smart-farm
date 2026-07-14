@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class PeternakanService
 {
@@ -12,6 +13,8 @@ class PeternakanService
     private ?string $activeJenisBudidayaId = null;
 
     private ?array $cachedBarnEnvironment = null;
+
+    private ?bool $unitBudidayaHasUmurMinggu = null;
 
     public function forKomoditas(?string $komoditasId): self
     {
@@ -74,6 +77,35 @@ class PeternakanService
         }
 
         return $query->pluck('id')->toArray();
+    }
+
+    private function hasUnitBudidayaUmurMingguColumn(): bool
+    {
+        if ($this->unitBudidayaHasUmurMinggu === null) {
+            $this->unitBudidayaHasUmurMinggu = Schema::hasColumn('unitBudidaya', 'umurMinggu');
+        }
+
+        return $this->unitBudidayaHasUmurMinggu;
+    }
+
+    private function unitBudidayaAgeSelect(string $prefix = 'unitBudidaya.'): array
+    {
+        return $this->hasUnitBudidayaUmurMingguColumn()
+            ? [$prefix.'umurMinggu']
+            : [];
+    }
+
+    private function flockAgeWeeks(object $coop, ?Carbon $date = null): int
+    {
+        if (property_exists($coop, 'umurMinggu') && $coop->umurMinggu !== null && is_numeric($coop->umurMinggu)) {
+            return max(0, (int) $coop->umurMinggu);
+        }
+
+        if (! empty($coop->createdAt)) {
+            return max(0, (int) floor(Carbon::parse($coop->createdAt)->diffInWeeks($date ?? now())));
+        }
+
+        return 0;
     }
 
     public function getDailyReportStatus(): array
@@ -268,9 +300,8 @@ class PeternakanService
             ]);
         }
 
-        // Flock age derived from createdAt
         $createdAt = \Carbon\Carbon::parse($coop->createdAt);
-        $weeks = (int) floor($createdAt->diffInWeeks(now()));
+        $weeks = $this->flockAgeWeeks($coop);
 
         return array_merge($barn, [
             'flockAge' => $weeks.' Minggu',
@@ -920,15 +951,15 @@ class PeternakanService
             ->leftJoin('jenisBudidaya', 'unitBudidaya.jenisBudidayaId', '=', 'jenisBudidaya.id')
             ->where('unitBudidaya.id', $coopId)
             ->where('unitBudidaya.isDeleted', 0)
-            ->select(
+            ->select(array_merge([
                 'unitBudidaya.id',
                 'unitBudidaya.nama',
                 'unitBudidaya.lokasi',
                 'unitBudidaya.jumlah',
                 'unitBudidaya.kapasitas',
                 'unitBudidaya.createdAt',
-                'jenisBudidaya.nama as breedName'
-            )
+                'jenisBudidaya.nama as breedName',
+            ], $this->unitBudidayaAgeSelect()))
             ->first();
 
         if (! $coop) {
@@ -1100,7 +1131,7 @@ class PeternakanService
                 'initial_population' => $initialPopulation,
                 'capacity' => (float) ($coop->kapasitas ?? 0),
                 'start_date' => $createdAt ? $createdAt->locale('id')->translatedFormat('d M Y') : '-',
-                'flock_age' => $createdAt ? ((int) floor($createdAt->diffInWeeks(now()))).' Minggu' : '-',
+                'flock_age' => $this->flockAgeWeeks($coop).' Minggu',
             ],
             'filters' => [
                 'start_date' => $startDate,
@@ -1377,7 +1408,7 @@ class PeternakanService
             ->whereIn('id', $activeCoopIds)
             ->orderBy('createdAt', 'asc')
             ->first();
-        $umurBiologis = $oldestCoop ? (int) floor(Carbon::parse($oldestCoop->createdAt)->diffInWeeks(now())).' Mgg' : '0 Mgg';
+        $umurBiologis = $oldestCoop ? $this->flockAgeWeeks($oldestCoop).' Mgg' : '0 Mgg';
 
         return [
             [
@@ -1702,8 +1733,10 @@ class PeternakanService
 
         $avgWeeks = 0;
         if (! empty($activeCoops)) {
-            $coops = DB::table('unitBudidaya')->whereIn('id', $activeCoops)->get(['createdAt']);
-            $weeks = $coops->map(fn ($c) => (int) floor(Carbon::parse($c->createdAt)->diffInWeeks(now())));
+            $coops = DB::table('unitBudidaya')
+                ->whereIn('id', $activeCoops)
+                ->get(array_merge(['createdAt'], $this->unitBudidayaAgeSelect('')));
+            $weeks = $coops->map(fn ($c) => $this->flockAgeWeeks($c));
             $avgWeeks = $weeks->isEmpty() ? 0 : (int) round($weeks->avg());
         }
 
@@ -1862,7 +1895,7 @@ class PeternakanService
             $reject = $this->sumRejectEggsForBarnDate($b->id, $row->reportDate);
             $mortality = $this->countMortalityForBarnDate($b->id, $row->reportDate);
 
-            $age = (int) floor(Carbon::parse($b->createdAt)->diffInWeeks($date)).' Wks';
+            $age = $this->flockAgeWeeks($b, $date).' Wks';
             $birdsAtReport = $this->populationAtReportTime($b->id, $date->copy()->endOfDay()->toDateTimeString(), (float) ($b->jumlah ?? 0));
             $status = $mortality > 0 ? 'Attention' : ($reject > 0 ? 'Check' : 'Optimal');
 

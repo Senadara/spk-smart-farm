@@ -17,9 +17,9 @@
                 'source' => 'harianTernak, panen',
             ],
             'Umur Biologis' => [
-                'body' => 'Rata-rata umur flock/kandang aktif yang dipakai untuk membaca fase produksi.',
-                'formula' => 'rata-rata umur kandang aktif',
-                'source' => 'unitBudidaya.createdAt',
+                'body' => 'Rata-rata umur flock/kandang aktif dari input mobile. Data lama fallback ke tanggal kandang dibuat.',
+                'formula' => 'rata-rata unitBudidaya.umurMinggu',
+                'source' => 'unitBudidaya.umurMinggu',
             ],
             'Feed Intake' => [
                 'body' => 'Estimasi konsumsi pakan per ekor per hari.',

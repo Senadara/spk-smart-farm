@@ -7,14 +7,19 @@ use App\Models\InventoryItem;
 use App\Models\InventoryMovement;
 use App\Models\InventorySupplierProductLink;
 use App\Models\SupplierProduct;
+use App\Services\Inventory\MobileInventorySyncService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class InventoryController extends Controller
 {
+    public function __construct(private MobileInventorySyncService $mobileInventorySync) {}
+
     public function index()
     {
+        $this->mobileInventorySync->sync();
+
         $items = InventoryItem::with([
             'supplier',
             'preferredSupplierProductLink.product.store',
@@ -140,6 +145,8 @@ class InventoryController extends Controller
 
     public function purchaseOrder()
     {
+        $this->mobileInventorySync->sync();
+
         $items = InventoryItem::with([
             'supplier',
             'preferredSupplierProductLink.product.store',
@@ -180,6 +187,8 @@ class InventoryController extends Controller
 
     public function analysis()
     {
+        $this->mobileInventorySync->sync();
+
         $items = InventoryItem::where('is_active', true)->get()
             ->map(fn (InventoryItem $item) => $this->formatItem($item, $this->barnMap()));
 
@@ -254,10 +263,12 @@ class InventoryController extends Controller
         }
 
         if (array_sum($feed) <= 0) {
-            $feed = $items->where('category', 'Pakan')->pluck('daily_usage')->map(fn ($value) => round((float) $value, 1))->pad(7, 0)->take(7)->values()->all();
+            $estimatedFeed = round((float) $items->where('category', 'Pakan')->sum('daily_usage'), 1);
+            $feed = array_fill(0, count($dateKeys), $estimatedFeed);
         }
         if (array_sum($vitamin) <= 0) {
-            $vitamin = $items->where('category', 'Vitamin')->pluck('daily_usage')->map(fn ($value) => round((float) $value, 1))->pad(7, 0)->take(7)->values()->all();
+            $estimatedVitamin = round((float) $items->where('category', 'Vitamin')->sum('daily_usage'), 1);
+            $vitamin = array_fill(0, count($dateKeys), $estimatedVitamin);
         }
 
         $byBarn = $items->groupBy(fn ($item) => $barnMap[$item->unit_budidaya_id] ?? 'Umum');

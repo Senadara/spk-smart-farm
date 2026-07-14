@@ -8,12 +8,15 @@ use App\Models\IotDeviceLog;
 use App\Models\SpkActionTask;
 use App\Models\SpkFuzzyLog;
 use App\Services\Fuzzy\NarrativeGenerator;
+use App\Services\Inventory\MobileInventorySyncService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class DashboardController extends Controller
 {
+    public function __construct(private MobileInventorySyncService $mobileInventorySync) {}
+
     public function index()
     {
         $livestock = $this->livestockProductivity();
@@ -310,6 +313,8 @@ class DashboardController extends Controller
 
     private function inventoryStockSummary(): array
     {
+        $this->mobileInventorySync->sync();
+
         if (! Schema::hasTable('inventory_items')) {
             return [
                 'total' => 0,

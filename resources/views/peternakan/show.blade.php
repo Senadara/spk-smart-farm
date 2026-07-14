@@ -16,10 +16,10 @@
         $barnOverviewHints = [
             'Lokasi' => ['body' => 'Lokasi fisik kandang untuk membantu identifikasi unit budidaya.', 'source' => 'unitBudidaya'],
             'Breed' => ['body' => 'Jenis/strain ayam yang dipelihara pada kandang.', 'source' => 'unitBudidaya / komoditas'],
-            'Tanggal Masuk' => ['body' => 'Tanggal awal flock masuk kandang, dipakai untuk menghitung umur biologis.', 'source' => 'unitBudidaya.createdAt'],
+            'Tanggal Masuk' => ['body' => 'Tanggal data kandang dibuat di sistem. Umur flock utama mengikuti input umur dari mobile.', 'source' => 'unitBudidaya.createdAt'],
             'Populasi' => ['body' => 'Jumlah ayam aktif yang dipakai sebagai pembagi HDP dan feed intake.', 'source' => 'unitBudidaya.jumlah'],
             'Kapasitas' => ['body' => 'Batas kapasitas kandang agar populasi dapat dibandingkan dengan daya tampung.', 'source' => 'unitBudidaya.kapasitas'],
-            'Umur Flock' => ['body' => 'Umur flock berdasarkan tanggal masuk sampai hari ini.', 'formula' => 'hari ini - tanggal masuk', 'source' => 'unitBudidaya.createdAt'],
+            'Umur Flock' => ['body' => 'Umur flock/ayam di kandang dalam satuan minggu dari input mobile. Data lama fallback ke tanggal kandang dibuat.', 'formula' => 'unitBudidaya.umurMinggu', 'source' => 'unitBudidaya.umurMinggu'],
         ];
         $sensorHints = [
             'Suhu' => ['body' => 'Suhu kandang terbaru dari sensor. Nilai dibandingkan dengan rentang ideal komoditas.', 'source' => 'iot_sensor_data'],

@@ -64,10 +64,10 @@ class MqttSubscriptionService
                     return;
                 }
 
-                if ($device->status !== 'active') {
+                if ($device->status === 'maintenance') {
                     $stats['skipped']++;
                     $stats['last_device'] = "{$device->deviceCode} ({$device->status})";
-                    $this->logInactiveDeviceMessage($device, $topic);
+                    $this->logMaintenanceDeviceMessage($device, $topic);
 
                     if ($once) {
                         $client->interrupt();
@@ -137,7 +137,10 @@ class MqttSubscriptionService
     {
         return IotDevice::with('parameterMappings.parameter')
             ->where('connectionConfigId', $connection->id)
-            ->where('status', 'active')
+            ->where(function ($query) {
+                $query->whereNull('status')
+                    ->orWhere('status', '<>', 'maintenance');
+            })
             ->get();
     }
 
@@ -162,10 +165,12 @@ class MqttSubscriptionService
 
     private function connectionSettings(IotConnectionConfig $connection, array $broker): ConnectionSettings
     {
+        $keepAlive = max(10, (int) ($connection->mqttKeepAlive ?? 60));
+
         $settings = (new ConnectionSettings())
             ->setConnectTimeout(10)
-            ->setSocketTimeout(5)
-            ->setKeepAliveInterval(max(5, (int) ($connection->mqttKeepAlive ?? 60)))
+            ->setSocketTimeout(max(30, $keepAlive + 10))
+            ->setKeepAliveInterval($keepAlive)
             ->setUseTls((bool) $broker['tls']);
 
         if ($connection->mqttUsername) {
@@ -225,14 +230,14 @@ class MqttSubscriptionService
     {
         $payloadDeviceCode = $this->ingestor->deviceCodeFromPayload($message);
         if ($payloadDeviceCode) {
-            $match = $devices->firstWhere('deviceCode', $payloadDeviceCode);
+            $match = $devices->first(fn (IotDevice $device) => strcasecmp((string) $device->deviceCode, $payloadDeviceCode) === 0);
             if ($match) {
                 return $match;
             }
 
             $knownDevice = IotDevice::with('parameterMappings.parameter')
                 ->where('connectionConfigId', $connection->id)
-                ->where('deviceCode', $payloadDeviceCode)
+                ->whereRaw('LOWER(deviceCode) = ?', [strtolower($payloadDeviceCode)])
                 ->first();
 
             if ($knownDevice) {
@@ -255,13 +260,13 @@ class MqttSubscriptionService
         return null;
     }
 
-    private function logInactiveDeviceMessage(IotDevice $device, string $topic): void
+    private function logMaintenanceDeviceMessage(IotDevice $device, string $topic): void
     {
         try {
             IotDeviceLog::create([
                 'deviceId' => $device->id,
                 'logType' => 'WARNING',
-                'message' => "[mqtt:{$topic}] Payload diterima, tetapi device {$device->deviceCode} berstatus {$device->status}. Aktifkan device agar data masuk monitoring.",
+                'message' => "[mqtt:{$topic}] Payload diterima, tetapi device {$device->deviceCode} sedang maintenance. Data tidak disimpan.",
             ]);
         } catch (\Throwable) {
             // Logging should not break the listener loop.

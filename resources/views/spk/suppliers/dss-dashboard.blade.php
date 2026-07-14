@@ -1,210 +1,474 @@
 @extends('layouts.app')
 
 @section('title', 'Dashboard DSS Supplier (SAW)')
-@section('breadcrumb', 'Supplier > Dashboard SAW')
-
+@section('breadcrumb', 'Supplier DSS > Ranking (SAW)')
 
 @section('content')
-<div class="max-w-7xl mx-auto space-y-6">
+@php
+    $selectedProduct = $produks->firstWhere('id', $produkId);
+    $userResolved = isset($userId) && $userId !== null;
+    $hasValidAhp = $bobots->isNotEmpty() && $latestConfig;
+    $bestRanking = $rankings->first();
+    $runnerUpRanking = $rankings->skip(1)->first();
+    $maxScore = max((float) ($rankings->max('final_score') ?? 0), 1);
+    $lastCalculatedAt = $rankings->pluck('last_calculated_at')->filter()->max();
+    $evaluationBySupplier = collect($evaluation)->keyBy('id');
 
+    $parameterKeyFor = function (?string $name): string {
+        $lower = strtolower((string) $name);
+
+        if (str_contains($lower, 'harga')) {
+            return 'price';
+        }
+
+        if (str_contains($lower, 'kualitas')) {
+            return 'quality';
+        }
+
+        if (str_contains($lower, 'waktu') || str_contains($lower, 'kecepatan')) {
+            return 'delivery_time';
+        }
+
+        if (str_contains($lower, 'jarak')) {
+            return 'distance';
+        }
+
+        return str_replace(' ', '_', $lower);
+    };
+
+    $formatAttribute = function (string $key, mixed $value): string {
+        if ($value === null || $value === '') {
+            return '-';
+        }
+
+        if (! is_numeric($value)) {
+            return (string) $value;
+        }
+
+        $number = (float) $value;
+
+        return match ($key) {
+            'price' => 'Rp '.number_format($number, 0, ',', '.'),
+            'quality' => number_format($number, 1, ',', '.').'/5',
+            'delivery_time' => number_format($number, 1, ',', '.').' hari',
+            'distance' => number_format($number, 1, ',', '.').' km',
+            default => number_format($number, 2, ',', '.'),
+        };
+    };
+
+    $formatScore = fn ($score): string => number_format((float) $score, 4, ',', '.');
+    $formatPercent = fn ($value): string => number_format(min(100, max(0, (float) $value * 100)), 1, ',', '.');
+    $formatDateTime = fn ($date): string => $date ? \Illuminate\Support\Carbon::parse($date)->format('d M Y H:i') : 'Belum dihitung';
+
+    $weightRows = $bobots
+        ->map(fn ($b) => [
+            'name' => $b->parameter?->nama_parameter ?? 'Parameter',
+            'type' => $b->parameter?->tipe ?? 'benefit',
+            'key' => $parameterKeyFor($b->parameter?->nama_parameter),
+            'weight' => (float) $b->bobot,
+        ])
+        ->sortByDesc('weight')
+        ->values();
+
+    $statusSteps = [
+        [
+            'label' => 'Bobot AHP',
+            'done' => $hasValidAhp,
+            'note' => $hasValidAhp ? 'Valid dan siap dipakai SAW' : 'Belum valid',
+        ],
+        [
+            'label' => 'Produk',
+            'done' => (bool) $selectedProduct,
+            'note' => $selectedProduct ? $selectedProduct->nama : 'Belum dipilih',
+        ],
+        [
+            'label' => 'Data Supplier',
+            'done' => (int) ($selectedProduct?->suppliers_count ?? 0) > 0,
+            'note' => number_format((int) ($selectedProduct?->suppliers_count ?? 0)).' supplier terhubung',
+        ],
+        [
+            'label' => 'Ranking SAW',
+            'done' => $rankings->isNotEmpty(),
+            'note' => $rankings->isNotEmpty() ? $rankings->count().' supplier dibandingkan' : 'Belum ada hasil',
+        ],
+    ];
+
+    $quickProducts = $produks->where('suppliers_count', '>', 0)->take(12);
+@endphp
+
+<div class="mx-auto max-w-7xl space-y-5">
     @if(session('success'))
-        <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-sm">{{ session('success') }}</div>
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
     @endif
-
-    @php $userResolved = isset($userId) && $userId !== null; @endphp
 
     @if(! $userResolved)
-        <div class="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-6 text-sm text-amber-950 shadow-sm mb-6">
-            <p class="font-extrabold text-base flex items-center gap-2 mb-3">Akun Anda belum bisa dipakai sebagai pemilik konfig DSS</p>
-            <p class="leading-relaxed text-amber-900/95 max-w-3xl">
-                Session login tidak memetakan Anda ke primary key pada tabel <code class="bg-white px-1 rounded border border-amber-200">users</code>
-                - dashboard SAW &amp; cache ranking tidak bisa diikat per pengguna sampai itu diperbaiki.
-                <span class="block mt-2 text-xs opacity-85">Konfigurasikan backend auth agar menyimpan ID numerik Laravel yang sama dengan <strong>users.id</strong>, atau pastikan ada baris <strong>users</strong> dengan email yang sama persis seperti di session Anda.</span>
-            </p>
-            <div class="mt-4 flex flex-wrap gap-2">
-                <a href="{{ route('spk.suppliers.dss.config') }}" class="inline-flex items-center rounded-xl bg-amber-800 px-4 py-2 text-xs font-black text-white hover:bg-amber-900">Pelajari di halaman AHP</a>
-                <a href="{{ route('settings.index') }}" class="inline-flex items-center rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100/80">&larr; Kembali ke pengaturan</a>
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p class="font-bold">Akun belum bisa dipakai untuk konfigurasi DSS.</p>
+            <p class="mt-1 leading-relaxed">Session login belum terhubung ke data pengguna Laravel. Ranking SAW belum bisa disimpan per pengguna sampai ID atau email akun sesuai dengan tabel pengguna.</p>
+            <div class="mt-3 flex flex-wrap gap-2">
+                <a href="{{ route('spk.suppliers.dss.config') }}" class="rounded-lg bg-amber-700 px-4 py-2 text-xs font-bold text-white hover:bg-amber-800">Buka Konfigurasi AHP</a>
+                <a href="{{ route('settings.index') }}" class="rounded-lg border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100">Buka Pengaturan</a>
             </div>
         </div>
     @endif
 
-    <div class="rounded-3xl bg-gradient-to-r from-purple-950 via-indigo-900 to-emerald-900 px-6 py-8 sm:px-10 text-white shadow-xl shadow-indigo-900/30 mb-6">
-        <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+    <section class="rounded-lg border border-gray-200 bg-white p-5 md:p-6">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div class="min-w-0">
-                <p class="text-[10px] font-bold uppercase tracking-widest text-emerald-200/95">Operational - DSS</p>
-                <h1 class="mt-2 text-2xl sm:text-3xl font-black tracking-tight">Ranking supplier - SAW</h1>
-                <p class="mt-3 text-sm text-indigo-100/95 leading-relaxed max-w-2xl">
-                    Bobot dari langkah konfig AHP digunakan untuk menghitung skor gabungan setiap supplier secara real-time ketika Anda mengganti produk di bawah.
+                <p class="text-xs font-bold uppercase tracking-wider text-emerald-700">Supplier DSS</p>
+                <h1 class="mt-1 text-2xl font-bold text-gray-900">Ranking Supplier dengan SAW</h1>
+                <p class="mt-1 max-w-3xl text-sm leading-relaxed text-gray-500">
+                    SAW memakai bobot AHP yang valid untuk memilih supplier terbaik berdasarkan harga, kualitas, waktu pengiriman, jarak, dan parameter lain yang tersedia.
                 </p>
             </div>
-            <div class="flex flex-shrink-0 flex-wrap gap-2">
-                <a href="{{ route('spk.suppliers.dss.config') }}" class="inline-flex items-center justify-center rounded-xl bg-emerald-400 px-5 py-2.5 text-sm font-black text-emerald-950 shadow-lg hover:bg-emerald-300 transition whitespace-nowrap">&larr; Edit bobot - AHP</a>
-                <a href="{{ route('spk.suppliers.products') }}" class="inline-flex items-center justify-center rounded-xl bg-white/10 px-5 py-2.5 text-sm font-bold ring-1 ring-white/25 hover:bg-white/15 transition whitespace-nowrap">Komparasi produk</a>
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ route('spk.suppliers.dss.config') }}" class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Atur AHP</a>
+                <a href="{{ route('spk.suppliers.products') }}" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700" style="text-decoration:none;">Cari Barang</a>
+                <a href="{{ route('spk.suppliers.orders.index') }}" class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Histori Pesanan</a>
             </div>
         </div>
-    </div>
-    <div x-data="{ 
-        searchQuery: '', 
-        get hasResults() { 
-            if (this.searchQuery === '') return true;
-            const q = this.searchQuery.toLowerCase();
-            const names = {{ json_encode($produks->pluck('nama')->map(fn($n) => strtolower($n))) }};
-            return names.some(n => n.includes(q));
-        }
-    }" class="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm mb-6">
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+    </section>
+
+    <x-page-hint title="Cara membaca rekomendasi SAW" tone="sky" :open="false">
+        Pilih produk yang ingin direstock. Sistem mengambil supplier yang menjual produk tersebut, menormalisasi nilai tiap parameter, lalu mengalikan nilai normalisasi dengan bobot AHP. Supplier dengan skor tertinggi menjadi rekomendasi utama. Jika hasil kosong, periksa bobot AHP, relasi produk-supplier, dan nilai parameter supplier.
+    </x-page-hint>
+
+    <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="rounded-lg border border-gray-200 bg-white p-4">
+            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Produk Aktif</p>
+            <p class="mt-2 line-clamp-1 text-lg font-black text-gray-900">{{ $selectedProduct?->nama ?? 'Belum ada produk' }}</p>
+            <p class="mt-1 text-xs text-gray-500">{{ number_format((int) ($selectedProduct?->suppliers_count ?? 0)) }} supplier tersedia</p>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4">
+            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Rekomendasi</p>
+            <p class="mt-2 line-clamp-1 text-lg font-black text-gray-900">{{ $bestRanking?->supplier?->nama ?? 'Belum tersedia' }}</p>
+            <p class="mt-1 text-xs text-gray-500">{{ $bestRanking ? 'Skor '.$formatScore($bestRanking->final_score) : 'Jalankan SAW dengan data lengkap' }}</p>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4">
+            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Konsistensi AHP</p>
+            <p class="mt-2 text-lg font-black {{ $latestConfig && $latestConfig->cr <= 0.1 ? 'text-emerald-700' : 'text-amber-700' }}">
+                {{ $latestConfig ? number_format((float) $latestConfig->cr, 4, ',', '.') : 'Belum ada' }}
+            </p>
+            <p class="mt-1 text-xs text-gray-500">{{ $latestConfig ? ($latestConfig->cr <= 0.1 ? 'CR valid, versi '.$latestConfig->version : 'CR belum valid') : 'Atur AHP terlebih dahulu' }}</p>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4">
+            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Terakhir Dihitung</p>
+            <p class="mt-2 text-lg font-black text-gray-900">{{ $formatDateTime($lastCalculatedAt) }}</p>
+            <p class="mt-1 text-xs text-gray-500">{{ $rankings->count() }} hasil ranking aktif</p>
+        </div>
+    </section>
+
+    <section class="rounded-lg border border-gray-200 bg-white p-4 md:p-5">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-                <h2 class="text-sm font-bold uppercase text-gray-600 tracking-wider">Katalog Produk</h2>
-                <p class="text-xs text-gray-500 mt-1">Pilih produk untuk melihat perbandingan supplier terbaik berdasarkan bobot AHP Anda.</p>
+                <p class="text-xs font-bold uppercase tracking-wider text-gray-500">Pilih Produk</p>
+                <h2 class="mt-1 text-lg font-bold text-gray-900">Produk yang akan dibandingkan suppliernya</h2>
+                <p class="mt-1 text-sm text-gray-500">Pilih satu produk untuk menghitung ranking supplier berdasarkan bobot AHP saat ini.</p>
             </div>
-            <div class="relative w-full sm:w-72">
-                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <svg class="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
-                </div>
-                <input x-model="searchQuery" type="text" placeholder="Cari nama produk..." class="block w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50 hover:bg-white transition-colors">
-            </div>
+            <form method="GET" action="{{ route('spk.suppliers.dss.dashboard') }}" class="grid w-full grid-cols-1 gap-2 sm:grid-cols-[1fr_auto] lg:max-w-xl">
+                <select name="produk_id" class="rounded-lg border border-gray-300 px-3 py-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                    @forelse($produks as $product)
+                        <option value="{{ $product->id }}" @selected((int) $produkId === (int) $product->id)>
+                            {{ $product->nama }} ({{ $product->suppliers_count }} supplier)
+                        </option>
+                    @empty
+                        <option value="">Belum ada produk</option>
+                    @endforelse
+                </select>
+                <button class="rounded-lg bg-gray-900 px-5 py-3 text-sm font-bold text-white hover:bg-gray-800" @disabled($produks->isEmpty())>Tampilkan</button>
+            </form>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
-            @foreach($produks as $p)
-            <a href="?produk_id={{ $p->id }}" 
-               x-show="searchQuery === '' || '{{ strtolower($p->nama) }}'.includes(searchQuery.toLowerCase())"
-               x-transition.opacity.duration.200ms
-               class="group flex flex-col p-4 rounded-2xl border transition-all duration-200 {{ $produkId == $p->id ? 'border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-500 shadow-md scale-[1.02]' : 'border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/30 hover:shadow-sm bg-white' }}">
-                <div class="flex items-start justify-between mb-3">
-                    <div class="p-2.5 rounded-xl transition-colors {{ $produkId == $p->id ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-50 text-gray-400 group-hover:bg-emerald-100/50 group-hover:text-emerald-500' }}">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-                    </div>
-                    @if($produkId == $p->id)
-                    <span class="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm">
-                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-                    </span>
-                    @endif
-                </div>
-                <h3 class="font-bold text-gray-900 text-sm line-clamp-2 leading-tight mb-1">{{ $p->nama }}</h3>
-                <div class="mt-auto pt-2 flex items-center gap-1.5 text-xs font-medium {{ $produkId == $p->id ? 'text-emerald-700' : 'text-gray-500' }}">
-                    <svg class="w-3.5 h-3.5 opacity-75" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-                    {{ $p->suppliers_count }} Mitra
-                </div>
-            </a>
-            @endforeach
-        </div>
-
-        <div x-show="!hasResults" x-cloak class="py-12 text-center flex flex-col items-center justify-center border-2 border-dashed border-gray-100 rounded-2xl mt-4">
-            <div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
-                <svg class="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        @if($quickProducts->isNotEmpty())
+            <div class="mt-4 flex gap-2 overflow-x-auto pb-1">
+                @foreach($quickProducts as $product)
+                    <a href="{{ route('spk.suppliers.dss.dashboard', ['produk_id' => $product->id]) }}"
+                        class="shrink-0 rounded-full px-4 py-2 text-xs font-bold {{ (int) $produkId === (int) $product->id ? 'bg-emerald-600 text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50' }}"
+                        style="text-decoration:none;">
+                        {{ $product->nama }}
+                    </a>
+                @endforeach
             </div>
-            <p class="text-sm font-bold text-gray-700">Produk tidak ditemukan</p>
-            <p class="text-xs text-gray-500 mt-1 max-w-xs">Tidak ada produk yang cocok dengan pencarian "<span x-text="searchQuery" class="font-medium"></span>".</p>
-        </div>
-    </div>
+        @endif
+    </section>
 
-    @if($bobots->isEmpty())
-    <div class="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-900">
-        Bobot AHP belum valid. <a href="{{ route('spk.suppliers.dss.config') }}" class="font-bold underline">Atur perbandingan kriteria</a> terlebih dahulu (CR harus <= 0.1).
-    </div>
+    @if(! $hasValidAhp)
+        <section class="rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-900">
+            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <p class="text-lg font-black">Bobot AHP belum siap untuk SAW.</p>
+                    <p class="mt-1 max-w-2xl text-sm leading-relaxed">Lengkapi perbandingan kriteria AHP sampai nilai CR tidak lebih dari 0,1. Setelah valid, halaman ini akan menampilkan ranking supplier untuk produk yang dipilih.</p>
+                </div>
+                <a href="{{ route('spk.suppliers.dss.config') }}" class="rounded-lg bg-amber-700 px-5 py-3 text-center text-sm font-bold text-white hover:bg-amber-800" style="text-decoration:none;">Atur Bobot AHP</a>
+            </div>
+        </section>
     @else
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="lg:col-span-1 space-y-6">
-            <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-                <h2 class="text-sm font-bold uppercase text-gray-600 mb-2">Status Konsistensi AHP</h2>
-                @if($latestConfig)
-                <p class="text-3xl font-black {{ $latestConfig->cr <= 0.1 ? 'text-emerald-600' : 'text-red-600' }}">{{ number_format($latestConfig->cr, 4) }}</p>
-                <p class="text-xs text-gray-500 mt-1">CR {{ $latestConfig->cr <= 0.1 ? '<= 0.1 (Valid)' : '> 0.1 (Invalid)' }} - v{{ $latestConfig->version }}</p>
-                @else
-                <p class="text-sm text-gray-500">Belum ada konfigurasi tersimpan.</p>
-                @endif
-            </div>
-            <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-                <h2 class="text-sm font-bold uppercase text-gray-600 mb-3">Bobot Kriteria</h2>
-                <canvas id="weightsPie" height="200"></canvas>
-            </div>
-            <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-                <h2 class="text-sm font-bold uppercase text-gray-600 mb-3">Radar Kriteria</h2>
-                <canvas id="weightsRadar" height="200"></canvas>
-            </div>
-        </div>
-
-        <div class="lg:col-span-2 space-y-6">
-            <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm overflow-hidden">
-                <h2 class="text-sm font-bold uppercase text-gray-600 mb-4">Peringkat Supplier (SAW)</h2>
-                @if($rankings->isEmpty())
-                <p class="text-sm text-gray-500 py-6 text-center">Tidak ada data ranking untuk produk ini.</p>
-                @else
-                <table class="min-w-full text-sm">
-                    <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
-                        <tr>
-                            <th class="px-4 py-3 text-left">Rank</th>
-                            <th class="px-4 py-3 text-left">Supplier</th>
-                            <th class="px-4 py-3 text-left">Skor Vi</th>
-                            <th class="px-4 py-3 text-left">Visual</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-50">
-                        @php $maxScore = $rankings->max('final_score') ?: 1; @endphp
-                        @foreach($rankings as $r)
-                        <tr class="{{ $r->ranking === 1 ? 'bg-emerald-50/50' : '' }}">
-                            <td class="px-4 py-3 font-black text-lg {{ $r->ranking === 1 ? 'text-emerald-600' : 'text-gray-400' }}">#{{ $r->ranking }}</td>
-                            <td class="px-4 py-3 font-semibold">{{ $r->supplier->nama ?? '-' }}</td>
-                            <td class="px-4 py-3 font-mono">{{ number_format($r->final_score, 4) }}</td>
-                            <td class="px-4 py-3 w-1/3">
-                                <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
-                                    <div class="h-full bg-emerald-500 rounded-full" style="width: {{ ($r->final_score / $maxScore) * 100 }}%"></div>
+        <div class="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div class="space-y-5">
+                @if($bestRanking)
+                    @php
+                        $bestScorePercent = $formatPercent($bestRanking->final_score);
+                        $gapToRunner = $runnerUpRanking
+                            ? max(0, (float) $bestRanking->final_score - (float) $runnerUpRanking->final_score)
+                            : null;
+                    @endphp
+                    <section class="rounded-lg border border-emerald-200 bg-emerald-50 p-5">
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div class="min-w-0">
+                                <p class="text-xs font-bold uppercase tracking-wider text-emerald-700">Rekomendasi Utama</p>
+                                <h2 class="mt-1 text-2xl font-black text-gray-900">{{ $bestRanking->supplier?->nama ?? 'Supplier' }}</h2>
+                                <p class="mt-1 text-sm text-emerald-900">
+                                    Peringkat #1 untuk {{ $selectedProduct?->nama ?? 'produk aktif' }} dengan skor SAW {{ $formatScore($bestRanking->final_score) }}.
+                                    @if($gapToRunner !== null)
+                                        Selisih dari peringkat #2 adalah {{ $formatScore($gapToRunner) }}.
+                                    @endif
+                                </p>
+                            </div>
+                            <div class="w-full rounded-lg border border-emerald-200 bg-white p-4 lg:w-64">
+                                <div class="flex items-end justify-between gap-3">
+                                    <span class="text-sm font-semibold text-gray-600">Kelayakan SAW</span>
+                                    <span class="text-2xl font-black text-emerald-700">{{ $bestScorePercent }}%</span>
                                 </div>
-                            </td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+                                <div class="mt-3 h-2.5 overflow-hidden rounded-full bg-emerald-100">
+                                    <div class="h-full rounded-full bg-emerald-600" style="width: {{ $bestScorePercent }}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            @if($bestRanking->supplier_id)
+                                <a href="{{ route('spk.suppliers.show', $bestRanking->supplier_id) }}" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700" style="text-decoration:none;">Buka Toko</a>
+                            @endif
+                            <a href="{{ route('spk.suppliers.products', ['search' => $selectedProduct?->nama]) }}" class="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100" style="text-decoration:none;">Cari Barang Ini</a>
+                        </div>
+                    </section>
+                @endif
+
+                <section class="rounded-lg border border-gray-200 bg-white p-4 md:p-5">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 class="text-lg font-bold text-gray-900">Ranking Supplier</h2>
+                            <p class="text-sm text-gray-500">Urutan supplier berdasarkan skor akhir SAW. Nilai kontribusi menunjukkan parameter yang paling mempengaruhi ranking.</p>
+                        </div>
+                        <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">{{ $rankings->count() }} supplier</span>
+                    </div>
+
+                    <div class="mt-4 space-y-3">
+                        @forelse($rankings as $ranking)
+                            @php
+                                $evaluationRow = $evaluationBySupplier->get($ranking->supplier_id, []);
+                                $attributes = collect(data_get($evaluationRow, 'attributes', []));
+                                $normalized = collect(data_get($evaluationRow, 'normalized', []));
+                                $scorePercent = $formatPercent($ranking->final_score);
+                                $relativePercent = number_format(min(100, max(0, ((float) $ranking->final_score / $maxScore) * 100)), 1, '.', '');
+                                $contributions = $weightRows
+                                    ->map(function ($weight) use ($attributes, $normalized) {
+                                        $norm = (float) ($normalized->get($weight['key']) ?? 0);
+
+                                        return [
+                                            'name' => $weight['name'],
+                                            'key' => $weight['key'],
+                                            'type' => $weight['type'],
+                                            'weight' => $weight['weight'],
+                                            'raw' => $attributes->get($weight['key']),
+                                            'normalized' => $norm,
+                                            'contribution' => $norm * $weight['weight'],
+                                        ];
+                                    })
+                                    ->sortByDesc('contribution')
+                                    ->take(4)
+                                    ->values();
+                            @endphp
+                            <article class="rounded-lg border {{ $ranking->ranking === 1 ? 'border-emerald-200 bg-emerald-50/60' : 'border-gray-200 bg-white' }} p-4">
+                                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                    <div class="flex min-w-0 gap-3">
+                                        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg {{ $ranking->ranking === 1 ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700' }} text-sm font-black">
+                                            #{{ $ranking->ranking }}
+                                        </div>
+                                        <div class="min-w-0">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <h3 class="line-clamp-1 text-base font-black text-gray-900">{{ $ranking->supplier?->nama ?? 'Supplier' }}</h3>
+                                                @if($ranking->ranking === 1)
+                                                    <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">Rekomendasi</span>
+                                                @elseif($ranking->ranking === 2)
+                                                    <span class="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-bold text-sky-700">Alternatif</span>
+                                                @endif
+                                            </div>
+                                            <p class="mt-1 text-xs text-gray-500">Skor Vi {{ $formatScore($ranking->final_score) }} - {{ $scorePercent }}% dari skala SAW.</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="w-full lg:w-64">
+                                        <div class="flex items-center justify-between text-xs font-semibold text-gray-500">
+                                            <span>Perbandingan skor</span>
+                                            <span>{{ $relativePercent }}%</span>
+                                        </div>
+                                        <div class="mt-2 h-2.5 overflow-hidden rounded-full bg-gray-100">
+                                            <div class="h-full rounded-full {{ $ranking->ranking === 1 ? 'bg-emerald-600' : 'bg-sky-500' }}" style="width: {{ $relativePercent }}%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                @if($contributions->isNotEmpty())
+                                    <div class="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+                                        @foreach($contributions as $item)
+                                            <div class="rounded-lg border border-gray-100 bg-white px-3 py-2">
+                                                <div class="flex items-start justify-between gap-2">
+                                                    <div class="min-w-0">
+                                                        <p class="line-clamp-1 text-xs font-bold text-gray-900">{{ $item['name'] }}</p>
+                                                        <p class="mt-0.5 text-[11px] text-gray-500">{{ $item['type'] === 'cost' ? 'Lebih kecil lebih baik' : 'Lebih besar lebih baik' }}</p>
+                                                    </div>
+                                                    <span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600">{{ number_format($item['weight'] * 100, 0, ',', '.') }}%</span>
+                                                </div>
+                                                <div class="mt-2 flex items-end justify-between gap-3 text-xs">
+                                                    <span class="font-semibold text-gray-700">{{ $formatAttribute($item['key'], $item['raw']) }}</span>
+                                                    <span class="text-gray-500">N {{ number_format($item['normalized'], 2, ',', '.') }}</span>
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @else
+                                    <div class="mt-4 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                                        Detail kontribusi belum tersedia. Pastikan nilai parameter supplier untuk produk ini sudah lengkap.
+                                    </div>
+                                @endif
+                            </article>
+                        @empty
+                            <div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center">
+                                <p class="font-bold text-gray-900">Ranking belum tersedia untuk produk ini.</p>
+                                <p class="mt-1 text-sm text-gray-500">Pastikan produk sudah memiliki supplier dan setiap supplier memiliki nilai parameter yang dibutuhkan SAW.</p>
+                                <div class="mt-4 flex flex-wrap justify-center gap-2">
+                                    <a href="{{ route('spk.suppliers.products', ['search' => $selectedProduct?->nama]) }}" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700" style="text-decoration:none;">Cek Barang Supplier</a>
+                                    <a href="{{ route('spk.suppliers.dss.config') }}" class="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Cek Bobot AHP</a>
+                                </div>
+                            </div>
+                        @endforelse
+                    </div>
+                </section>
+
+                @if(! empty($evaluation) && $weightRows->isNotEmpty())
+                    <details class="rounded-lg border border-gray-200 bg-white p-4 md:p-5">
+                        <summary class="cursor-pointer text-sm font-bold text-gray-900">Detail matriks nilai dan normalisasi SAW</summary>
+                        <p class="mt-2 text-sm text-gray-500">Bagian ini membantu pengecekan blackbox: nilai asli berasal dari parameter supplier, sedangkan nilai N adalah hasil normalisasi yang dipakai dalam skor SAW.</p>
+                        <div class="mt-4 overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-100 text-sm">
+                                <thead class="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500">
+                                    <tr>
+                                        <th class="px-3 py-3">Supplier</th>
+                                        @foreach($weightRows as $weight)
+                                            <th class="px-3 py-3">{{ $weight['name'] }}</th>
+                                        @endforeach
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    @foreach($evaluation as $row)
+                                        @php
+                                            $rowAttributes = collect(data_get($row, 'attributes', []));
+                                            $rowNormalized = collect(data_get($row, 'normalized', []));
+                                        @endphp
+                                        <tr>
+                                            <td class="px-3 py-3 font-bold text-gray-900">{{ data_get($row, 'name', 'Supplier') }}</td>
+                                            @foreach($weightRows as $weight)
+                                                <td class="px-3 py-3 text-gray-700">
+                                                    <div class="font-semibold">{{ $formatAttribute($weight['key'], $rowAttributes->get($weight['key'])) }}</div>
+                                                    <div class="text-xs text-gray-500">N {{ number_format((float) ($rowNormalized->get($weight['key']) ?? 0), 3, ',', '.') }}</div>
+                                                </td>
+                                            @endforeach
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
                 @endif
             </div>
 
-            @if($insights->isNotEmpty())
-            <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-                <h2 class="text-sm font-bold uppercase text-gray-600 mb-3">Insight Rekomendasi</h2>
-                <ul class="space-y-2">
-                    @foreach($insights as $insight)
-                    <li class="text-sm px-3 py-2 rounded-lg border
-                        @if($insight['severity'] === 'danger') bg-red-50 border-red-100 text-red-800
-                        @elseif($insight['severity'] === 'warning') bg-amber-50 border-amber-100 text-amber-900
-                        @elseif($insight['severity'] === 'success') bg-emerald-50 border-emerald-100 text-emerald-800
-                        @else bg-blue-50 border-blue-100 text-blue-800 @endif">
-                        {{ $insight['message'] }}
-                    </li>
-                    @endforeach
-                </ul>
-            </div>
-            @endif
+            <aside class="space-y-5">
+                <section class="rounded-lg border border-gray-200 bg-white p-5">
+                    <h2 class="text-base font-bold text-gray-900">Kesiapan Perhitungan</h2>
+                    <div class="mt-4 space-y-3">
+                        @foreach($statusSteps as $step)
+                            <div class="flex items-start gap-3">
+                                <div class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full {{ $step['done'] ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}">
+                                    @if($step['done'])
+                                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                    @else
+                                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 8v4m0 4h.01"/></svg>
+                                    @endif
+                                </div>
+                                <div>
+                                    <p class="text-sm font-bold text-gray-900">{{ $step['label'] }}</p>
+                                    <p class="text-xs text-gray-500">{{ $step['note'] }}</p>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </section>
+
+                <section class="rounded-lg border border-gray-200 bg-white p-5">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-base font-bold text-gray-900">Bobot AHP Aktif</h2>
+                            <p class="text-xs text-gray-500">Semakin besar bobot, semakin besar pengaruhnya ke SAW.</p>
+                        </div>
+                        <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">v{{ $latestConfig?->version ?? '-' }}</span>
+                    </div>
+
+                    <div class="mt-4 space-y-3">
+                        @foreach($weightRows as $weight)
+                            @php $weightPercent = number_format(min(100, max(0, $weight['weight'] * 100)), 1, '.', ''); @endphp
+                            <div>
+                                <div class="flex items-center justify-between gap-3 text-sm">
+                                    <span class="font-semibold text-gray-800">{{ $weight['name'] }}</span>
+                                    <span class="font-black text-gray-900">{{ number_format($weight['weight'] * 100, 1, ',', '.') }}%</span>
+                                </div>
+                                <div class="mt-1 h-2 overflow-hidden rounded-full bg-gray-100">
+                                    <div class="h-full rounded-full bg-emerald-600" style="width: {{ $weightPercent }}%"></div>
+                                </div>
+                                <p class="mt-1 text-[11px] text-gray-500">{{ $weight['type'] === 'cost' ? 'Cost: nilai lebih kecil lebih baik' : 'Benefit: nilai lebih besar lebih baik' }}</p>
+                            </div>
+                        @endforeach
+                    </div>
+                </section>
+
+                @if($insights->isNotEmpty())
+                    <section class="rounded-lg border border-gray-200 bg-white p-5">
+                        <h2 class="text-base font-bold text-gray-900">Insight Rekomendasi</h2>
+                        <div class="mt-4 space-y-2">
+                            @foreach($insights as $insight)
+                                <div class="rounded-lg border px-3 py-2 text-sm leading-relaxed
+                                    @if($insight['severity'] === 'danger') border-red-100 bg-red-50 text-red-800
+                                    @elseif($insight['severity'] === 'warning') border-amber-100 bg-amber-50 text-amber-900
+                                    @elseif($insight['severity'] === 'success') border-emerald-100 bg-emerald-50 text-emerald-800
+                                    @else border-sky-100 bg-sky-50 text-sky-800 @endif">
+                                    {{ $insight['message'] }}
+                                </div>
+                            @endforeach
+                        </div>
+                    </section>
+                @endif
+
+                <section class="rounded-lg border border-gray-200 bg-white p-5">
+                    <h2 class="text-base font-bold text-gray-900">Riwayat AHP</h2>
+                    <div class="mt-4 space-y-2">
+                        @forelse($configHistory as $config)
+                            <div class="flex items-center justify-between gap-3 rounded-lg border border-gray-100 px-3 py-2">
+                                <div>
+                                    <p class="text-sm font-bold text-gray-900">Versi {{ $config->version }}</p>
+                                    <p class="text-xs text-gray-500">CR {{ number_format((float) $config->cr, 4, ',', '.') }}</p>
+                                </div>
+                                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $config->is_valid ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700' }}">
+                                    {{ $config->is_valid ? 'Valid' : 'Invalid' }}
+                                </span>
+                            </div>
+                        @empty
+                            <div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                                Belum ada riwayat konfigurasi.
+                            </div>
+                        @endforelse
+                    </div>
+                </section>
+            </aside>
         </div>
-    </div>
     @endif
 </div>
-
-@if($bobots->isNotEmpty())
-@push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const labels = @json($bobots->map(fn($b) => $b->parameter->nama_parameter));
-    const data = @json($bobots->map(fn($b) => round($b->bobot, 4)));
-    const colors = ['#10b981','#8b5cf6','#f59e0b','#3b82f6','#ef4444'];
-
-    new Chart(document.getElementById('weightsPie'), {
-        type: 'pie',
-        data: { labels, datasets: [{ data, backgroundColor: colors }] },
-        options: { plugins: { legend: { position: 'bottom' } } }
-    });
-
-    new Chart(document.getElementById('weightsRadar'), {
-        type: 'radar',
-        data: {
-            labels,
-            datasets: [{ label: 'Bobot AHP', data, backgroundColor: 'rgba(16,185,129,0.2)', borderColor: '#10b981' }]
-        },
-        options: { scales: { r: { beginAtZero: true, max: Math.max(...data) * 1.2 || 1 } } }
-    });
-});
-</script>
-@endpush
-@endif
 @endsection

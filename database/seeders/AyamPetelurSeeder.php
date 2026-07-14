@@ -154,7 +154,7 @@ class AyamPetelurSeeder extends Seeder
 
             if (! $coop) {
                 $coopId = Str::uuid()->toString();
-                DB::table('unitBudidaya')->insert([
+                $payload = [
                     'id' => $coopId,
                     'jenisBudidayaId' => $jenisBudidayaId,
                     'nama' => $k['nama'],
@@ -166,9 +166,22 @@ class AyamPetelurSeeder extends Seeder
                     'updatedAt' => now(),
                     'status' => 1,
                     'isDeleted' => 0,
-                ]);
+                ];
+
+                if (Schema::hasColumn('unitBudidaya', 'umurMinggu')) {
+                    $payload['umurMinggu'] = $k['age_weeks'];
+                }
+
+                DB::table('unitBudidaya')->insert($payload);
             } else {
                 $coopId = $coop->id;
+
+                if (Schema::hasColumn('unitBudidaya', 'umurMinggu') && ((int) ($coop->umurMinggu ?? 0)) <= 0) {
+                    DB::table('unitBudidaya')->where('id', $coopId)->update([
+                        'umurMinggu' => $k['age_weeks'],
+                        'updatedAt' => now(),
+                    ]);
+                }
             }
 
             // Ensure Device
