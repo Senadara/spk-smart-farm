@@ -42,6 +42,7 @@ if (session('user.role') !== 'supplier') {
             ->latest('createdAt')
             ->take(5)
             ->get()
+            ->toBase()
             ->map(fn ($log) => [
                 'id' => 'iot-'.$log->id,
                 'title' => 'IoT '.($log->logType === 'ERROR' ? 'Error' : 'Warning'),
@@ -65,10 +66,16 @@ if (session('user.role') !== 'supplier') {
             ->latest('createdAt')
             ->take(5)
             ->get()
+            ->toBase()
             ->map(fn ($log) => [
                 'id' => 'spk-'.$log->id,
                 'title' => 'SPK Perlu Tindakan',
-                'message' => \Illuminate\Support\Str::limit($log->recommendation ?: $log->narrative ?: ($log->diagnosis_kausalitas ?: 'Tinjau hasil SPK terbaru.'), 100),
+                'message' => \Illuminate\Support\Str::limit(
+                    \App\Services\Fuzzy\NarrativeGenerator::sanitizePlainText($log->recommendation)
+                        ?: \App\Services\Fuzzy\NarrativeGenerator::sanitizePlainText($log->narrative)
+                        ?: ($log->diagnosis_kausalitas ?: 'Tinjau hasil SPK terbaru.'),
+                    100
+                ),
                 'type' => ((float) $log->output_value < 55 || $log->status_lingkungan === 'Buruk') ? 'danger' : 'warning',
                 'read_at' => null,
                 'created_at' => $log->createdAt?->diffForHumans() ?? '-',

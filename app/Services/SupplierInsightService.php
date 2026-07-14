@@ -87,16 +87,16 @@ class SupplierInsightService
             }
         }
 
-        $kecepatanParam = SpkParameter::where('nama_parameter', 'like', '%Kecepatan%')->first();
-        if ($kecepatanParam && $produkId) {
+        $pengirimanParam = SpkParameter::where('nama_parameter', 'like', '%Pengiriman%')->first();
+        if ($pengirimanParam && $produkId) {
             $slow = SpkSupplierParameterValue::where('produk_id', $produkId)
-                ->where('parameter_id', $kecepatanParam->id)
+                ->where('parameter_id', $pengirimanParam->id)
                 ->with('supplier')
-                ->orderBy('value')
+                ->orderByDesc('value')
                 ->first();
 
-            $estimatedDays = $slow && $slow->value > 0 ? round(100 / $slow->value, 1) : null;
-            if ($slow && $estimatedDays !== null && $estimatedDays >= 3) {
+            $estimatedDays = $slow ? (float) $slow->value : null;
+            if ($slow && $estimatedDays !== null && $estimatedDays >= 2) {
                 $supplierName = $slow->supplier?->nama ?? 'Supplier';
                 $insights->push([
                     'type' => 'delivery_risk',

@@ -8,6 +8,7 @@ use App\Models\SpkFuzzyProfile;
 use App\Services\Fuzzy\InputResolver;
 use App\Services\Fuzzy\MamdaniEngine;
 use App\Services\Fuzzy\NarrativeGenerator;
+use App\Services\Notifications\SpkEnvironmentAlertService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,7 @@ class FuzzyController extends Controller
         private readonly InputResolver     $resolver,
         private readonly MamdaniEngine     $engine,
         private readonly NarrativeGenerator $narrator,
+        private readonly SpkEnvironmentAlertService $environmentAlertService,
     ) {}
 
     // ──────────────────────────────────────────────────────────────
@@ -76,6 +78,8 @@ class FuzzyController extends Controller
                 'narrative'           => $narrative,
                 'recommendation'      => $result['kausalitas']['recommendation'] ?? null,
             ]);
+
+            $this->environmentAlertService->dispatchForLog($log);
 
             return response()->json([
                 'success'    => true,
@@ -151,6 +155,8 @@ class FuzzyController extends Controller
                 ? DB::table('unitBudidaya')->where('id', $log->unit_budidaya_id)->value('nama')
                 : 'Global';
 
+            $plainNarrative = NarrativeGenerator::sanitizePlainText($log->narrative);
+
             return [
                 'id'       => $log->id,
                 'date'     => \Carbon\Carbon::parse($log->createdAt)->locale('id')->diffForHumans(),
@@ -160,10 +166,10 @@ class FuzzyController extends Controller
                 'barn'     => $barn,
                 'status'   => $log->diagnosis_kausalitas ?? $lingkLabel,
                 'color'    => $color,
-                'verdict'  => $log->narrative
-                    ? \Str::limit(strip_tags($log->narrative), 120)
+                'verdict'  => $plainNarrative
+                    ? \Str::limit($plainNarrative, 120)
                     : '-',
-                'recommendation' => $log->recommendation,
+                'recommendation' => NarrativeGenerator::sanitizePlainText($log->recommendation),
                 'scores'   => [
                     'lingkungan' => $log->status_lingkungan,
                     'kesehatan'  => $log->status_kesehatan,
@@ -196,7 +202,10 @@ class FuzzyController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $log,
+            'data'    => array_merge($log->toArray(), [
+                'narrative' => NarrativeGenerator::sanitizePlainText($log->narrative),
+                'recommendation' => NarrativeGenerator::sanitizePlainText($log->recommendation),
+            ]),
         ]);
     }
 

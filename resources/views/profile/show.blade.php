@@ -51,7 +51,7 @@
     <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
             <h3 class="text-base font-bold text-[var(--color-gray-900)]">Lokasi Operasional Peternakan</h3>
-            <p class="mt-1 text-sm text-[var(--color-gray-500)]">Lokasi ini menjadi titik asal perhitungan jarak supplier pada SPK AHP-SAW.</p>
+            <p class="mt-1 text-sm text-[var(--color-gray-500)]">Lokasi ini menjadi titik asal estimasi waktu pengiriman supplier pada SPK AHP-SAW.</p>
         </div>
         @if($farmProfile?->hasCoordinates())
             <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Koordinat aktif</span>

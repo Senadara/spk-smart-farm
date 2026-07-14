@@ -10,7 +10,9 @@ use App\Services\Fuzzy\FuzzySensorCardMapper;
 use App\Services\Fuzzy\InputResolver;
 use App\Services\Fuzzy\MamdaniEngine;
 use App\Services\Fuzzy\NarrativeGenerator;
+use App\Services\Notifications\SpkEnvironmentAlertService;
 use App\Services\PeternakanService;
+use App\Services\Spk\SpkFuzzyEvaluationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -130,17 +132,9 @@ class SpkDashboardController extends Controller
     private function runFuzzyEngine(?string $coopId, ?string $commodityId = null): array
     {
         try {
-            $resolver  = app(InputResolver::class);
-            $engine    = app(MamdaniEngine::class);
-            $narrator  = app(NarrativeGenerator::class);
-            $profile   = SpkFuzzyProfile::resolveForContext($commodityId, $coopId);
+            $result = app(SpkFuzzyEvaluationService::class)->evaluate($coopId, $commodityId);
 
-            $inputs    = $resolver->resolve($coopId, $commodityId, $profile?->id);
-            $result    = $engine->processCascaded($inputs, $profile?->id, $commodityId, $coopId);
-            $barnName  = $coopId ? DB::table('unitBudidaya')->where('id', $coopId)->value('nama') : null;
-            $narrative = $narrator->generate($result, $barnName);
-
-            return array_merge($result, ['narrative' => $narrative, 'error' => null]);
+            return array_merge($result, ['error' => null]);
         } catch (\Throwable $e) {
             \Log::error('[SpkDashboard] FuzzyEngine error: ' . $e->getMessage());
             return ['error' => $e->getMessage(), 'inputs' => [], 'lingkungan' => [], 'kesehatan' => [], 'kausalitas' => [], 'narrative' => null];
@@ -149,28 +143,10 @@ class SpkDashboardController extends Controller
 
     private function persistFuzzyResult(?string $coopId, array $result, ?string $commodityId = null): SpkFuzzyLog
     {
-        return SpkFuzzyLog::create([
-            'unit_budidaya_id' => $coopId,
-            'profile_id' => $result['profile']['id'] ?? null,
-            'commodity_id' => $result['profile']['commodity_id'] ?? $commodityId,
-            'input_json' => $result['inputs'] ?? [],
-            'fuzzified_json' => [
-                'lingkungan' => $result['lingkungan']['fuzzified'] ?? [],
-                'kesehatan' => $result['kesehatan']['fuzzified'] ?? [],
-            ],
-            'rule_result_json' => [
-                'lingkungan' => $result['lingkungan']['dominant_rule'] ?? null,
-                'kesehatan' => $result['kesehatan']['dominant_rule'] ?? null,
-                'kausalitas' => $result['kausalitas'] ?? null,
-            ],
-            'status_lingkungan' => $result['lingkungan']['label'] ?? null,
-            'status_kesehatan' => $result['kesehatan']['label'] ?? null,
-            'diagnosis_kausalitas' => $result['kausalitas']['label'] ?? null,
-            'output_value' => min((float) ($result['lingkungan']['value'] ?? 0), (float) ($result['kesehatan']['value'] ?? 0)),
-            'output_label' => $result['kausalitas']['label'] ?? null,
-            'narrative' => $result['narrative'] ?? null,
-            'recommendation' => $result['kausalitas']['recommendation'] ?? null,
-        ]);
+        $log = app(SpkFuzzyEvaluationService::class)->persist($coopId, $result, $commodityId);
+        app(SpkEnvironmentAlertService::class)->dispatchForLog($log);
+
+        return $log;
     }
 
     /**
@@ -204,6 +180,8 @@ class SpkDashboardController extends Controller
                 ? DB::table('unitBudidaya')->where('id', $log->unit_budidaya_id)->value('nama')
                 : 'Global';
 
+            $plainNarrative = NarrativeGenerator::sanitizePlainText($log->narrative);
+
             return [
                 'id'        => $log->id,
                 'date'      => $createdAt->locale('id')->diffForHumans(),
@@ -214,8 +192,8 @@ class SpkDashboardController extends Controller
                 'barn'      => $barnName,
                 'status'    => $log->diagnosis_kausalitas ?? $lingkLabel,
                 'color'     => $colorMap[$lingkLabel] ?? 'gray',
-                'verdict'   => $log->narrative ? \Str::limit(strip_tags($log->narrative), 150) : '-',
-                'recommendation' => $log->recommendation ?? '-',
+                'verdict'   => $plainNarrative ? \Str::limit($plainNarrative, 150) : '-',
+                'recommendation' => NarrativeGenerator::sanitizePlainText($log->recommendation) ?: '-',
                 'raw'       => is_array($log->input_json) ? $log->input_json : [],
                 'search'    => strtolower($log->id . ' ' . $barnName . ' ' . ($log->diagnosis_kausalitas ?? '') . ' ' . $lingkLabel),
             ];
@@ -276,8 +254,8 @@ class SpkDashboardController extends Controller
                     'statusColor' => $colorMap[$lingkLabel] ?? 'gray',
                     'score'       => $gabScore,
                     'scoreColor'  => $this->scoreColor($gabScore),
-                    'title'       => $kausalitas['label'] ?? 'Diagnosis Kausalitas',
-                    'description' => $result['narrative'] ?? ($kausalitas['diagnosis'] ?? '-'),
+                    'title'       => 'Diagnosis Kausalitas',
+                    'description' => NarrativeGenerator::sanitizePlainText($result['narrative'] ?? ($kausalitas['diagnosis'] ?? '-')),
                     'link'        => '#',
                     'isMain'      => true,
                 ],
@@ -332,8 +310,8 @@ class SpkDashboardController extends Controller
                     'statusColor' => $colorMap[$lingkLabel] ?? 'gray',
                     'score'       => $gabScore,
                     'scoreColor'  => $this->scoreColor($gabScore),
-                    'title'       => $kausalitas['label'] ?? 'Diagnosis Kausalitas',
-                    'description' => $result['narrative'] ?? ($kausalitas['diagnosis'] ?? '-'),
+                    'title'       => 'Diagnosis Kausalitas',
+                    'description' => NarrativeGenerator::sanitizePlainText($result['narrative'] ?? ($kausalitas['diagnosis'] ?? '-')),
                     'link'        => '#',
                     'isMain'      => true,
                 ],
@@ -408,7 +386,6 @@ class SpkDashboardController extends Controller
 
         $labels      = [];
         $hdpActual   = [];
-        $fcrActual   = [];
         $suhuActual  = [];
         $amoniaActual= [];
         $humidityActual = [];
@@ -417,7 +394,6 @@ class SpkDashboardController extends Controller
             $inputs       = is_array($log->input_json) ? $log->input_json : [];
             $labels[]     = \Carbon\Carbon::parse($log->createdAt)->format('d/m H:i');
             $hdpActual[]  = round($inputs['hdp'] ?? 0, 1);
-            $fcrActual[]  = round($inputs['fcr'] ?? 0, 2);
             $suhuActual[] = round($inputs['suhu'] ?? 0, 1);
             $amoniaActual[]= round($inputs['amonia'] ?? 0, 1);
             $humidityActual[] = round($inputs['kelembapan'] ?? 0, 1);
@@ -435,7 +411,7 @@ class SpkDashboardController extends Controller
             }
             return [
                 'hdpComparison' => ['labels' => $weeks, 'actual' => array_fill(0, count($weeks), null), 'standard' => $hdpStd],
-                'causality'     => ['labels' => [], 'fcr' => [], 'suhu' => [], 'kelembaban' => [], 'amonia' => []],
+                'causality'     => ['labels' => [], 'suhu' => [], 'kelembaban' => [], 'amonia' => []],
             ];
         }
 
@@ -450,7 +426,6 @@ class SpkDashboardController extends Controller
             ],
             'causality' => [
                 'labels'     => $labels,
-                'fcr'        => $fcrActual,
                 'suhu'       => $suhuActual,
                 'kelembaban' => $humidityActual,
                 'amonia'     => $amoniaActual,

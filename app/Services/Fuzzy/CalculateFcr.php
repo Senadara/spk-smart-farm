@@ -29,7 +29,7 @@ class CalculateFcr
             ->where('laporan.isDeleted', 0)
             ->where('panen.isDeleted', 0)
             ->whereDate('laporan.createdAt', $today)
-            ->selectRaw('SUM(COALESCE(panen.berat, panen.jumlah * 0.06)) as totalMass')
+            ->selectRaw('SUM(COALESCE(panen.berat, 0)) as totalMass')
             ->value('totalMass');
 
         if ($eggMass <= 0) {

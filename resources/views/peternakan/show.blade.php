@@ -11,7 +11,7 @@
             'Feed Intake' => ['body' => 'Rata-rata pakan yang dikonsumsi per ekor per hari.', 'formula' => '(pakan hari ini / populasi hidup) x 1000 gram', 'source' => 'harianTernak, unitBudidaya'],
             'FCR' => ['body' => 'Feed Conversion Ratio kandang ini. Semakin kecil biasanya semakin efisien.', 'formula' => 'pakan hari ini / egg mass', 'source' => 'harianTernak, panen'],
             'Mortalitas' => ['body' => 'Persentase kematian ayam pada kandang ini.', 'formula' => '(jumlah kematian / populasi awal) x 100%', 'source' => 'kematian, laporan'],
-            'Afkir' => ['body' => 'Persentase telur/ayam afkir yang tercatat pada laporan kualitas atau operasional.', 'formula' => '(jumlah afkir / total terkait) x 100%', 'source' => 'panenRincianGrade, laporan'],
+            'Reject Telur' => ['body' => 'Persentase telur rusak/reject dari total panen hari ini.', 'formula' => '(jumlah telur reject / total telur) x 100%', 'source' => 'panenRincianGrade, grade'],
         ];
         $barnOverviewHints = [
             'Lokasi' => ['body' => 'Lokasi fisik kandang untuk membantu identifikasi unit budidaya.', 'source' => 'unitBudidaya'],
@@ -29,9 +29,9 @@
         ];
         $eggMetricHints = [
             'Total Telur' => ['body' => 'Jumlah telur yang dipanen dari kandang ini pada laporan hari ini.', 'formula' => 'SUM(panen.jumlah)', 'source' => 'panen'],
-            'Egg Mass' => ['body' => 'Berat total telur kandang hari ini.', 'formula' => 'SUM(panen.berat) atau panen.jumlah x 0.06 kg', 'source' => 'panen'],
+            'Egg Mass' => ['body' => 'Berat total telur kandang hari ini dari laporan panen mobile.', 'formula' => 'SUM(panen.berat)', 'source' => 'panen'],
             'Berat Rata-rata' => ['body' => 'Rata-rata berat telur berdasarkan total berat dan jumlah telur.', 'formula' => 'egg mass / total telur', 'source' => 'panen'],
-            'Reject/Afkir' => ['body' => 'Persentase telur reject atau afkir dari total panen.', 'formula' => '(jumlah reject / total telur) x 100%', 'source' => 'panenRincianGrade, grade'],
+            'Reject/Rusak' => ['body' => 'Persentase telur reject, rusak, retak, kotor, pecah, atau afkir dari total panen.', 'formula' => '(jumlah telur reject / total telur) x 100%', 'source' => 'panenRincianGrade, grade'],
         ];
         $canExportProductivity = in_array(session('user.role'), ['pjawab', 'owner', 'admin'], true);
     @endphp
@@ -145,16 +145,16 @@
                     {{ $barn['breed'] }} · {{ $barn['location'] }} · Umur Flock: {{ $barn['flockAge'] }} · {{ $barn['totalBirds'] }} / {{ $barn['capacity'] }} ekor
                 </p>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                 <x-dashboard-hint-toggle />
-                <a href="{{ route('peternakan', array_filter(['komoditas' => $activeKomoditasId])) }}" class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition flex items-center gap-2 no-underline">
+                <a href="{{ route('peternakan', array_filter(['komoditas' => $activeKomoditasId])) }}" class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600 transition hover:bg-gray-50 no-underline sm:w-auto sm:px-4 sm:text-sm">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
                     Kembali
                 </a>
                 @if($canExportProductivity)
                     <a
                         href="{{ route('peternakan.settlement', array_filter(['id' => $barn['id'], 'komoditas' => $activeKomoditasId])) }}"
-                        class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition flex items-center gap-2 shadow-sm no-underline"
+                        class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-medium text-white shadow-sm transition hover:bg-emerald-600 no-underline sm:w-auto sm:px-4 sm:text-sm"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         Settlement / PDF
@@ -203,7 +203,7 @@
                 ['label'=>'Feed Intake','value'=>$kpi['feedIntake'].'g','trend'=>['direction'=>'stable','value'=>'Stable','status'=>'neutral']],
                 ['label'=>'FCR','value'=>$kpi['fcr'] ?: '-','trend'=>['direction'=>'down','value'=>'-0.02','status'=>'positive']],
                 ['label'=>'Mortalitas','value'=>$kpi['mortalitas'].'%','trend'=>['direction'=>$kpi['mortalitas']>0.05?'up':'stable','value'=>$kpi['mortalitas']>0.05?'+0.01%':'Stable','status'=>$kpi['mortalitas']>0.05?'warning':'neutral']],
-                ['label'=>'Afkir','value'=>$kpi['afkir'].'%','trend'=>['direction'=>'stable','value'=>'Stable','status'=>'neutral']],
+                ['label'=>'Reject Telur','value'=>$kpi['afkir'].'%','trend'=>['direction'=>$kpi['afkir']>5?'up':'stable','value'=>$kpi['afkir']>5?'Perlu cek':'Stable','status'=>$kpi['afkir']>5?'warning':'neutral']],
             ] as $m)
                 @php
                     $hint = $detailKpiHints[$m['label']] ?? null;
@@ -221,9 +221,9 @@
 
         {{-- ═══ SENSOR TREND CHART + LIVE SENSORS ═══ --}}
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            <div class="lg:col-span-3 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                    <div class="flex items-center gap-2">
+            <div class="lg:col-span-3 bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-sm">
+                <div class="flex flex-col gap-3 mb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                    <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                         <h3 class="text-base font-semibold text-gray-800">Tren Sensor</h3>
                         <x-metric-hint title="Tren Sensor" body="Grafik ini menampilkan histori sensor kandang berdasarkan rentang jam yang dipilih." formula="AVG(sensor value) per jam" source="iot_sensor_data, iot_parameter" />
                     </div>
@@ -233,7 +233,7 @@
                                 <button @click="sensorRange=r.v; renderTrend()" :class="sensorRange===r.v ? 'bg-white shadow-sm text-gray-900':'text-gray-500 hover:text-gray-700'" class="px-2.5 py-1 text-[10px] font-semibold rounded-md transition-all" x-text="r.l"></button>
                             </template>
                         </div>
-                        <select x-model="sensorFilter" @change="renderTrend()" class="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-300">
+                        <select x-model="sensorFilter" @change="renderTrend()" class="min-w-0 flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-300 sm:flex-none">
                             <option value="all">Semua</option>
                             <option value="0">Suhu</option>
                             <option value="1">Kelembapan</option>
@@ -242,13 +242,13 @@
                         </select>
                     </div>
                 </div>
-                <div style="height: 260px;">
+                <div class="h-[220px] sm:h-[260px]">
                     <canvas x-ref="trendCanvas"></canvas>
                 </div>
             </div>
 
             {{-- Live Sensors + IoT Device --}}
-            <div class="lg:col-span-2 bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+            <div class="lg:col-span-2 bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-sm">
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center gap-2">
                         <h3 class="text-base font-semibold text-gray-800">Sensor & Perangkat</h3>
@@ -308,8 +308,8 @@
         </div>
 
         {{-- ═══ PRODUCTIVITY TREND CHART ═══ --}}
-        <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div class="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-sm">
+            <div class="flex flex-col gap-3 mb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                 <div>
                     <div class="flex items-center gap-2">
                         <h3 class="text-base font-semibold text-gray-800">Tren Produktivitas</h3>
@@ -317,13 +317,13 @@
                     </div>
                     <p class="text-xs text-gray-400 mt-0.5">HDP, HHEP, FCR, Feed Intake, Mortalitas</p>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                     <div class="flex bg-gray-100 rounded-lg p-0.5">
                         <template x-for="r in [{v:'7d',l:'7H'},{v:'14d',l:'14H'},{v:'30d',l:'30H'}]">
                             <button @click="prodRange=r.v; renderProd()" :class="prodRange===r.v ? 'bg-white shadow-sm text-gray-900':'text-gray-500 hover:text-gray-700'" class="px-2.5 py-1 text-[10px] font-semibold rounded-md transition-all" x-text="r.l"></button>
                         </template>
                     </div>
-                    <select x-model="prodFilter" @change="renderProd()" class="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-300">
+                    <select x-model="prodFilter" @change="renderProd()" class="min-w-0 flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-300 sm:flex-none">
                         <option value="all">Semua</option>
                         <option value="0">HDP</option>
                         <option value="1">HHEP</option>
@@ -333,7 +333,7 @@
                     </select>
                 </div>
             </div>
-            <div style="height: 280px;">
+            <div class="h-[230px] sm:h-[280px]">
                 <canvas x-ref="prodCanvas"></canvas>
             </div>
         </div>
@@ -346,7 +346,7 @@
             $rejectRate = $eggQuality['rejectRate'] ?? null;
             $hasMissingEggFields = !empty($eggQuality['missingFields'] ?? []);
         @endphp
-        <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+        <div class="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-sm">
             <div class="flex flex-wrap items-start justify-between gap-3 mb-5">
                 <div>
                     <div class="flex items-center gap-2">
@@ -372,7 +372,7 @@
                 </div>
             @endif
 
-            <div class="grid grid-cols-1 {{ $hasMissingEggFields ? 'md:grid-cols-3' : 'md:grid-cols-2' }} gap-6">
+            <div class="grid grid-cols-1 {{ $hasMissingEggFields ? 'md:grid-cols-3' : 'md:grid-cols-2' }} gap-4 sm:gap-6">
                 <div>
                     <div class="mb-3 flex items-center gap-1">
                         <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Distribusi Grade</p>
@@ -416,7 +416,7 @@
                             ['label' => 'Total Telur', 'value' => number_format((float)($eggQuality['totalEggs'] ?? 0), 0, ',', '.'), 'class' => 'text-gray-900'],
                             ['label' => 'Egg Mass', 'value' => number_format((float)($eggQuality['totalWeightKg'] ?? 0), 2, ',', '.') . ' kg', 'class' => 'text-gray-900'],
                             ['label' => 'Berat Rata-rata', 'value' => $eggQuality['avgWeightGram'] !== null ? number_format((float)$eggQuality['avgWeightGram'], 1, ',', '.') . 'g' : '-', 'class' => 'text-gray-900'],
-                            ['label' => 'Reject/Afkir', 'value' => $rejectRate !== null ? number_format((float)$rejectRate, 2, ',', '.') . '%' : '-', 'class' => $rejectRate !== null && $rejectRate > 5 ? 'text-amber-600' : 'text-gray-900'],
+                            ['label' => 'Reject/Rusak', 'value' => $rejectRate !== null ? number_format((float)$rejectRate, 2, ',', '.') . '%' : '-', 'sub' => isset($eggQuality['rejectCount']) ? number_format((float)($eggQuality['rejectCount'] ?? 0), ($eggQuality['rejectUnit'] ?? 'butir') === 'kg' ? 2 : 0, ',', '.') . ' ' . ($eggQuality['rejectUnit'] ?? 'butir') : null, 'class' => $rejectRate !== null && $rejectRate > 5 ? 'text-amber-600' : 'text-gray-900'],
                         ] as $metric)
                             @php
                                 $hint = $eggMetricHints[$metric['label']];
@@ -426,7 +426,10 @@
                                     <p class="text-[10px] text-gray-400 uppercase font-semibold">{{ $metric['label'] }}</p>
                                     <x-metric-hint :title="$metric['label']" :body="$hint['body']" :formula="$hint['formula']" :source="$hint['source']" />
                                 </div>
-                                <p class="mt-1 text-xl font-black {{ $metric['class'] }}">{{ $metric['value'] }}</p>
+                                <p class="mt-1 text-lg sm:text-xl font-black {{ $metric['class'] }}">{{ $metric['value'] }}</p>
+                                @if(!empty($metric['sub']))
+                                    <p class="mt-0.5 text-[11px] font-medium text-gray-400">{{ $metric['sub'] }}</p>
+                                @endif
                             </div>
                         @endforeach
                     </div>
@@ -454,7 +457,7 @@
                         <p class="text-[11px] text-gray-500 mt-0.5">Ringkasan kelengkapan data yang dipakai untuk membaca kondisi kandang hari ini.</p>
                     </div>
                     <div class="flex items-center gap-2">
-                        <x-metric-hint title="Status data harian" body="Audit ini memberi tahu data mana yang tersedia, kosong, atau memakai estimasi agar hasil dashboard tidak disalahartikan." source="laporan, panen, harianTernak, kematian, sensor" />
+                        <x-metric-hint title="Status data harian" body="Audit ini memberi tahu data mana yang tersedia atau masih perlu dilengkapi agar hasil dashboard tidak disalahartikan." source="laporan, panen, harianTernak, kematian, sensor" />
                         <span class="text-[11px] font-semibold text-gray-400">{{ $dailyDataAudit['date'] ?? '' }}</span>
                     </div>
                 </div>
@@ -464,12 +467,12 @@
                             $auditCls = [
                                 'ready' => 'bg-emerald-50 text-emerald-700 border-emerald-100',
                                 'empty' => 'bg-amber-50 text-amber-700 border-amber-100',
-                                'fallback' => 'bg-sky-50 text-sky-700 border-sky-100',
+                                'warning' => 'bg-orange-50 text-orange-700 border-orange-100',
                             ][$item['status']] ?? 'bg-gray-50 text-gray-600 border-gray-100';
                             $statusText = [
                                 'ready' => 'tersedia',
                                 'empty' => 'belum ada',
-                                'fallback' => 'estimasi',
+                                'warning' => 'perlu data',
                             ][$item['status']] ?? 'dicek';
                         @endphp
                         <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold {{ $auditCls }}">
@@ -481,7 +484,7 @@
         </div>
 
         @if(false)
-        <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+        <div class="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-sm">
             <h3 class="text-base font-semibold text-gray-800 mb-5">Legacy Egg Production Details (Disabled)</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {{-- Size Distribution --}}
@@ -518,30 +521,32 @@
         {{-- ═══ PRODUCTION LOG TABLE ═══ --}}
         @endif
 
-        <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+        <div class="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-sm">
             <div class="mb-4 flex items-center gap-2">
                 <h3 class="text-base font-semibold text-gray-800">Log Produksi 7 Hari</h3>
-                <x-metric-hint title="Log Produksi 7 Hari" body="Tabel ini menampilkan ringkasan laporan produksi kandang selama tujuh hari terakhir." source="laporan, panen, harianTernak, kematian" />
+                <x-metric-hint title="Log Produksi 7 Hari" body="Tabel ini menampilkan produksi tujuh hari terakhir. Reject khusus telur rusak/reject, sedangkan mortalitas menghitung ayam mati dari laporan kematian." source="laporan, panen, panenRincianGrade, harianTernak, kematian" />
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-gray-100">
-                            @foreach (['Tanggal','Telur','Reject','Pakan (kg)','Air (L)','Mortalitas','HDP'] as $th)
+                            @foreach (['Tanggal','Telur','Reject','Pakan (kg)','Mortalitas','HDP'] as $th)
                                 <th class="text-{{ $loop->first ? 'left' : 'right' }} py-2.5 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">{{ $th }}</th>
                             @endforeach
                         </tr>
                     </thead>
                     <tbody>
                         @foreach ($productionLog as $log)
+                            @php
+                                $mortalityCount = (float) ($log['mortalityCount'] ?? (is_numeric($log['mortality']) ? $log['mortality'] : 0));
+                            @endphp
                             <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                                 <td class="py-2.5 px-3 font-medium text-gray-900">{{ $log['date'] }}</td>
                                 <td class="py-2.5 px-3 text-right text-gray-700">{{ $log['eggs'] }}</td>
                                 <td class="py-2.5 px-3 text-right text-gray-500">{{ $log['rejects'] }}</td>
                                 <td class="py-2.5 px-3 text-right text-gray-500">{{ is_numeric($log['feedKg']) ? number_format($log['feedKg']) : $log['feedKg'] }}</td>
-                                <td class="py-2.5 px-3 text-right text-gray-500">{{ is_numeric($log['waterL']) ? number_format($log['waterL']) : $log['waterL'] }}</td>
                                 <td class="py-2.5 px-3 text-right">
-                                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ $log['mortality'] > 2 ? 'text-red-600 bg-red-50' : 'text-emerald-600 bg-emerald-50' }}">{{ $log['mortality'] }}</span>
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ $mortalityCount > 2 ? 'text-red-600 bg-red-50' : 'text-emerald-600 bg-emerald-50' }}">{{ $log['mortality'] }}</span>
                                 </td>
                                 <td class="py-2.5 px-3 text-right font-bold text-gray-900">{{ $log['hdp'] }}</td>
                             </tr>
@@ -567,7 +572,7 @@
             $taskLink = route('spk.tasks.index', ['coop_id' => $barn['id']]);
         @endphp
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+            <div class="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-sm">
                 <div class="flex items-start justify-between gap-3">
                     <div>
                         <h3 class="text-base font-semibold text-gray-800">Analisis SPK</h3>
@@ -593,12 +598,12 @@
                         <span class="rounded-full border px-2.5 py-1 text-[11px] font-semibold {{ $chipCls }}">{{ $msg['mode'] }}</span>
                     @endforeach
                 </div>
-                <a href="{{ $spkLink }}" class="mt-5 inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition no-underline">
+                <a href="{{ $spkLink }}" class="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition no-underline sm:w-auto sm:px-4 sm:text-sm">
                     Buka Analisa SPK Kandang Ini
                 </a>
             </div>
 
-            <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+            <div class="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-sm">
                 <div class="flex items-start justify-between gap-3 mb-4">
                     <div>
                         <h3 class="text-base font-semibold text-gray-800">Aktivitas Petugas</h3>
@@ -606,7 +611,7 @@
                     </div>
                     <div class="flex items-center gap-2">
                         <x-metric-hint title="Aktivitas Petugas" body="Aktivitas ini merangkum laporan atau tindakan terbaru yang berkaitan dengan kandang." source="laporan, spk_action_tasks, spk_action_reports" />
-                        <a href="{{ $taskLink }}" class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition no-underline">Penugasan</a>
+                        <a href="{{ $taskLink }}" class="inline-flex items-center justify-center rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100 no-underline sm:px-3 sm:text-xs">Penugasan</a>
                     </div>
                 </div>
                 <div class="space-y-2">
@@ -632,7 +637,7 @@
         @if(false)
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {{-- SPK Messages --}}
-            <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+            <div class="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-sm">
                 <div class="flex items-center gap-2 mb-4">
                     <svg class="w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
                     <h3 class="text-base font-semibold text-gray-800">Analisis SPK</h3>
@@ -655,7 +660,7 @@
             </div>
 
             {{-- Activity Log --}}
-            <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+            <div class="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-sm">
                 <h3 class="text-base font-semibold text-gray-800 mb-4">Aktivitas Petugas Hari Ini</h3>
                 <div class="relative pl-4 border-l-2 border-gray-200 space-y-5">
                     @foreach ($activityLog as $act)

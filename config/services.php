@@ -31,4 +31,15 @@ return [
         ],
     ],
 
+    'node_notifications' => [
+        'base_url' => env('NODE_NOTIFICATION_BASE_URL', env('API_BASE_URL', 'http://node-api:4000/api')),
+        'internal_token' => env('SPK_INTERNAL_NOTIFICATION_TOKEN'),
+        'timeout' => env('NODE_NOTIFICATION_TIMEOUT', 10),
+    ],
+
+    'spk_notifications' => [
+        'enabled' => env('SPK_NOTIFICATION_ENABLED', true),
+        'cooldown_minutes' => env('SPK_NOTIFICATION_COOLDOWN_MINUTES', 30),
+    ],
+
 ];

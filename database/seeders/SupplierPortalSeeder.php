@@ -9,6 +9,7 @@ use App\Models\SpkParameter;
 use App\Models\SpkSupplierParameterValue;
 use App\Models\SupplierOrder;
 use App\Models\SupplierOrderDetail;
+use App\Models\SupplierOrderRating;
 use App\Models\SupplierProduct;
 use App\Models\SupplierStore;
 use App\Models\User;
@@ -114,6 +115,7 @@ class SupplierPortalSeeder extends Seeder
                 ]
             );
         });
+        $masterSupplier = $this->seedSpkAlternative($store);
 
         $orders = [
             [
@@ -136,6 +138,7 @@ class SupplierPortalSeeder extends Seeder
                 'status' => 'selesai',
                 'product' => 2,
                 'quantity' => 10,
+                'rating' => 4,
             ],
         ];
 
@@ -162,14 +165,27 @@ class SupplierPortalSeeder extends Seeder
                     'isDeleted' => false,
                 ]
             );
-        }
 
-        $this->seedSpkAlternative($store);
+            if ($item['status'] === 'selesai') {
+                SupplierOrderRating::query()->updateOrCreate(
+                    ['order_id' => $order->id],
+                    [
+                        'user_id' => $customer->id,
+                        'store_id' => $store->id,
+                        'supplier_id' => $masterSupplier->id,
+                        'product_id' => $product->id,
+                        'master_produk_id' => null,
+                        'rating' => $item['rating'] ?? 4,
+                        'note' => 'Produk diterima sesuai pesanan demo.',
+                    ]
+                );
+            }
+        }
 
         $this->command?->info('SupplierPortalSeeder: akun, toko, produk, pesanan, dan alternatif SPK siap.');
     }
 
-    private function seedSpkAlternative(SupplierStore $store): void
+    private function seedSpkAlternative(SupplierStore $store): MasterSupplier
     {
         $supplier = MasterSupplier::query()->updateOrCreate(
             ['nama' => $store->nama],
@@ -193,8 +209,8 @@ class SupplierPortalSeeder extends Seeder
 
         $values = [
             'Harga' => 378000,
-            'Kualitas' => 90,
-            'Kecepatan Pengiriman' => 50,
+            'Kualitas' => 4.5,
+            'Waktu Pengiriman' => 0.5,
         ];
 
         foreach ($values as $parameterName => $value) {
@@ -212,5 +228,7 @@ class SupplierPortalSeeder extends Seeder
                 ['value' => $value]
             );
         }
+
+        return $supplier;
     }
 }

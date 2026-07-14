@@ -3,16 +3,20 @@
 namespace App\Http\Controllers\Spk;
 
 use App\Http\Controllers\Controller;
+use App\Models\MasterProduk;
 use App\Models\MasterSupplier;
 use App\Models\SpkParameter;
+use App\Models\SpkRanking;
 use App\Models\SpkSupplierParameterValue;
 use App\Models\SupplierOrder;
 use App\Models\SupplierOrderDetail;
+use App\Models\SupplierOrderRating;
 use App\Models\SupplierProduct;
 use App\Models\SupplierProductCategory;
 use App\Models\SupplierStore;
 use App\Services\SupplierDistanceService;
 use App\Support\SpkDssActorId;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,7 +48,10 @@ class SupplierRecommendationController extends Controller
             });
         }
 
-        $suppliers = $query->orderByDesc('rating')->get()->map(fn ($s) => $this->formatSupplierCard($s, $dssActorId));
+        $suppliers = $query->orderBy('nama')->get()
+            ->map(fn ($s) => $this->formatSupplierCard($s, $dssActorId))
+            ->sortBy(fn (array $supplier) => $supplier['distance_value'] ?? 9999)
+            ->values();
         $orderSummary = $this->orderSummary($dssActorId);
 
         return view('spk.suppliers.index', [
@@ -115,7 +122,7 @@ class SupplierRecommendationController extends Controller
         ]);
     }
 
-    public function addToCart(Request $request): RedirectResponse
+    public function addToCart(Request $request): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'product_id' => 'required|string|exists:produk,id',
@@ -134,14 +141,28 @@ class SupplierRecommendationController extends Controller
 
         $request->session()->put('supplier_cart', $cart);
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Barang ditambahkan ke keranjang.',
+                'cart' => $this->cartSummary($request),
+            ]);
+        }
+
         return back()->with('success', 'Barang ditambahkan ke keranjang.');
     }
 
-    public function removeFromCart(Request $request, SupplierProduct $product): RedirectResponse
+    public function removeFromCart(Request $request, SupplierProduct $product): RedirectResponse|JsonResponse
     {
         $cart = $request->session()->get('supplier_cart', []);
         unset($cart[$product->id]);
         $request->session()->put('supplier_cart', $cart);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Barang dihapus dari keranjang.',
+                'cart' => $this->cartSummary($request),
+            ]);
+        }
 
         return back()->with('success', 'Barang dihapus dari keranjang.');
     }
@@ -318,7 +339,7 @@ class SupplierRecommendationController extends Controller
         $allowedStatuses = ['all', 'menunggu', 'diterima', 'selesai', 'ditolak', 'dibatalkan', 'expired'];
 
         $query = SupplierOrder::query()
-            ->with(['store', 'details.product'])
+            ->with(['store', 'details.product', 'rating'])
             ->where('userId', $userId)
             ->where('isDeleted', false);
 
@@ -343,6 +364,71 @@ class SupplierRecommendationController extends Controller
             'statusCounts' => $statusCounts,
             'statusLabels' => $this->orderStatusLabels(),
         ]);
+    }
+
+    public function rateOrder(Request $request, SupplierOrder $order): RedirectResponse
+    {
+        $userId = SpkDssActorId::resolve($request);
+        if (! $userId || $order->userId !== $userId || $order->isDeleted) {
+            abort(404);
+        }
+
+        if ($order->status !== 'selesai') {
+            return back()->with('error', 'Rating hanya dapat diberikan setelah pesanan berstatus selesai.');
+        }
+
+        $validated = $request->validate([
+            'rating' => 'required|integer|min:1|max:5',
+            'note' => 'nullable|string|max:500',
+        ]);
+
+        $order->loadMissing(['store', 'details.product']);
+        $supplier = $order->store ? $this->supplierForStore($order->store) : null;
+        $firstProduct = $order->details->first(fn (SupplierOrderDetail $detail) => $detail->product !== null)?->product;
+        $firstMasterProduk = $firstProduct ? $this->resolveOrCreateMasterProdukForSupplierProduct($firstProduct) : null;
+        $rating = (int) $validated['rating'];
+        $note = trim((string) ($validated['note'] ?? ''));
+
+        DB::transaction(function () use ($order, $userId, $supplier, $firstProduct, $firstMasterProduk, $rating, $note) {
+            SupplierOrderRating::query()->updateOrCreate(
+                ['order_id' => $order->id],
+                [
+                    'user_id' => $userId,
+                    'store_id' => $order->tokoId,
+                    'supplier_id' => $supplier?->id,
+                    'product_id' => $firstProduct?->id,
+                    'master_produk_id' => $firstMasterProduk?->id,
+                    'rating' => $rating,
+                    'note' => $note !== '' ? $note : null,
+                ]
+            );
+
+            if (! $supplier) {
+                return;
+            }
+
+            $produkIds = $this->syncSupplierQualityRating($supplier, $order, $rating);
+            if ($produkIds !== []) {
+                SpkRanking::query()
+                    ->where('supplier_id', $supplier->id)
+                    ->whereIn('produk_id', $produkIds)
+                    ->delete();
+            }
+
+            $averageRating = SupplierOrderRating::query()
+                ->where('supplier_id', $supplier->id)
+                ->avg('rating');
+
+            $supplier->forceFill([
+                'rating' => round((float) ($averageRating ?: $rating), 1),
+            ])->save();
+        });
+
+        $message = $supplier
+            ? 'Rating supplier berhasil disimpan dan nilai kualitas SPK diperbarui.'
+            : 'Rating berhasil disimpan. Toko ini belum terhubung ke master supplier, sehingga nilai SPK belum diperbarui.';
+
+        return back()->with('success', $message);
     }
 
     public function cancelOrder(Request $request, SupplierOrder $order): RedirectResponse
@@ -371,6 +457,10 @@ class SupplierRecommendationController extends Controller
             ? 'https://www.google.com/maps/search/?api=1&query='.$s->latitude.','.$s->longitude
             : null;
 
+        $productCount = $store
+            ? $store->products()->where('isDeleted', false)->where('stok', '>', 0)->count()
+            : 0;
+
         return [
             'id' => $s->id,
             'name' => $s->nama,
@@ -379,12 +469,9 @@ class SupplierRecommendationController extends Controller
             'distance_value' => $distance,
             'delivery_estimate' => $this->distanceService->deliveryEstimateLabel($distance),
             'has_store' => $store !== null,
-            'store_product_count' => $store
-                ? $store->products()->where('isDeleted', false)->where('stok', '>', 0)->count()
-                : 0,
+            'store_product_count' => $productCount,
             'maps_url' => $mapsUrl,
-            'score' => (int) round(($s->rating ?? 0) * 20),
-            'rating' => $s->rating ?? 0,
+            'score' => $this->supplierDisplayScore($s, $userId, $distance, $productCount),
             'reviews' => 0,
             'price_tier' => 'Rp',
             'categories' => array_map('ucfirst', $categories),
@@ -437,8 +524,17 @@ class SupplierRecommendationController extends Controller
             ? $this->distanceService->distanceToCoordinates($store->latitude, $store->longitude, $userId)
             : null;
 
-        $score = $supplier
-            ? (int) round(($supplier->rating ?? 0) * 20)
+        $rankingScore = $supplier && $userId
+            ? SpkRanking::query()
+                ->where('user_id', $userId)
+                ->where('supplier_id', $supplier->id)
+                ->where('is_valid', true)
+                ->orderByDesc('last_calculated_at')
+                ->value('final_score')
+            : null;
+
+        $score = $rankingScore !== null
+            ? (int) round(min(1, max(0, (float) $rankingScore)) * 100)
             : (int) max(55, round(92 - min($distance ?? 80, 80) * 0.25));
 
         return [
@@ -462,6 +558,31 @@ class SupplierRecommendationController extends Controller
             'distance_sort' => $distance ?? 9999,
             'delivery' => $this->distanceService->deliveryEstimateLabel($distance),
         ];
+    }
+
+    private function supplierDisplayScore(MasterSupplier $supplier, ?string $userId, ?float $distance, int $productCount): int
+    {
+        $rankingScore = $userId
+            ? SpkRanking::query()
+                ->where('user_id', $userId)
+                ->where('supplier_id', $supplier->id)
+                ->where('is_valid', true)
+                ->orderByDesc('last_calculated_at')
+                ->value('final_score')
+            : null;
+
+        if ($rankingScore !== null) {
+            return (int) round(min(1, max(0, (float) $rankingScore)) * 100);
+        }
+
+        $distanceScore = $distance !== null
+            ? max(45, 100 - (min($distance, 80) * 0.7))
+            : 70;
+        $catalogScore = $productCount > 0
+            ? min(100, 65 + min($productCount, 25))
+            : 45;
+
+        return (int) round(($distanceScore * 0.55) + ($catalogScore * 0.45));
     }
 
     private function cartSummary(Request $request): array
@@ -535,6 +656,79 @@ class SupplierRecommendationController extends Controller
             'dibatalkan' => 'Dibatalkan',
             'expired' => 'Kedaluwarsa',
         ];
+    }
+
+    /**
+     * @return array<int>
+     */
+    private function syncSupplierQualityRating(MasterSupplier $supplier, SupplierOrder $order, int $rating): array
+    {
+        $qualityParameter = SpkParameter::query()
+            ->where('nama_parameter', 'like', '%Kualitas%')
+            ->first();
+
+        if (! $qualityParameter) {
+            return [];
+        }
+
+        $updatedProdukIds = [];
+        foreach ($order->details as $detail) {
+            if (! $detail->product) {
+                continue;
+            }
+
+            $masterProduk = $this->resolveOrCreateMasterProdukForSupplierProduct($detail->product);
+            if (! $masterProduk) {
+                continue;
+            }
+
+            $supplier->produks()->syncWithoutDetaching([$masterProduk->id]);
+            SpkSupplierParameterValue::query()->updateOrCreate(
+                [
+                    'supplier_id' => $supplier->id,
+                    'produk_id' => $masterProduk->id,
+                    'parameter_id' => $qualityParameter->id,
+                ],
+                ['value' => $rating]
+            );
+
+            $updatedProdukIds[] = $masterProduk->id;
+        }
+
+        return array_values(array_unique($updatedProdukIds));
+    }
+
+    private function resolveOrCreateMasterProdukForSupplierProduct(SupplierProduct $product): ?MasterProduk
+    {
+        $productName = trim((string) $product->nama);
+        if ($productName === '') {
+            return null;
+        }
+
+        $normalized = $this->normalizeProductName($productName);
+        $masterProduk = MasterProduk::query()
+            ->get()
+            ->first(function (MasterProduk $produk) use ($normalized) {
+                $masterName = $this->normalizeProductName($produk->nama);
+
+                return $masterName === $normalized
+                    || str_contains($masterName, $normalized)
+                    || str_contains($normalized, $masterName);
+            });
+
+        return $masterProduk ?? MasterProduk::query()->firstOrCreate(
+            ['nama' => $productName],
+            ['deskripsi' => $product->deskripsi]
+        );
+    }
+
+    private function normalizeProductName(string $name): string
+    {
+        $name = strtolower($name);
+        $name = preg_replace('/(\d+)\s+(kg|g|mg|ml|l|liter|dosis|butir)\b/', '$1$2', $name) ?? $name;
+        $name = preg_replace('/[^a-z0-9]+/', ' ', $name) ?? $name;
+
+        return trim($name);
     }
 
     private function productIcon(string $nama): string

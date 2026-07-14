@@ -25,6 +25,8 @@ class IotDevice extends Model
         'deviceCode',
         'deviceName',
         'pollingInterval',
+        'mqttTopic',
+        'webhookToken',
         'status',
         'installedAt',
         'lastSeenAt',

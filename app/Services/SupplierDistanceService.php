@@ -77,29 +77,35 @@ class SupplierDistanceService
         return (int) max(30, ceil(($distanceKm / $averageSpeedKmh) * 60 + $handlingMinutes));
     }
 
+    public function estimatedDeliveryDays(?float $distanceKm): ?float
+    {
+        if ($distanceKm === null) {
+            return null;
+        }
+
+        return match (true) {
+            $distanceKm <= 40 => 0.5,
+            $distanceKm <= 150 => 1.0,
+            $distanceKm <= 350 => 2.0,
+            $distanceKm <= 700 => 3.0,
+            default => (float) min(7, max(4, (int) ceil($distanceKm / 300))),
+        };
+    }
+
     public function deliveryEstimateLabel(?float $distanceKm): string
     {
-        $minutes = $this->estimatedDeliveryMinutes($distanceKm);
-        if ($minutes === null) {
+        $days = $this->estimatedDeliveryDays($distanceKm);
+        if ($days === null) {
             return 'Estimasi pengiriman belum tersedia';
         }
 
-        if ($minutes < 60) {
-            return "Estimasi {$minutes} menit";
+        if ($days <= 0.5) {
+            return 'Estimasi same day';
         }
 
-        $hours = intdiv($minutes, 60);
-        $remainingMinutes = $minutes % 60;
+        $roundedDays = (int) ceil($days);
 
-        if ($hours < 24) {
-            return $remainingMinutes > 0
-                ? "Estimasi {$hours} jam {$remainingMinutes} menit"
-                : "Estimasi {$hours} jam";
-        }
-
-        $days = (int) ceil($hours / 24);
-
-        return "Estimasi {$days} hari";
+        return "Estimasi {$roundedDays} hari";
     }
 
     public function haversineKm(float $originLat, float $originLng, float $targetLat, float $targetLng): float

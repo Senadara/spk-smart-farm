@@ -84,6 +84,7 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
         Route::get('/dss/api/weights', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiWeights'])->name('spk.suppliers.dss.api.weights');
         Route::get('/dss/api/insights', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiInsights'])->name('spk.suppliers.dss.api.insights');
         Route::get('/orders', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'orders'])->name('spk.suppliers.orders.index');
+        Route::patch('/orders/{order}/rating', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'rateOrder'])->name('spk.suppliers.orders.rating');
         Route::patch('/orders/{order}/cancel', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'cancelOrder'])->name('spk.suppliers.orders.cancel');
         Route::post('/cart', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'addToCart'])->name('spk.suppliers.cart.add');
         Route::delete('/cart/{product}', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'removeFromCart'])->name('spk.suppliers.cart.remove');
@@ -127,6 +128,7 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
 
         // CRUD Endpoints - Connections
         Route::post('/connections', [IotController::class, 'storeConnection'])->name('iot.connections.store');
+        Route::post('/connections/{id}/test', [IotController::class, 'testConnection'])->name('iot.connections.test');
         Route::put('/connections/{id}', [IotController::class, 'updateConnection'])->name('iot.connections.update');
         Route::delete('/connections/{id}', [IotController::class, 'destroyConnection'])->name('iot.connections.destroy');
 

@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Models\InventoryItem;
 use App\Models\IotDeviceLog;
 use App\Models\SpkActionTask;
 use App\Models\SpkFuzzyLog;
+use App\Services\Fuzzy\NarrativeGenerator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -17,6 +19,7 @@ class DashboardController extends Controller
         $livestock = $this->livestockProductivity();
         $crop = $this->cropProductivity();
         $spk = $this->spkProductivityStatus();
+        $inventory = $this->inventoryStockSummary();
 
         return view('dashboard.index', [
             'user' => session('user', []),
@@ -24,8 +27,9 @@ class DashboardController extends Controller
             'livestock' => $livestock,
             'crop' => $crop,
             'spk' => $spk,
+            'inventory' => $inventory,
             'trend' => $this->productivityTrend(),
-            'alerts' => $this->alerts(),
+            'alerts' => $this->alerts($inventory),
             'quickLinks' => $this->quickLinks(),
         ]);
     }
@@ -177,7 +181,12 @@ class DashboardController extends Controller
             ->get()
             ->map(fn (SpkFuzzyLog $log) => [
                 'title' => $this->spkWarningTitle($log),
-                'message' => Str::limit($log->recommendation ?: $log->narrative ?: 'Tinjau hasil analisa SPK terbaru untuk menentukan tindakan.', 120),
+                'message' => Str::limit(
+                    NarrativeGenerator::sanitizePlainText($log->recommendation)
+                        ?: NarrativeGenerator::sanitizePlainText($log->narrative)
+                        ?: 'Tinjau hasil analisa SPK terbaru untuk menentukan tindakan.',
+                    120
+                ),
                 'time' => $log->createdAt?->diffForHumans() ?? '-',
                 'url' => route('spk.dashboard', array_filter([
                     'history_id' => $log->id,
@@ -299,6 +308,126 @@ class DashboardController extends Controller
         ];
     }
 
+    private function inventoryStockSummary(): array
+    {
+        if (! Schema::hasTable('inventory_items')) {
+            return [
+                'total' => 0,
+                'total_label' => '0 item',
+                'critical' => 0,
+                'warning' => 0,
+                'safe' => 0,
+                'needs_restock' => 0,
+                'badge_label' => 'Belum ada data',
+                'tone' => 'gray',
+                'message' => 'Data stok gudang belum tersedia.',
+                'items' => [],
+                'alerts' => [],
+            ];
+        }
+
+        $items = InventoryItem::query()
+            ->where('is_active', true)
+            ->orderBy('category')
+            ->orderBy('name')
+            ->get()
+            ->map(function (InventoryItem $item) {
+                $daysLeft = $item->daily_usage > 0
+                    ? (int) floor((float) $item->stock / max((float) $item->daily_usage, 0.0001))
+                    : null;
+                $status = $this->inventoryStatus($item, $daysLeft);
+                $score = $this->inventoryRestockScore($item, $daysLeft, $status);
+
+                return [
+                    'id' => $item->id,
+                    'name' => $item->name,
+                    'category' => $item->category ?: 'Umum',
+                    'stock' => (float) $item->stock,
+                    'stock_label' => $this->formatQuantity((float) $item->stock, $item->unit),
+                    'unit' => $item->unit,
+                    'days_left' => $daysLeft,
+                    'days_left_label' => $daysLeft === null ? 'pemakaian belum tercatat' : $daysLeft.' hari',
+                    'minimum_stock' => (float) $item->minimum_stock,
+                    'reorder_point' => (float) $item->reorder_point,
+                    'status' => $status,
+                    'score' => $score,
+                ];
+            });
+
+        $critical = $items->where('status', 'critical')->count();
+        $warning = $items->where('status', 'warning')->count();
+        $safe = $items->where('status', 'safe')->count();
+        $needsRestock = $critical + $warning;
+
+        if ($critical > 0) {
+            $tone = 'red';
+            $badge = 'Restock urgent';
+            $message = $critical.' item sudah berada di bawah stok minimum atau sisa harinya kritis.';
+        } elseif ($warning > 0) {
+            $tone = 'amber';
+            $badge = 'Perlu restock';
+            $message = $warning.' item mendekati reorder point. Siapkan pemesanan sebelum stok menipis.';
+        } elseif ($items->isEmpty()) {
+            $tone = 'gray';
+            $badge = 'Belum ada data';
+            $message = 'Belum ada item inventaris aktif yang dapat dipantau.';
+        } else {
+            $tone = 'emerald';
+            $badge = 'Stok aman';
+            $message = 'Stok gudang aktif masih berada di atas batas minimum.';
+        }
+
+        $priorityItems = $items
+            ->filter(fn (array $item) => in_array($item['status'], ['critical', 'warning'], true))
+            ->sortByDesc('score')
+            ->take(3)
+            ->values()
+            ->all();
+
+        return [
+            'total' => $items->count(),
+            'total_label' => $items->count().' item',
+            'critical' => $critical,
+            'warning' => $warning,
+            'safe' => $safe,
+            'needs_restock' => $needsRestock,
+            'badge_label' => $badge,
+            'tone' => $tone,
+            'message' => $message,
+            'items' => $priorityItems,
+            'alerts' => collect($priorityItems)->map(fn (array $item) => [
+                'sort_key' => now()->timestamp,
+                'type' => $item['status'] === 'critical' ? 'danger' : 'warning',
+                'title' => 'Stok: '.$item['name'],
+                'message' => 'Sisa '.$item['stock_label'].'; estimasi '.$item['days_left_label'].'. Prioritaskan restock gudang.',
+                'time' => 'Hari ini',
+                'url' => route('inventory'),
+            ])->all(),
+        ];
+    }
+
+    private function inventoryStatus(InventoryItem $item, ?int $daysLeft): string
+    {
+        if ($item->stock <= $item->minimum_stock || ($daysLeft !== null && $daysLeft <= max(2, (int) $item->lead_time_days))) {
+            return 'critical';
+        }
+
+        if ($item->stock <= $item->reorder_point || ($daysLeft !== null && $daysLeft <= (int) $item->lead_time_days + 5)) {
+            return 'warning';
+        }
+
+        return 'safe';
+    }
+
+    private function inventoryRestockScore(InventoryItem $item, ?int $daysLeft, string $status): float
+    {
+        $statusWeight = ['critical' => 0.65, 'warning' => 0.4, 'safe' => 0.1][$status] ?? 0.1;
+        $daysWeight = $daysLeft === null ? 0.05 : max(0, min(0.25, (30 - min($daysLeft, 30)) / 120));
+        $leadWeight = min(0.1, ((int) $item->lead_time_days) / 80);
+
+        return round($statusWeight + $daysWeight + $leadWeight, 3);
+    }
+
     private function unitIdsByBudidayaType(string $type): array
     {
         if (! Schema::hasTable('unitBudidaya')) {
@@ -410,8 +539,8 @@ class DashboardController extends Controller
     private function harvestSelectRaw(): string
     {
         $massExpression = Schema::hasColumn('panen', 'berat')
-            ? 'SUM(COALESCE(panen.berat, panen.jumlah * 0.06))'
-            : 'SUM(COALESCE(panen.jumlah, 0) * 0.06)';
+            ? 'SUM(COALESCE(panen.berat, 0))'
+            : '0';
 
         return 'SUM(COALESCE(panen.jumlah, 0)) as total, '.$massExpression.' as mass';
     }
@@ -472,9 +601,8 @@ class DashboardController extends Controller
             ->join('laporan', 'kematian.laporanId', '=', 'laporan.id')
             ->whereIn('laporan.unitBudidayaId', $unitIds);
 
-        $dateColumn = Schema::hasColumn('kematian', 'tanggal') ? 'kematian.tanggal' : 'laporan.createdAt';
-        $query->whereDate($dateColumn, '>=', $startDate)
-            ->whereDate($dateColumn, '<=', $endDate);
+        $query->whereDate('laporan.createdAt', '>=', $startDate)
+            ->whereDate('laporan.createdAt', '<=', $endDate);
 
         if (Schema::hasColumn('laporan', 'isDeleted')) {
             $query->where('laporan.isDeleted', 0);
@@ -544,7 +672,16 @@ class DashboardController extends Controller
         return number_format((float) $value, $decimals, ',', '.');
     }
 
-    private function alerts(): array
+    private function formatQuantity(float|int $value, ?string $unit = null): string
+    {
+        $formatted = floor((float) $value) === (float) $value
+            ? $this->formatNumber($value)
+            : $this->formatDecimal($value, 1);
+
+        return trim($formatted.' '.($unit ?? ''));
+    }
+
+    private function alerts(array $inventory = []): array
     {
         $iotAlerts = Schema::hasTable('iot_device_log')
             ? IotDeviceLog::query()
@@ -553,6 +690,7 @@ class DashboardController extends Controller
                 ->latest('createdAt')
                 ->take(4)
                 ->get()
+                ->toBase()
                 ->map(fn (IotDeviceLog $log) => [
                     'sort_key' => $log->createdAt?->timestamp ?? 0,
                     'type' => $log->logType === 'ERROR' ? 'danger' : 'warning',
@@ -574,18 +712,27 @@ class DashboardController extends Controller
                 ->latest('createdAt')
                 ->take(4)
                 ->get()
+                ->toBase()
                 ->map(fn (SpkFuzzyLog $log) => [
                     'sort_key' => $log->createdAt?->timestamp ?? 0,
                     'type' => ((float) $log->output_value < 55 || $log->status_lingkungan === 'Buruk') ? 'danger' : 'warning',
                     'title' => 'SPK: '.($log->diagnosis_kausalitas ?: $log->status_lingkungan ?: 'Perlu tindakan'),
-                    'message' => Str::limit($log->recommendation ?: $log->narrative ?: 'Tinjau hasil analisa SPK terbaru.', 110),
+                    'message' => Str::limit(
+                        NarrativeGenerator::sanitizePlainText($log->recommendation)
+                            ?: NarrativeGenerator::sanitizePlainText($log->narrative)
+                            ?: 'Tinjau hasil analisa SPK terbaru.',
+                        110
+                    ),
                     'time' => $log->createdAt?->diffForHumans() ?? '-',
                     'url' => route('spk.dashboard', array_filter(['history_id' => $log->id, 'coop_id' => $log->unit_budidaya_id])),
                 ])
             : collect();
 
+        $inventoryAlerts = collect($inventory['alerts'] ?? []);
+
         return $iotAlerts
             ->merge($spkAlerts)
+            ->merge($inventoryAlerts)
             ->sortByDesc('sort_key')
             ->take(6)
             ->map(function (array $alert) {

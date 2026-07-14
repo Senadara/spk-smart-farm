@@ -109,14 +109,13 @@
                                     <h2 class="truncate text-base font-bold text-gray-900">{{ $supplier['name'] }}</h2>
                                     <p class="mt-1 line-clamp-2 text-xs text-gray-500">{{ $supplier['location'] }}</p>
                                 </div>
-                                <span class="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{{ $supplier['rating'] }}/5</span>
                             </div>
                         </div>
                     </div>
 
                     <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-gray-100 pt-3">
                         <div>
-                            <dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Jarak</dt>
+                            <dt class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Jarak Info</dt>
                             <dd class="mt-1 text-sm font-bold text-gray-900">{{ $supplier['distance'] }}</dd>
                         </div>
                         <div>

@@ -23,7 +23,6 @@
                     <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
                         <span class="rounded-full bg-gray-100 px-3 py-1 text-gray-700">{{ $supplier['distance'] }}</span>
                         <span class="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">{{ $supplier['delivery_estimate'] }}</span>
-                        <span class="rounded-full bg-amber-50 px-3 py-1 text-amber-700">Rating {{ $supplier['rating'] }}/5</span>
                     </div>
                 </div>
             </div>
@@ -123,12 +122,8 @@
                 <h2 class="font-bold text-gray-900">Ringkasan SPK</h2>
                 <dl class="mt-4 space-y-3 text-sm">
                     <div class="flex items-center justify-between gap-4">
-                        <dt class="text-gray-500">Skor supplier</dt>
+                        <dt class="text-gray-500">Skor rekomendasi</dt>
                         <dd class="font-bold text-emerald-700">{{ $supplier['score'] }}%</dd>
-                    </div>
-                    <div class="flex items-center justify-between gap-4">
-                        <dt class="text-gray-500">Rating</dt>
-                        <dd class="font-bold text-gray-900">{{ $supplier['rating'] }}/5</dd>
                     </div>
                     <div class="flex items-center justify-between gap-4">
                         <dt class="text-gray-500">Estimasi</dt>

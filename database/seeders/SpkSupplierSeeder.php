@@ -5,13 +5,20 @@ namespace Database\Seeders;
 use App\Models\MasterProduk;
 use App\Models\MasterSupplier;
 use App\Models\SpkParameter;
+use App\Models\SpkRanking;
 use App\Models\SpkSupplierParameterValue;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class SpkSupplierSeeder extends Seeder
 {
     public function run(): void
     {
+        $legacyDelivery = SpkParameter::query()->where('nama_parameter', 'Kecepatan Pengiriman')->first();
+        if ($legacyDelivery) {
+            $legacyDelivery->update(['nama_parameter' => 'Waktu Pengiriman']);
+        }
+
         $parameters = [
             [
                 'nama_parameter' => 'Harga',
@@ -21,17 +28,12 @@ class SpkSupplierSeeder extends Seeder
             [
                 'nama_parameter' => 'Kualitas',
                 'tipe' => 'benefit',
-                'deskripsi' => 'Skor kualitas produk 0-100',
+                'deskripsi' => 'Rating kualitas produk 1-5 dari pembelian selesai. Nilai 3 digunakan sebagai netral jika belum ada rating.',
             ],
             [
-                'nama_parameter' => 'Kecepatan Pengiriman',
-                'tipe' => 'benefit',
-                'deskripsi' => 'Kecepatan pengiriman (hari, semakin cepat semakin baik - nilai = 1/estimasi hari)',
-            ],
-            [
-                'nama_parameter' => 'Jarak',
+                'nama_parameter' => 'Waktu Pengiriman',
                 'tipe' => 'cost',
-                'deskripsi' => 'Jarak dari lokasi operasional peternakan owner ke lokasi supplier. Nilai dihitung otomatis per user.',
+                'deskripsi' => 'Estimasi waktu pengiriman dari seller ke peternakan dalam hari. Nilai 0.5 berarti same day; semakin kecil semakin baik.',
             ],
         ];
 
@@ -128,26 +130,26 @@ class SpkSupplierSeeder extends Seeder
             $supplierModels[$supplierName]->produks()->syncWithoutDetaching($ids);
         }
 
-        // Nilai parameter: [supplier][produk] => [Harga, Kualitas, Kecepatan score]
-        // Kecepatan: skor benefit = 100/estimasi_hari (semakin cepat nilai lebih tinggi)
+        // Nilai parameter: [supplier][produk] => [Harga, Rating Kualitas 1-5, Estimasi Hari Pengiriman]
+        // Waktu Pengiriman: cost dalam hari, 0.5 berarti same day.
         $values = [
             'Pakan Layer Premium (50kg)' => [
-                'PT Agrinusa Jaya' => [380000, 92, 100 / 1],
-                'Jaya Pakan Nusantara' => [355000, 85, 100 / 2],
+                'PT Agrinusa Jaya' => [380000, 4.6, 0.5],
+                'Jaya Pakan Nusantara' => [355000, 4.2, 1],
             ],
             'Vaksin ND-IB (1000 dosis)' => [
-                'CV Medion Farma Unggas' => [150000, 95, 100 / 3],
-                'PT Agrinusa Jaya' => [125000, 88, 100 / 1],
+                'CV Medion Farma Unggas' => [150000, 4.8, 2],
+                'PT Agrinusa Jaya' => [125000, 4.4, 0.5],
             ],
             'Vitamin Stress (1kg)' => [
-                'CV Medion Farma Unggas' => [45000, 94, 100 / 3],
-                'PT Agrinusa Jaya' => [55000, 90, 100 / 1],
+                'CV Medion Farma Unggas' => [45000, 4.7, 2],
+                'PT Agrinusa Jaya' => [55000, 4.5, 0.5],
             ],
             'Jagung Giling (50kg)' => [
-                'Jaya Pakan Nusantara' => [250000, 82, 100 / 2],
+                'Jaya Pakan Nusantara' => [250000, 4.1, 1],
             ],
             'Egg Tray Plastik (30 Butir)' => [
-                'Makmur Poultry Supply' => [12000, 87, 100 / 1],
+                'Makmur Poultry Supply' => [12000, 4.3, 1],
             ],
         ];
 
@@ -155,7 +157,7 @@ class SpkSupplierSeeder extends Seeder
             $produkId = $produkModels[$produkName]->id;
             foreach ($supplierData as $supplierName => $nums) {
                 $supplierId = $supplierModels[$supplierName]->id;
-                $map = ['Harga', 'Kualitas', 'Kecepatan Pengiriman'];
+                $map = ['Harga', 'Kualitas', 'Waktu Pengiriman'];
                 foreach ($map as $i => $paramName) {
                     SpkSupplierParameterValue::updateOrCreate(
                         [
@@ -168,6 +170,14 @@ class SpkSupplierSeeder extends Seeder
                 }
             }
         }
+
+        $distanceParam = SpkParameter::query()->where('nama_parameter', 'Jarak')->first();
+        if ($distanceParam) {
+            $distanceParam->delete();
+        }
+
+        DB::table('spk_ahp_configurations')->delete();
+        SpkRanking::query()->delete();
 
         $this->command?->info('SpkSupplierSeeder: kriteria, supplier, produk, dan nilai evaluasi berhasil di-seed.');
     }

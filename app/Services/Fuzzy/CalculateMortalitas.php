@@ -25,7 +25,7 @@ class CalculateMortalitas
             ->whereIn('laporan.unitBudidayaId', $coopIds)
             ->where('laporan.isDeleted', 0)
             ->where('kematian.isDeleted', 0)
-            ->whereDate('kematian.tanggal', '>=', $startOfMonth)
+            ->whereDate('laporan.createdAt', '>=', $startOfMonth)
             ->count();
 
         return round(($mati / $populasi) * 100, 3);

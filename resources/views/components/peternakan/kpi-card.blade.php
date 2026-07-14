@@ -32,7 +32,7 @@ Props:
     $arrowPath = $arrows[$trend['direction']] ?? $arrows['stable'];
 @endphp
 
-<div {{ $attributes->merge(['class' => 'bg-white border border-gray-100 rounded-xl p-3.5 xl:p-4 min-w-0 min-h-[94px] hover:shadow-md transition-all flex flex-col justify-between']) }}>
+<div {{ $attributes->merge(['class' => 'bg-white border border-gray-100 rounded-xl p-3 sm:p-3.5 xl:p-4 min-w-0 min-h-[86px] sm:min-h-[94px] hover:shadow-md transition-all flex flex-col justify-between']) }}>
     <div class="mb-2 flex items-start justify-between gap-2">
         <p class="min-w-0 truncate text-[11px] font-medium uppercase tracking-wider text-gray-400" title="{{ $label }}">{{ $label }}</p>
         @if($hint)
@@ -40,8 +40,8 @@ Props:
         @endif
     </div>
     <div class="flex items-end justify-between gap-2 min-w-0">
-        <p class="text-xl 2xl:text-2xl font-bold text-gray-900 leading-none truncate" title="{{ $value }}">{{ $value }}</p>
-        <span class="inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5 text-[11px] font-semibold rounded-full whitespace-nowrap {{ $badgeClass }}">
+        <p class="text-lg sm:text-xl 2xl:text-2xl font-bold text-gray-900 leading-none truncate" title="{{ $value }}">{{ $value }}</p>
+        <span class="inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-semibold rounded-full whitespace-nowrap {{ $badgeClass }}">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $arrowPath !!}</svg>
             {{ $trend['value'] }}
         </span>

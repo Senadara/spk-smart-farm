@@ -324,7 +324,7 @@
                                     $barnName = $spk->unitBudidaya->nama ?? 'Global';
                                 @endphp
                                 <option value="{{ $spk->id }}" {{ old('spk_fuzzy_log_id', $prefill['spk_id']) == $spk->id ? 'selected' : '' }}>
-                                    [{{ $spkDate }} - {{ $barnName }}] {{ \Str::limit($spk->recommendation ?: $spk->narrative, 60) }}
+                                    [{{ $spkDate }} - {{ $barnName }}] {{ \Str::limit(\App\Services\Fuzzy\NarrativeGenerator::sanitizePlainText($spk->recommendation) ?: \App\Services\Fuzzy\NarrativeGenerator::sanitizePlainText($spk->narrative), 60) }}
                                 </option>
                             @endforeach
                         </select>

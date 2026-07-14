@@ -27,8 +27,8 @@
                 'source' => 'harianTernak, unitBudidaya',
             ],
             'Egg Mass' => [
-                'body' => 'Berat total telur yang dipanen hari ini, dari laporan berat atau estimasi jumlah telur.',
-                'formula' => 'SUM(panen.berat) atau panen.jumlah x 0.06 kg',
+                'body' => 'Berat total telur yang dipanen hari ini dari laporan panen mobile.',
+                'formula' => 'SUM(panen.berat)',
                 'source' => 'panen',
             ],
             'Mortality' => [
@@ -675,15 +675,15 @@
 
         {{-- SECTION 5: DAILY PRODUCTION LOG --}}
         <div class="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-            <div class="flex items-center justify-between p-6 border-b border-gray-50">
+            <div class="flex flex-col gap-3 border-b border-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                 <div class="flex items-center gap-2">
                     <h3 class="text-lg font-semibold text-gray-800">Daily Production Log</h3>
-                    <x-metric-hint title="Daily Production Log" body="Log ini menampilkan laporan panen atau kematian terbaru dari kandang aktif sebagai jejak operasional harian." source="laporan, panen, kematian, unitBudidaya" />
+                    <x-metric-hint title="Daily Production Log" body="Log ini menampilkan laporan panen dan kematian terbaru. Rejects hanya menghitung telur rusak/reject dari rincian grade, sedangkan mortalitas ditampilkan terpisah." source="laporan, panen, panenRincianGrade, kematian, unitBudidaya" />
                 </div>
                 <div class="flex items-center gap-3">
-                    <div class="relative">
+                    <div class="relative w-full sm:w-auto">
                         <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                        <input x-model="searchLog" type="text" placeholder="Cari log..." class="pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 w-56">
+                        <input x-model="searchLog" type="text" placeholder="Cari log..." class="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-4 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 sm:w-56">
                     </div>
                 </div>
             </div>
@@ -691,36 +691,38 @@
                 <table class="w-full text-sm text-left">
                     <thead class="bg-gray-50/90">
                         <tr>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Date</th>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Barn</th>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Flock Age</th>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Birds</th>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Eggs Collected</th>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Rejects</th>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Date</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Barn</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Flock Age</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Birds</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Eggs Collected</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Rejects</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Mortalitas</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-50">
                         @foreach($productionLog as $log)
                             @php
-                                $logStatus = ['Optimal' => 'text-emerald-600 bg-emerald-50', 'Attention' => 'text-amber-600 bg-amber-50', 'Critical' => 'text-red-600 bg-red-50'];
+                                $logStatus = ['Optimal' => 'text-emerald-600 bg-emerald-50', 'Check' => 'text-sky-600 bg-sky-50', 'Attention' => 'text-amber-600 bg-amber-50', 'Critical' => 'text-red-600 bg-red-50'];
                                 $statusClass = $logStatus[$log['status']] ?? 'text-gray-600 bg-gray-50';
                                 $searchHay = strtolower(($log['date'] ?? '') . ($log['barn'] ?? '') . ($log['status'] ?? ''));
                             @endphp
                             <tr class="hover:bg-gray-50/70 transition-colors" x-show="!searchLog || @js($searchHay).includes(searchLog.toLowerCase())">
-                                <td class="px-6 py-4 text-gray-600 font-medium">{{ $log['date'] }}</td>
-                                <td class="px-6 py-4 font-semibold text-blue-600">{{ $log['barn'] }}</td>
-                                <td class="px-6 py-4 text-gray-600">{{ $log['flock_age'] }}</td>
-                                <td class="px-6 py-4 text-gray-800 font-semibold">{{ $log['birds'] }}</td>
-                                <td class="px-6 py-4 text-gray-800 font-semibold">{{ $log['eggs'] }}</td>
-                                <td class="px-6 py-4 text-gray-600">{{ $log['rejects'] }}</td>
-                                <td class="px-6 py-4"><span class="px-3 py-1.5 text-xs font-semibold rounded-full {{ $statusClass }}">{{ $log['status'] }}</span></td>
+                                <td class="px-4 py-3 text-gray-600 font-medium sm:px-6 sm:py-4">{{ $log['date'] }}</td>
+                                <td class="px-4 py-3 font-semibold text-blue-600 sm:px-6 sm:py-4">{{ $log['barn'] }}</td>
+                                <td class="px-4 py-3 text-gray-600 sm:px-6 sm:py-4">{{ $log['flock_age'] }}</td>
+                                <td class="px-4 py-3 text-gray-800 font-semibold sm:px-6 sm:py-4">{{ $log['birds'] }}</td>
+                                <td class="px-4 py-3 text-gray-800 font-semibold sm:px-6 sm:py-4">{{ $log['eggs'] }}</td>
+                                <td class="px-4 py-3 text-gray-600 sm:px-6 sm:py-4">{{ $log['rejects'] }}</td>
+                                <td class="px-4 py-3 text-gray-600 sm:px-6 sm:py-4">{{ $log['mortality'] ?? '-' }}</td>
+                                <td class="px-4 py-3 sm:px-6 sm:py-4"><span class="px-2.5 py-1 text-xs font-semibold rounded-full sm:px-3 sm:py-1.5 {{ $statusClass }}">{{ $log['status'] }}</span></td>
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
             </div>
-            <div class="flex items-center justify-between px-6 py-4 border-t border-gray-50">
+            <div class="flex items-center justify-between border-t border-gray-50 px-4 py-3 sm:px-6 sm:py-4">
                 <p class="text-sm text-gray-500">Menampilkan {{ count($productionLog) }} entri terakhir</p>
             </div>
         </div>

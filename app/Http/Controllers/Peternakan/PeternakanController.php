@@ -11,7 +11,9 @@ use App\Services\Fuzzy\FuzzySensorCardMapper;
 use App\Services\Fuzzy\InputResolver;
 use App\Services\Fuzzy\MamdaniEngine;
 use App\Services\Fuzzy\NarrativeGenerator;
+use App\Services\Notifications\SpkEnvironmentAlertService;
 use App\Services\PeternakanService;
+use App\Services\Spk\SpkFuzzyEvaluationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +29,8 @@ class PeternakanController extends Controller
         protected MamdaniEngine $mamdaniEngine,
         protected FuzzySensorCardMapper $sensorCardMapper,
         protected NarrativeGenerator $narrativeGenerator,
+        protected SpkFuzzyEvaluationService $fuzzyEvaluationService,
+        protected SpkEnvironmentAlertService $environmentAlertService,
     ) {}
 
     /**
@@ -386,8 +390,8 @@ class PeternakanController extends Controller
             ?: $log->status_lingkungan
             ?: 'Perlu pemeriksaan';
 
-        $description = $log->recommendation
-            ?: $log->narrative
+        $description = NarrativeGenerator::sanitizePlainText($log->recommendation)
+            ?: NarrativeGenerator::sanitizePlainText($log->narrative)
             ?: 'Tinjau hasil SPK dan tentukan tindak lanjut petugas.';
 
         $params = array_filter([
@@ -400,7 +404,7 @@ class PeternakanController extends Controller
             'id' => $log->id,
             'barn' => $log->unitBudidaya?->nama ?? 'Global',
             'title' => $title,
-            'description' => Str::limit(strip_tags($description), 140),
+            'description' => Str::limit($description, 140),
             'score' => $score,
             'priority' => $score < 55 ? 'Urgent' : 'Tinggi',
             'time' => $log->createdAt?->format('H:i') ?? '-',
@@ -409,7 +413,7 @@ class PeternakanController extends Controller
                 'create_task' => 1,
                 'spk_id' => $log->id,
                 'coop_id' => $log->unit_budidaya_id,
-                'desc' => Str::limit(strip_tags($description), 160),
+                'desc' => Str::limit($description, 160),
             ])),
         ];
     }
@@ -417,43 +421,21 @@ class PeternakanController extends Controller
     private function runFuzzyEngine(?string $coopId): array
     {
         $commodityId = $this->peternakanService->getActiveKomoditasId();
-        $profile = SpkFuzzyProfile::resolveForContext($commodityId, $coopId);
-        $inputs = $this->inputResolver->resolve($coopId, $commodityId, $profile?->id);
-        $result = $this->mamdaniEngine->processCascaded($inputs, $profile?->id, $commodityId, $coopId);
-        $barnName = $coopId ? DB::table('unitBudidaya')->where('id', $coopId)->value('nama') : null;
-        $narrative = $this->narrativeGenerator->generate($result, $barnName);
 
-        return array_merge($result, ['narrative' => $narrative, 'inputs' => $inputs]);
+        return $this->fuzzyEvaluationService->evaluate($coopId, $commodityId);
     }
 
     private function runAndPersistFuzzy(?string $coopId): SpkFuzzyLog
     {
-        $result = $this->runFuzzyEngine($coopId);
-        $barnName = $coopId ? DB::table('unitBudidaya')->where('id', $coopId)->value('nama') : null;
-        Cache::forget($this->cacheKey('fuzzy', $coopId));
+        $log = $this->fuzzyEvaluationService->evaluateAndPersist(
+            $coopId,
+            $this->peternakanService->getActiveKomoditasId()
+        );
 
-        return SpkFuzzyLog::create([
-            'unit_budidaya_id' => $coopId,
-            'profile_id' => $result['profile']['id'] ?? null,
-            'commodity_id' => $result['profile']['commodity_id'] ?? $this->peternakanService->getActiveKomoditasId(),
-            'input_json' => $result['inputs'] ?? [],
-            'fuzzified_json' => [
-                'lingkungan' => $result['lingkungan']['fuzzified'] ?? [],
-                'kesehatan' => $result['kesehatan']['fuzzified'] ?? [],
-            ],
-            'rule_result_json' => [
-                'lingkungan' => $result['lingkungan']['dominant_rule'] ?? null,
-                'kesehatan' => $result['kesehatan']['dominant_rule'] ?? null,
-                'kausalitas' => $result['kausalitas'] ?? null,
-            ],
-            'status_lingkungan' => $result['lingkungan']['label'] ?? null,
-            'status_kesehatan' => $result['kesehatan']['label'] ?? null,
-            'diagnosis_kausalitas' => $result['kausalitas']['label'] ?? null,
-            'output_value' => min((float) ($result['lingkungan']['value'] ?? 0), (float) ($result['kesehatan']['value'] ?? 0)),
-            'output_label' => $result['kausalitas']['label'] ?? null,
-            'narrative' => $result['narrative'] ?? null,
-            'recommendation' => $result['kausalitas']['recommendation'] ?? null,
-        ]);
+        Cache::forget($this->cacheKey('fuzzy', $coopId));
+        $this->environmentAlertService->dispatchForLog($log);
+
+        return $log;
     }
 
     private function mapFuzzyToView(array $result, ?array $barn): array
@@ -520,8 +502,8 @@ class PeternakanController extends Controller
                     'statusColor' => $colorMap[$lingkLabel] ?? 'emerald',
                     'score' => $gabScore,
                     'scoreColor' => $this->scoreColor($gabScore),
-                    'title' => $kausalitas['label'] ?? 'Diagnosis Kausalitas',
-                    'description' => $result['narrative'] ?? ($kausalitas['diagnosis'] ?? '-'),
+                    'title' => 'Diagnosis Kausalitas',
+                    'description' => NarrativeGenerator::sanitizePlainText($result['narrative'] ?? ($kausalitas['diagnosis'] ?? '-')),
                     'link' => $spkLink,
                     'isMain' => true,
                 ],

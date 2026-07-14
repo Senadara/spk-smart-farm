@@ -14,7 +14,7 @@ return new class extends Migration
         if (Schema::hasTable('panen') && !Schema::hasColumn('panen', 'berat')) {
             Schema::table('panen', function (Blueprint $table) {
                 $table->decimal('berat', 10, 2)->nullable()->after('jumlah')
-                      ->comment('Berat panen dalam kg (egg mass). Fallback = jumlah * 0.06');
+                      ->comment('Berat panen dalam kg (egg mass) dari laporan panen mobile.');
             });
         }
     }

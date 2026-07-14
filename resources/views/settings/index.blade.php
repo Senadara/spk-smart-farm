@@ -22,15 +22,11 @@
             <p class="mt-3 text-xs font-semibold text-emerald-700">Buka Data Master</p>
         </a>
 
-        <div id="iot-settings" class="rounded-lg border border-gray-200 bg-white p-5">
+        <a id="iot-settings" href="{{ route('iot.devices') }}" class="rounded-lg border border-gray-200 bg-white p-5 hover:bg-gray-50" style="text-decoration:none;">
             <p class="text-sm font-bold text-gray-900">IoT</p>
-            <p class="mt-1 text-sm text-gray-500">Daftarkan device, mapping payload, koneksi, parameter, dan threshold sensor.</p>
-            <div class="mt-4 flex flex-wrap gap-2">
-                <a href="{{ route('iot.devices') }}" class="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700" style="text-decoration:none;">Device & Mapping</a>
-                <a href="{{ route('iot.config') }}" class="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Konfigurasi</a>
-                <a href="{{ route('iot.monitoring') }}" class="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Monitoring</a>
-            </div>
-        </div>
+            <p class="mt-1 text-sm text-gray-500">Mulai dari setup terpadu: koneksi, device per kandang, mapping payload, parameter sensor, threshold, lalu monitoring.</p>
+            <p class="mt-3 text-xs font-semibold text-emerald-700">Buka Setup IoT</p>
+        </a>
 
         @if(session('user') && isset(session('user')['role']) && session('user')['role'] === 'pjawab')
             <a href="{{ route('settings.fuzzy.index') }}" class="rounded-lg border border-gray-200 bg-white p-5 hover:bg-gray-50" style="text-decoration:none;">

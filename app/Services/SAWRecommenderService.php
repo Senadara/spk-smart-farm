@@ -57,15 +57,15 @@ class SAWRecommenderService
             ->get();
 
         $minMax = $this->normalizer->computeMinMax(
-            $this->withRuntimeDistanceValues($paramValues, $parameters, $suppliers, $userId)
+            $this->withRuntimeDeliveryValues($paramValues, $parameters, $suppliers, $userId)
         );
 
         $scores = [];
         foreach ($supplierIds as $sid) {
             $valuesByParameter = [];
             foreach ($parameters as $param) {
-                if ($this->isDistanceParameter($param)) {
-                    $valuesByParameter[$param->id] = $this->distanceValue($suppliers[$sid], $userId);
+                if ($this->isDeliveryTimeParameter($param)) {
+                    $valuesByParameter[$param->id] = $this->deliveryDaysValue($suppliers[$sid], $userId);
 
                     continue;
                 }
@@ -73,6 +73,12 @@ class SAWRecommenderService
                 $pv = $paramValues->where('supplier_id', $sid)->where('parameter_id', $param->id)->first();
                 if ($pv) {
                     $valuesByParameter[$param->id] = (float) $pv->value;
+
+                    continue;
+                }
+
+                if ($this->isQualityParameter($param)) {
+                    $valuesByParameter[$param->id] = $this->neutralQualityRating();
                 }
             }
 
@@ -140,7 +146,7 @@ class SAWRecommenderService
 
         $suppliers = $produk->suppliers->keyBy('id');
         $minMax = $this->normalizer->computeMinMax(
-            $this->withRuntimeDistanceValues($paramValues, $parameters, $suppliers, $userId)
+            $this->withRuntimeDeliveryValues($paramValues, $parameters, $suppliers, $userId)
         );
         $paramTypes = $parameters->pluck('tipe', 'id')->toArray();
 
@@ -154,13 +160,15 @@ class SAWRecommenderService
 
             $valuesByParameter = [];
             foreach ($parameters as $param) {
-                if ($this->isDistanceParameter($param)) {
-                    $val = $this->distanceValue($supplier, $userId);
+                if ($this->isDeliveryTimeParameter($param)) {
+                    $val = $this->deliveryDaysValue($supplier, $userId);
                 } else {
                     $pv = $paramValues->where('supplier_id', $supplier->id)
                         ->where('parameter_id', $param->id)
                         ->first();
-                    $val = $pv?->value;
+                    $val = $pv
+                        ? (float) $pv->value
+                        : ($this->isQualityParameter($param) ? $this->neutralQualityRating() : null);
                 }
 
                 $valuesByParameter[$param->id] = $val ?? 0;
@@ -191,7 +199,8 @@ class SAWRecommenderService
         $map = [
             'harga' => 'price',
             'kualitas' => 'quality',
-            'kecepatan' => 'delivery_speed',
+            'waktu' => 'delivery_time',
+            'kecepatan' => 'delivery_time',
             'jarak' => 'distance',
         ];
 
@@ -205,14 +214,29 @@ class SAWRecommenderService
         return str_replace(' ', '_', strtolower($nama));
     }
 
-    private function isDistanceParameter(SpkParameter $parameter): bool
+    private function isDeliveryTimeParameter(SpkParameter $parameter): bool
     {
-        return str_contains(strtolower($parameter->nama_parameter), 'jarak');
+        $name = strtolower($parameter->nama_parameter);
+
+        return str_contains($name, 'pengiriman')
+            && (str_contains($name, 'waktu') || str_contains($name, 'kecepatan'));
     }
 
-    private function distanceValue(MasterSupplier $supplier, ?string $userId): float
+    private function isQualityParameter(SpkParameter $parameter): bool
     {
-        return $this->distanceService->distanceToSupplier($supplier, $userId) ?? 9999.0;
+        return str_contains(strtolower($parameter->nama_parameter), 'kualitas');
+    }
+
+    private function neutralQualityRating(): float
+    {
+        return 3.0;
+    }
+
+    private function deliveryDaysValue(MasterSupplier $supplier, ?string $userId): float
+    {
+        $distance = $this->distanceService->distanceToSupplier($supplier, $userId);
+
+        return $this->distanceService->estimatedDeliveryDays($distance) ?? 99.0;
     }
 
     /**
@@ -221,17 +245,37 @@ class SAWRecommenderService
      * @param  \Illuminate\Support\Collection<int, MasterSupplier>  $suppliers
      * @return \Illuminate\Support\Collection<int, object>
      */
-    private function withRuntimeDistanceValues($storedValues, $parameters, $suppliers, ?string $userId)
+    private function withRuntimeDeliveryValues($storedValues, $parameters, $suppliers, ?string $userId)
     {
         $values = collect($storedValues);
-        $distanceParameters = $parameters->filter(fn (SpkParameter $param) => $this->isDistanceParameter($param));
+        $deliveryParameters = $parameters->filter(fn (SpkParameter $param) => $this->isDeliveryTimeParameter($param));
+        $qualityParameters = $parameters->filter(fn (SpkParameter $param) => $this->isQualityParameter($param));
 
-        foreach ($distanceParameters as $parameter) {
+        foreach ($deliveryParameters as $parameter) {
             foreach ($suppliers as $supplier) {
                 $row = new stdClass;
                 $row->supplier_id = $supplier->id;
                 $row->parameter_id = $parameter->id;
-                $row->value = $this->distanceValue($supplier, $userId);
+                $row->value = $this->deliveryDaysValue($supplier, $userId);
+                $values->push($row);
+            }
+        }
+
+        foreach ($qualityParameters as $parameter) {
+            foreach ($suppliers as $supplier) {
+                $hasStoredValue = $values->contains(
+                    fn ($row) => (int) $row->supplier_id === (int) $supplier->id
+                        && (int) $row->parameter_id === (int) $parameter->id
+                );
+
+                if ($hasStoredValue) {
+                    continue;
+                }
+
+                $row = new stdClass;
+                $row->supplier_id = $supplier->id;
+                $row->parameter_id = $parameter->id;
+                $row->value = $this->neutralQualityRating();
                 $values->push($row);
             }
         }

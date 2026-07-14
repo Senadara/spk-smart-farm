@@ -8,7 +8,7 @@
             <div>
                 <p class="text-xs font-bold uppercase tracking-wider text-emerald-700">IoT</p>
                 <h1 class="mt-1 text-2xl font-bold text-gray-900">Monitoring Sensor</h1>
-                <p class="mt-1 text-sm text-gray-500">Pantau kondisi sensor dan log perangkat. Mapping dan konfigurasi perangkat dikelola dari Pengaturan.</p>
+                <p class="mt-1 text-sm text-gray-500">Pantau kondisi sensor dan log perangkat. Mapping dan konfigurasi perangkat dikelola dari Setup IoT.</p>
             </div>
             <div class="flex flex-wrap gap-2">
                 <a href="{{ route('iot.monitoring') }}" class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700" style="text-decoration:none;">
@@ -17,41 +17,19 @@
                     </svg>
                     Buka Monitoring
                 </a>
-                <a href="{{ route('settings.index') }}#iot-settings" class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">
+                <a href="{{ route('iot.devices') }}" class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317a1.724 1.724 0 013.35 0 1.724 1.724 0 002.573 1.066 1.724 1.724 0 012.37 2.37 1.724 1.724 0 001.065 2.572 1.724 1.724 0 010 3.35 1.724 1.724 0 00-1.066 2.573 1.724 1.724 0 01-2.37 2.37 1.724 1.724 0 00-2.572 1.065 1.724 1.724 0 01-3.35 0 1.724 1.724 0 00-2.573-1.066 1.724 1.724 0 01-2.37-2.37 1.724 1.724 0 00-1.065-2.572 1.724 1.724 0 010-3.35 1.724 1.724 0 001.066-2.573 1.724 1.724 0 012.37-2.37 1.724 1.724 0 002.572-1.065z"/>
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
-                    Pengaturan IoT
+                    Setup IoT
                 </a>
             </div>
         </div>
 
         <x-page-hint title="Alur IoT" tone="sky" :open="false">
-            Gunakan halaman ini untuk memantau data sensor dan log perangkat. Untuk registrasi device, mapping payload, protokol, parameter, dan threshold, buka Pengaturan IoT.
+            Gunakan halaman ini untuk memantau data sensor dan log perangkat. Untuk registrasi device, mapping payload, protokol, parameter, dan threshold, buka Setup IoT.
         </x-page-hint>
-
-        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <a href="{{ route('iot.monitoring') }}" class="group rounded-lg border border-emerald-200 bg-emerald-50 p-5 transition hover:border-emerald-300 hover:bg-emerald-100 hover:shadow-sm" style="text-decoration:none;">
-                <div class="flex items-start justify-between gap-4">
-                    <div>
-                        <p class="text-sm font-bold text-emerald-900">Monitoring Sensor & Log</p>
-                        <p class="mt-1 text-sm text-emerald-700">Lihat data sensor terbaru, filter device, dan cek log perangkat.</p>
-                    </div>
-                    <span class="rounded-lg bg-white px-3 py-2 text-sm font-bold text-emerald-700 group-hover:translate-x-0.5 transition">Buka</span>
-                </div>
-            </a>
-
-            <a href="{{ route('settings.index') }}#iot-settings" class="group rounded-lg border border-sky-200 bg-sky-50 p-5 transition hover:border-sky-300 hover:bg-sky-100 hover:shadow-sm" style="text-decoration:none;">
-                <div class="flex items-start justify-between gap-4">
-                    <div>
-                        <p class="text-sm font-bold text-sky-900">Shortcut Pengaturan IoT</p>
-                        <p class="mt-1 text-sm text-sky-700">Kelola device, mapping, koneksi, parameter, dan batas sensor.</p>
-                    </div>
-                    <span class="rounded-lg bg-white px-3 py-2 text-sm font-bold text-sky-700 group-hover:translate-x-0.5 transition">Atur</span>
-                </div>
-            </a>
-        </div>
 
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             @foreach ($stats as $stat)
@@ -66,7 +44,7 @@
                         <h2 class="text-base font-bold text-gray-900">Device per Kandang</h2>
                         <p class="text-sm text-gray-500">Status perangkat yang terhubung ke unit budidaya.</p>
                     </div>
-                    <a href="{{ route('settings.index') }}#iot-settings" class="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Kelola</a>
+                    <a href="{{ route('iot.devices') }}" class="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Kelola</a>
                 </div>
 
                 <div class="overflow-x-auto">

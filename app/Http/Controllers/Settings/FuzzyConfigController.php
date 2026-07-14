@@ -155,7 +155,7 @@ class FuzzyConfigController extends Controller
 
         // Cek duplikat nama dalam group yang sama
         if (SpkFuzzyVariable::where('profile_id', $validated['profile_id'])->where('name', $validated['name'])->where('group', $validated['group'])->exists()) {
-            return redirect()->route('settings.fuzzy.index', ['profile_id' => $validated['profile_id']])
+            return redirect()->route('settings.fuzzy.index', ['profile_id' => $validated['profile_id'], 'tab' => 'variables'])
                 ->withErrors(['name' => "Variabel '{$validated['name']}' sudah ada di group '{$validated['group']}'."])
                 ->withInput();
         }
@@ -184,7 +184,7 @@ class FuzzyConfigController extends Controller
 
         // Cek duplikat selain diri sendiri
         if (SpkFuzzyVariable::where('profile_id', $validated['profile_id'])->where('name', $validated['name'])->where('group', $validated['group'])->where('id', '!=', $id)->exists()) {
-            return redirect()->route('settings.fuzzy.index', ['profile_id' => $validated['profile_id']])
+            return redirect()->route('settings.fuzzy.index', ['profile_id' => $validated['profile_id'], 'tab' => 'variables'])
                 ->withErrors(['name' => "Variabel '{$validated['name']}' sudah ada di group '{$validated['group']}'."])
                 ->withInput();
         }
@@ -192,7 +192,7 @@ class FuzzyConfigController extends Controller
         SpkFuzzyVariable::findOrFail($id)->update($validated);
         MamdaniEngine::clearCache($validated['profile_id']);
 
-        return redirect()->route('settings.fuzzy.index', ['profile_id' => $validated['profile_id']])
+        return redirect()->route('settings.fuzzy.index', ['profile_id' => $validated['profile_id'], 'tab' => 'variables'])
             ->with('success', 'Variabel berhasil diperbarui.');
     }
 
@@ -350,13 +350,13 @@ class FuzzyConfigController extends Controller
         // Validasi: tidak boleh ada variabel kondisi duplikat
         $varIds = array_column($validated['conditions'], 'variable_id');
         if (count($varIds) !== count(array_unique($varIds))) {
-            return redirect()->route('settings.fuzzy.index', ['profile_id' => $validated['profile_id']])
+            return redirect()->route('settings.fuzzy.index', ['profile_id' => $validated['profile_id'], 'tab' => 'rules'])
                 ->withErrors(['conditions' => 'Tidak boleh ada variabel yang duplikat dalam satu rule.'])
                 ->withInput();
         }
 
         if (! $this->ruleBelongsToProfile($validated['profile_id'], $validated['output_set_id'], $validated['conditions'])) {
-            return redirect()->route('settings.fuzzy.index', ['profile_id' => $validated['profile_id']])
+            return redirect()->route('settings.fuzzy.index', ['profile_id' => $validated['profile_id'], 'tab' => 'rules'])
                 ->withErrors(['conditions' => 'Output dan kondisi rule harus berasal dari profile fuzzy yang sama.'])
                 ->withInput();
         }
@@ -382,7 +382,7 @@ class FuzzyConfigController extends Controller
         });
         MamdaniEngine::clearCache($validated['profile_id']);
 
-        return redirect()->route('settings.fuzzy.index', ['profile_id' => $validated['profile_id']])
+        return redirect()->route('settings.fuzzy.index', ['profile_id' => $validated['profile_id'], 'tab' => 'rules'])
             ->with('success', 'Rule berhasil ditambahkan.');
     }
 
@@ -404,14 +404,14 @@ class FuzzyConfigController extends Controller
         $varIds = array_column($validated['conditions'], 'variable_id');
         if (count($varIds) !== count(array_unique($varIds))) {
             $rule = SpkFuzzyRule::find($id);
-            return redirect()->route('settings.fuzzy.index', ['profile_id' => $rule?->profile_id])
+            return redirect()->route('settings.fuzzy.index', ['profile_id' => $rule?->profile_id, 'tab' => 'rules'])
                 ->withErrors(['conditions' => 'Tidak boleh ada variabel yang duplikat dalam satu rule.'])
                 ->withInput();
         }
 
         $profileId = SpkFuzzyRule::where('id', $id)->value('profile_id');
         if (! $this->ruleBelongsToProfile($profileId, $validated['output_set_id'], $validated['conditions'])) {
-            return redirect()->route('settings.fuzzy.index', ['profile_id' => $profileId])
+            return redirect()->route('settings.fuzzy.index', ['profile_id' => $profileId, 'tab' => 'rules'])
                 ->withErrors(['conditions' => 'Output dan kondisi rule harus berasal dari profile fuzzy yang sama.'])
                 ->withInput();
         }
@@ -436,7 +436,7 @@ class FuzzyConfigController extends Controller
         });
         MamdaniEngine::clearCache($profileId);
 
-        return redirect()->route('settings.fuzzy.index', ['profile_id' => $profileId])
+        return redirect()->route('settings.fuzzy.index', ['profile_id' => $profileId, 'tab' => 'rules'])
             ->with('success', 'Rule berhasil diperbarui.');
     }
 
@@ -447,7 +447,7 @@ class FuzzyConfigController extends Controller
         SpkFuzzyRule::findOrFail($id)->delete();
         MamdaniEngine::clearCache($profileId);
 
-        return redirect()->route('settings.fuzzy.index', ['profile_id' => $profileId])
+        return redirect()->route('settings.fuzzy.index', ['profile_id' => $profileId, 'tab' => 'rules'])
             ->with('success', 'Rule berhasil dihapus.');
     }
 

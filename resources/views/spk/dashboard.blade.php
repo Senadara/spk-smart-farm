@@ -10,7 +10,7 @@
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white px-5 py-4 rounded-xl border border-gray-100 shadow-sm">
             <div>
                 <h1 class="text-xl font-bold text-gray-900">Pusat Analisis & SPK</h1>
-                <p class="text-xs text-gray-400 mt-0.5">Diagnosa Fuzzy 3-Mode, Kausalitas Multi-Sensor, dan Logistik</p>
+                <p class="text-xs text-gray-400 mt-0.5">Diagnosa Fuzzy 3-Mode, tren sensor lingkungan, dan logistik</p>
             </div>
             
             <div class="flex flex-wrap items-center gap-3">
@@ -144,12 +144,12 @@
                         </div>
                     </div>
 
-                    {{-- Chart 2: Multi-Sensor Causality --}}
+                    {{-- Chart 2: Multi-Sensor Environment Trend --}}
                     <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
                         <div class="flex justify-between items-center mb-4">
                             <div>
-                                <h3 class="text-sm font-bold text-gray-800">Kausalitas Multi-Sensor vs FCR</h3>
-                                <p class="text-[11px] text-gray-400">Dampak Suhu, Kelembaban, Amonia (7 hari sebelum analisa)</p>
+                                <h3 class="text-sm font-bold text-gray-800">Tren Multi-Sensor Lingkungan</h3>
+                                <p class="text-[11px] text-gray-400">Suhu, kelembapan, dan amonia dari log analisa terbaru</p>
                             </div>
                         </div>
                         <div style="height: 220px;">
@@ -521,56 +521,42 @@
 
                     const data = @js($chartData['causality']);
 
-                    // This is a complex multi-axis chart overlaying Suhu, Kelembaban, Amonia against FCR Trends
                     this._causalityChart = new Chart(ctx, {
                         type: 'line',
                         data: {
                             labels: data.labels,
                             datasets: [
                                 {
-                                    label: 'FCR Harian (Produktivitas)',
-                                    data: data.fcr,
-                                    borderColor: '#3B82F6', // Blue
-                                    backgroundColor: '#3B82F610',
-                                    borderWidth: 3,
-                                    tension: 0.4,
-                                    pointRadius: 4,
-                                    pointBackgroundColor: '#fff',
-                                    fill: true,
-                                    yAxisID: 'yFcr',
-                                    order: 1 // Drawn on top
-                                },
-                                {
-                                    label: 'Suhu Rata-rata (°C)',
+                                    label: 'Suhu Rata-rata (C)',
                                     data: data.suhu,
-                                    borderColor: '#F59E0B', // Amber
+                                    borderColor: '#F59E0B',
+                                    backgroundColor: '#F59E0B18',
                                     borderWidth: 2,
-                                    borderDash: [5, 5],
                                     tension: 0.4,
-                                    pointRadius: 0,
+                                    pointRadius: 2,
                                     yAxisID: 'ySuhu',
-                                    order: 2
+                                    order: 1
                                 },
                                 {
                                     label: 'Amonia (ppm)',
                                     data: data.amonia,
-                                    borderColor: '#EF4444', // Red
+                                    borderColor: '#EF4444',
                                     borderWidth: 2,
-                                    borderDash: [3, 3],
+                                    borderDash: [5, 5],
                                     tension: 0.4,
-                                    pointRadius: 0,
+                                    pointRadius: 2,
                                     yAxisID: 'yAmonia',
-                                    order: 3
+                                    order: 2
                                 },
                                 {
-                                    label: 'Kelembaban (%)',
+                                    label: 'Kelembapan (%)',
                                     type: 'bar',
                                     data: data.kelembaban,
-                                    backgroundColor: 'rgba(156, 163, 175, 0.15)', // Grayish bar background
+                                    backgroundColor: 'rgba(14, 165, 233, 0.16)',
                                     borderColor: 'transparent',
                                     borderWidth: 0,
                                     yAxisID: 'yKelembaban',
-                                    order: 4 // Drawn on bottom
+                                    order: 3
                                 }
                             ]
                         },
@@ -584,28 +570,20 @@
                             scales: {
                                 x: { grid: { display: false }, ticks: { font: { size: 9, family: 'Inter' }, color: '#9CA3AF' } },
                                 
-                                // Left Axis: FCR (Primary)
-                                yFcr: { 
-                                    type: 'linear', display: true, position: 'left',
-                                    grid: { color: 'rgba(0,0,0,0.04)' }, 
-                                    title: { display: true, text: 'FCR', font: { size: 9 }, color: '#3B82F6' },
-                                    ticks: { font: { size: 9, family: 'Inter' }, color: '#3B82F6' },
-                                    suggestedMin: 1.8, suggestedMax: 2.5
-                                },
-                                // Right Axis 1: Suhu
                                 ySuhu: {
-                                    type: 'linear', display: true, position: 'right',
-                                    grid: { drawOnChartArea: false },
-                                    title: { display: true, text: 'Suhu (°C)', font: { size: 9 }, color: '#F59E0B' },
+                                    type: 'linear', display: true, position: 'left',
+                                    grid: { color: 'rgba(0,0,0,0.04)' },
+                                    title: { display: true, text: 'Suhu (C)', font: { size: 9 }, color: '#F59E0B' },
                                     ticks: { font: { size: 9, family: 'Inter' }, color: '#F59E0B' },
                                     suggestedMin: 20, suggestedMax: 40
                                 },
-                                // Right Axis 2: Amonia (Hidden labels, just for scaling correctly)
                                 yAmonia: {
-                                    type: 'linear', display: false, position: 'right',
+                                    type: 'linear', display: true, position: 'right',
+                                    grid: { drawOnChartArea: false },
+                                    title: { display: true, text: 'Amonia (ppm)', font: { size: 9 }, color: '#EF4444' },
+                                    ticks: { font: { size: 9, family: 'Inter' }, color: '#EF4444' },
                                     suggestedMin: 0, suggestedMax: 50
                                 },
-                                // Right Axis 3: Kelembaban (Hidden labels)
                                 yKelembaban: {
                                     type: 'linear', display: false, position: 'right',
                                     suggestedMin: 0, suggestedMax: 100

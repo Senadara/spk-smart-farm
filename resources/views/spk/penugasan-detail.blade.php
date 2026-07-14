@@ -105,8 +105,11 @@
                                 <span class="font-semibold text-slate-800">{{ $task->fuzzyLog->output_label ?? '-' }}</span>
                             </div>
                         </div>
-                        @if($task->fuzzyLog->recommendation)
-                            <p class="mt-3 text-xs leading-relaxed text-slate-600">{{ $task->fuzzyLog->recommendation }}</p>
+                        @php
+                            $cleanRecommendation = \App\Services\Fuzzy\NarrativeGenerator::sanitizePlainText($task->fuzzyLog->recommendation ?? null);
+                        @endphp
+                        @if($cleanRecommendation)
+                            <p class="mt-3 text-xs leading-relaxed text-slate-600">{{ $cleanRecommendation }}</p>
                         @endif
                     </div>
                 @endif

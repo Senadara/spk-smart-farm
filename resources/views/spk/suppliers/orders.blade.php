@@ -88,7 +88,50 @@
                         @elseif($order->status === 'diterima')
                             <p class="mt-4 rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">Pesanan sedang diproses supplier.</p>
                         @elseif($order->status === 'selesai')
+                            @php
+                                $currentRating = old('rating', $order->rating?->rating ?? 3);
+                            @endphp
                             <p class="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Pesanan sudah selesai.</p>
+
+                            <form method="POST" action="{{ route('spk.suppliers.orders.rating', $order) }}" class="mt-4 space-y-3">
+                                @csrf
+                                @method('PATCH')
+
+                                <div>
+                                    <label class="text-xs font-semibold uppercase tracking-wider text-gray-400">Rating Kualitas</label>
+                                    <select name="rating" class="mt-1 w-full rounded-lg border-gray-200 text-sm font-semibold text-gray-700 focus:border-emerald-500 focus:ring-emerald-500">
+                                        <option value="5" @selected((int) $currentRating === 5)>5 - Sangat baik</option>
+                                        <option value="4" @selected((int) $currentRating === 4)>4 - Baik</option>
+                                        <option value="3" @selected((int) $currentRating === 3)>3 - Netral</option>
+                                        <option value="2" @selected((int) $currentRating === 2)>2 - Kurang</option>
+                                        <option value="1" @selected((int) $currentRating === 1)>1 - Buruk</option>
+                                    </select>
+                                    @error('rating')
+                                        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+
+                                <div>
+                                    <label class="text-xs font-semibold uppercase tracking-wider text-gray-400">Catatan</label>
+                                    <textarea name="note" rows="2" maxlength="500" placeholder="Opsional"
+                                        class="mt-1 w-full rounded-lg border-gray-200 text-sm text-gray-700 focus:border-emerald-500 focus:ring-emerald-500">{{ old('note', $order->rating?->note) }}</textarea>
+                                    @error('note')
+                                        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+
+                                <button class="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                                    {{ $order->rating ? 'Perbarui Rating' : 'Simpan Rating' }}
+                                </button>
+
+                                <p class="text-xs text-gray-500">
+                                    @if($order->rating)
+                                        Rating Anda saat ini: <span class="font-semibold text-gray-700">{{ $order->rating->rating }}/5</span>.
+                                    @else
+                                        Belum ada rating. SPK memakai nilai netral <span class="font-semibold text-gray-700">3/5</span> sampai rating disimpan.
+                                    @endif
+                                </p>
+                            </form>
                         @endif
                     </div>
                 </div>
