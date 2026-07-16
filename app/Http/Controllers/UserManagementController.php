@@ -16,6 +16,12 @@ class UserManagementController extends Controller
         // Hanya owner yang bisa melihat daftar karyawannya
         $karyawan = User::where('owner_id', $user['id'])
                         ->where('role', 'petugas')
+                        ->where(function ($query) {
+                            $query->where('isDeleted', false)
+                                ->orWhereNull('isDeleted');
+                        })
+                        ->orderByDesc('isActive')
+                        ->orderBy('name')
                         ->get();
 
         return view('users.index', compact('karyawan'));
@@ -47,7 +53,10 @@ class UserManagementController extends Controller
     public function update(Request $request, $id)
     {
         $owner = session('user');
-        $karyawan = User::where('id', $id)->where('owner_id', $owner['id'])->firstOrFail();
+        $karyawan = User::where('id', $id)
+            ->where('owner_id', $owner['id'])
+            ->where('role', 'petugas')
+            ->firstOrFail();
 
         $request->validate([
             'name' => 'required|string|max:255',
@@ -72,9 +81,32 @@ class UserManagementController extends Controller
     public function destroy($id)
     {
         $owner = session('user');
-        $karyawan = User::where('id', $id)->where('owner_id', $owner['id'])->firstOrFail();
-        $karyawan->delete();
+        $karyawan = User::where('id', $id)
+            ->where('owner_id', $owner['id'])
+            ->where('role', 'petugas')
+            ->firstOrFail();
 
-        return redirect()->route('users.index')->with('success', 'Akun Petugas berhasil dihapus.');
+        $karyawan->update([
+            'isActive' => false,
+        ]);
+
+        return redirect()->route('users.index')
+            ->with('success', 'Akun Petugas berhasil dinonaktifkan. Data histori tetap tersimpan.');
+    }
+
+    public function activate($id)
+    {
+        $owner = session('user');
+        $karyawan = User::where('id', $id)
+            ->where('owner_id', $owner['id'])
+            ->where('role', 'petugas')
+            ->firstOrFail();
+
+        $karyawan->update([
+            'isActive' => true,
+        ]);
+
+        return redirect()->route('users.index')
+            ->with('success', 'Akun Petugas berhasil diaktifkan kembali.');
     }
 }

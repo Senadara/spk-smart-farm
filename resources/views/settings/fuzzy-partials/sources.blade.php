@@ -15,26 +15,29 @@
     $sourceColors = [
         'iot' => 'bg-emerald-50 text-emerald-700',
         'report_metric' => 'bg-sky-50 text-sky-700',
-        'function' => 'bg-violet-50 text-violet-700',
+        'function' => 'bg-gray-100 text-gray-700',
         'database' => 'bg-amber-50 text-amber-700',
     ];
 @endphp
 
 <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-base font-semibold text-gray-900">Sumber Data Input</h2>
-            <p class="text-sm text-gray-500 mt-1">Hubungkan variabel SPK ke IoT, metric laporan dinamis, function kalkulasi, atau sumber database aman.</p>
+        <div class="flex items-center gap-2">
+            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-sm font-black text-emerald-700">2</span>
+            <div>
+                <h2 class="text-base font-semibold text-gray-900">Sumber Data</h2>
+                <p class="text-xs text-gray-500">Hubungkan input SPK ke data aktual.</p>
+            </div>
         </div>
         <button type="button" @click="openAddSource()"
-            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-[var(--color-primary)] border-none cursor-pointer hover:opacity-90 transition-opacity">
+            class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
             Atur Sumber
         </button>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div class="bg-white rounded-2xl p-5 lg:col-span-2" style="box-shadow: var(--shadow-sm);">
+        <div class="rounded-2xl border border-gray-100 bg-white p-5 lg:col-span-2" style="box-shadow: var(--shadow-sm);">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
@@ -98,10 +101,10 @@
                                 </td>
                                 <td class="py-3 px-3 text-gray-600">
                                     @if(! $src)
-                                        <span class="text-xs text-red-500">Variabel ini akan bernilai 0 saat evaluasi SPK.</span>
+                                        <span class="text-xs text-red-500">Belum terbaca saat evaluasi.</span>
                                     @elseif($src->source_type === 'iot')
                                         <div><code class="text-xs bg-gray-100 px-2 py-0.5 rounded">{{ $config['parameterCode'] ?? '-' }}</code></div>
-                                        <div class="text-xs text-gray-400 mt-1">Segar maks. {{ $config['maxAgeMinutes'] ?? 30 }} menit, offline setelah {{ $config['offlineAfterMisses'] ?? 3 }} miss</div>
+                                        <div class="text-xs text-gray-400 mt-1">Segar {{ $config['maxAgeMinutes'] ?? 30 }} menit</div>
                                     @elseif($src->source_type === 'report_metric')
                                         <div><code class="text-xs bg-gray-100 px-2 py-0.5 rounded">{{ $config['metricCode'] ?? '-' }}</code></div>
                                         <div class="text-xs text-gray-400 mt-1">{{ $config['aggregation'] ?? 'sum' }} / {{ $config['dateScope'] ?? 'today' }}</div>
@@ -139,23 +142,20 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-2xl p-5 space-y-4" style="box-shadow: var(--shadow-sm);">
-            <div>
-                <h3 class="text-sm font-semibold text-gray-900">Alur Konfigurasi</h3>
-                <p class="text-sm text-gray-500 mt-1">Urutan ini membuat SPK tetap dinamis saat parameter bertambah.</p>
-            </div>
-            <div class="space-y-3 text-sm">
-                <div class="rounded-xl bg-gray-50 p-3">
-                    <div class="font-semibold text-gray-800">1. Buat variabel input</div>
-                    <div class="text-xs text-gray-500 mt-1">Contoh: suhu, bobot_rata_rata, konsumsi_air.</div>
+        <div class="rounded-2xl border border-gray-100 bg-white p-5" style="box-shadow: var(--shadow-sm);">
+            <h3 class="text-sm font-semibold text-gray-900">Status Input</h3>
+            <div class="mt-4 space-y-3 text-sm">
+                <div class="flex items-center justify-between rounded-xl bg-gray-50 p-3">
+                    <span class="font-semibold text-gray-700">Total input</span>
+                    <span class="rounded-lg bg-white px-2 py-1 font-bold text-gray-900">{{ $inputVariables->count() }}</span>
                 </div>
-                <div class="rounded-xl bg-gray-50 p-3">
-                    <div class="font-semibold text-gray-800">2. Pilih sumber data</div>
-                    <div class="text-xs text-gray-500 mt-1">IoT untuk sensor, Metric Laporan untuk data harian fleksibel.</div>
+                <div class="flex items-center justify-between rounded-xl bg-emerald-50 p-3">
+                    <span class="font-semibold text-emerald-800">Tersambung</span>
+                    <span class="rounded-lg bg-white px-2 py-1 font-bold text-emerald-800">{{ $inputVariables->filter(fn ($var) => $sourceByVariable->has($var->id))->count() }}</span>
                 </div>
-                <div class="rounded-xl bg-gray-50 p-3">
-                    <div class="font-semibold text-gray-800">3. Lengkapi membership dan rule</div>
-                    <div class="text-xs text-gray-500 mt-1">Variabel tanpa sumber tetap tampil, tetapi hasil inputnya 0.</div>
+                <div class="flex items-center justify-between rounded-xl bg-amber-50 p-3">
+                    <span class="font-semibold text-amber-800">Belum diatur</span>
+                    <span class="rounded-lg bg-white px-2 py-1 font-bold text-amber-800">{{ $inputVariables->reject(fn ($var) => $sourceByVariable->has($var->id))->count() }}</span>
                 </div>
             </div>
         </div>
@@ -245,7 +245,7 @@
                         </div>
                     </div>
 
-                    <div x-show="editSource.source_type === 'function'" class="rounded-xl border border-violet-100 bg-violet-50/40 p-4">
+                    <div x-show="editSource.source_type === 'function'" class="rounded-xl border border-gray-200 bg-gray-50 p-4">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Function *</label>
                         <select name="function_name" x-model="editSource.function_name" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
                             <option value="">Pilih function</option>

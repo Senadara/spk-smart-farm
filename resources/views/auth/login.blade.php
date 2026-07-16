@@ -62,6 +62,11 @@
                 </x-button>
             </div>
         </form>
+
+        <div class="mt-6 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-center text-sm text-slate-600">
+            Belum punya akun?
+            <a href="{{ route('register') }}" class="font-bold text-emerald-700 hover:text-emerald-800">Daftar sebagai owner atau supplier</a>
+        </div>
     </x-card>
 
     {{-- Footer --}}

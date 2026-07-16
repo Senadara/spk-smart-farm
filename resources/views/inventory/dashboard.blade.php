@@ -18,7 +18,7 @@
             ],
             'Low Stock' => [
                 'body' => 'Item yang sudah melewati batas reorder point atau estimasi habis mendekati lead time.',
-                'formula' => 'stok <= reorder_point atau sisa_hari <= lead_time + 5',
+                'formula' => 'stok <= reorder_point atau sisa_hari <= lead_time + safety_stock',
                 'source' => 'inventory_items',
             ],
             'Critical Stock' => [
@@ -32,6 +32,7 @@
                 'source' => 'inventory_items, inventory_movements',
             ],
         ];
+        $canAccessSupplierOrders = in_array(session('user.role'), ['pjawab', 'owner', 'admin'], true);
     @endphp
 
     <div x-data="inventoryDashboard()" class="max-w-full space-y-5" x-cloak>
@@ -77,15 +78,17 @@
                             <option value="{{ $category }}">{{ $category }}</option>
                         @endforeach
                     </select>
-                    <a href="{{ route('spk.suppliers.products') }}" class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700" style="text-decoration:none;">
-                        Cari Barang Supplier
-                    </a>
+                    @if($canAccessSupplierOrders)
+                        <a href="{{ route('spk.suppliers.products') }}" class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700" style="text-decoration:none;">
+                            Cari Barang Supplier
+                        </a>
+                    @endif
                 </div>
             </div>
         </div>
 
         <x-page-hint title="Alur inventaris yang dipakai" tone="amber" :open="false">
-            Barang, stok awal, barang masuk, stok keluar, dan pemakaian harian tetap dicatat dari mobile/API Node.js. Laravel membaca proyeksi stok tersebut, menghitung rekomendasi restock, menghubungkan item ke produk supplier, lalu memasukkan produk yang sesuai ke keranjang pemesanan.
+            Barang, stok awal, barang masuk, stok keluar, dan pemakaian harian tetap dicatat dari mobile/API Node.js. Laravel membaca proyeksi stok tersebut, menampilkan stok yang menipis, lalu membantu mencari supplier terbaik dengan SPK AHP-SAW sebelum barang dimasukkan ke keranjang pemesanan.
         </x-page-hint>
 
         <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -104,124 +107,150 @@
             @endforeach
         </div>
 
-        <div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-            <div class="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
-                <div class="min-w-0 rounded-xl border border-slate-100 bg-white p-4 shadow-sm md:p-5">
-                    <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                            <h3 class="text-sm font-bold text-slate-800">Tren Pemakaian Stok</h3>
-                            <p class="text-[11px] text-slate-400">Outflow 7 hari terakhir dari sinkronisasi stok.</p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <x-metric-hint title="Tren Pemakaian Stok" body="Grafik ini menunjukkan stok keluar selama beberapa hari terakhir. Jika belum ada movement, sistem memakai estimasi pemakaian harian item." formula="SUM(inventory_movements outflow) per tanggal" source="inventory_movements, inventory_items" />
-                            <div class="flex rounded-lg bg-slate-100 p-0.5">
-                            <template x-for="r in [{v:'3d',l:'3H'},{v:'5d',l:'5H'},{v:'7d',l:'7H'}]" :key="r.v">
-                                <button @click="consumptionRange=r.v; renderConsumption()" :class="consumptionRange===r.v ? 'bg-white shadow-sm text-slate-900':'text-slate-500 hover:text-slate-700'" class="rounded-md px-2.5 py-1 text-[10px] font-semibold transition-all" x-text="r.l"></button>
-                            </template>
-                            </div>
-                        </div>
+        <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <div class="min-w-0 rounded-xl border border-slate-100 bg-white p-4 shadow-sm md:p-5">
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-800">Tren Pemakaian Stok</h3>
+                        <p class="text-[11px] text-slate-400">Outflow 7 hari terakhir dari sinkronisasi stok.</p>
                     </div>
-                    <div class="relative h-[210px] md:h-[220px]">
-                        <canvas x-ref="consumptionCanvas"></canvas>
-                        <div x-show="!chartReady" class="absolute inset-0 flex items-center justify-center rounded-lg bg-slate-50 text-xs font-semibold text-slate-500">
-                            Grafik siap setelah Chart.js termuat.
+                    <div class="flex items-center gap-2">
+                        <x-metric-hint title="Tren Pemakaian Stok" body="Grafik ini menunjukkan stok keluar selama beberapa hari terakhir. Jika belum ada movement, sistem memakai estimasi pemakaian harian item." formula="SUM(inventory_movements outflow) per tanggal" source="inventory_movements, inventory_items" />
+                        <div class="flex rounded-lg bg-slate-100 p-0.5">
+                        <template x-for="r in [{v:'3d',l:'3H'},{v:'5d',l:'5H'},{v:'7d',l:'7H'}]" :key="r.v">
+                            <button @click="consumptionRange=r.v; renderConsumption()" :class="consumptionRange===r.v ? 'bg-white shadow-sm text-slate-900':'text-slate-500 hover:text-slate-700'" class="rounded-md px-2.5 py-1 text-[10px] font-semibold transition-all" x-text="r.l"></button>
+                        </template>
                         </div>
                     </div>
                 </div>
-
-                <div class="min-w-0 rounded-xl border border-slate-100 bg-white p-4 shadow-sm md:p-5">
-                    <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                            <h3 class="text-sm font-bold text-slate-800">Distribusi Pemakaian</h3>
-                            <p class="text-[11px] text-slate-400">Estimasi pemakaian harian per kandang.</p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <x-metric-hint title="Distribusi Pemakaian" body="Grafik ini membandingkan estimasi pemakaian harian pakan dan vitamin pada tiap kandang." formula="SUM(daily_usage) per kandang dan kategori" source="inventory_items, unitBudidaya" />
-                            <select x-model="usageFilter" @change="renderUsage()" class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-300">
-                                <option value="all">Semua</option>
-                                <option value="pakan">Pakan</option>
-                                <option value="vitamin">Vitamin</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="relative h-[210px] md:h-[220px]">
-                        <canvas x-ref="usageCanvas"></canvas>
-                        <div x-show="!chartReady" class="absolute inset-0 flex items-center justify-center rounded-lg bg-slate-50 text-xs font-semibold text-slate-500">
-                            Grafik siap setelah Chart.js termuat.
-                        </div>
+                <div class="relative h-[220px]">
+                    <canvas x-ref="consumptionCanvas"></canvas>
+                    <div x-show="!chartReady" class="absolute inset-0 flex items-center justify-center rounded-lg bg-slate-50 text-xs font-semibold text-slate-500">
+                        Grafik siap setelah Chart.js termuat.
                     </div>
                 </div>
             </div>
 
-            <div class="flex min-h-0 flex-col rounded-xl border border-emerald-100 bg-white p-4 shadow-sm xl:h-[312px]">
-                <div class="mb-3 flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 pb-3">
-                    <div class="min-w-0">
-                        <h3 class="text-sm font-bold text-slate-900">Rekomendasi Restock</h3>
-                        <p class="mt-0.5 text-[11px] text-slate-500">Prioritas stok, sisa hari, dan lead time.</p>
+            <div class="min-w-0 rounded-xl border border-slate-100 bg-white p-4 shadow-sm md:p-5">
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-800">Distribusi Pemakaian</h3>
+                        <p class="text-[11px] text-slate-400">Estimasi pemakaian harian per kandang.</p>
                     </div>
-                    <div class="flex shrink-0 items-center gap-2">
-                        <x-metric-hint title="Rekomendasi Restock" body="Daftar ini diurutkan berdasarkan skor prioritas restock. Critical lebih tinggi dari Warning, lalu dipengaruhi sisa hari dan lead time." formula="status_weight + days_weight + lead_time_weight" source="inventory_items, supplier product link" />
-                        <span class="rounded border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold tracking-wide text-emerald-600">{{ count($recommendedRestocks) }}</span>
+                    <div class="flex items-center gap-2">
+                        <x-metric-hint title="Distribusi Pemakaian" body="Grafik ini membandingkan estimasi pemakaian harian pakan dan vitamin pada tiap kandang." formula="SUM(daily_usage) per kandang dan kategori" source="inventory_items, unitBudidaya" />
+                        <select x-model="usageFilter" @change="renderUsage()" class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-300">
+                            <option value="all">Semua</option>
+                            <option value="pakan">Pakan</option>
+                            <option value="vitamin">Vitamin</option>
+                        </select>
                     </div>
                 </div>
-
-                <div class="custom-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-                    @forelse ($recommendedRestocks as $item)
-                        @php
-                            $pColor = ['Critical' => 'bg-rose-50 text-rose-700 border-rose-100', 'Warning' => 'bg-amber-50 text-amber-700 border-amber-100', 'Safe' => 'bg-slate-50 text-slate-600 border-slate-100'][$item['priority']] ?? 'bg-slate-50 text-slate-600 border-slate-100';
-                            $linked = $item['linked_product'];
-                        @endphp
-                        <div class="rounded-lg border border-slate-100 bg-white p-2.5">
-                            <div class="flex items-start justify-between gap-2">
-                                <div class="min-w-0">
-                                    <h4 class="line-clamp-1 text-xs font-bold text-slate-900" title="{{ $item['name'] }}">{{ $item['name'] }}</h4>
-                                    <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
-                                        <span>{{ $item['current_stock'] }}</span>
-                                        <span class="h-1 w-1 rounded-full bg-slate-300"></span>
-                                        <span class="{{ ($item['days_remaining'] ?? 999) <= 3 ? 'font-bold text-rose-600' : '' }}">{{ $item['days_label'] }}</span>
-                                    </div>
-                                </div>
-                                <span class="shrink-0 whitespace-nowrap rounded border px-1.5 py-0.5 text-[9px] font-semibold {{ $pColor }}">{{ $item['priority'] }}</span>
-                            </div>
-
-                            @if($linked)
-                                <div class="mt-2 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[10px] text-emerald-800">
-                                    <p class="line-clamp-1 font-bold">{{ $linked['name'] }}</p>
-                                    <p class="mt-0.5 line-clamp-1">{{ $linked['store'] }} - rekomendasi {{ $linked['recommended_label'] }}</p>
-                                </div>
-                            @else
-                                <div class="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[10px] text-amber-800">
-                                    <p class="font-bold">Belum terhubung produk supplier.</p>
-                                </div>
-                            @endif
-
-                            <div class="mt-2 flex items-center justify-between gap-2 border-t border-slate-50 pt-2">
-                                <span class="rounded border border-slate-100 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">Score {{ $item['score'] }}</span>
-                                <div class="flex shrink-0 gap-1">
-                                    @if($linked)
-                                        <form method="POST" action="{{ $item['order_url'] }}">
-                                            @csrf
-                                            <button type="submit" class="rounded-md bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-emerald-700">
-                                                Pesan Barang
-                                            </button>
-                                        </form>
-                                    @else
-                                        <button @click="openLink(@js($item))" class="rounded-md bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 transition hover:bg-amber-100">
-                                            Hubungkan
-                                        </button>
-                                        <a href="{{ route('spk.suppliers.products', ['search' => $item['name']]) }}" class="rounded-md bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-slate-700" style="text-decoration:none;">
-                                            Cari
-                                        </a>
-                                    @endif
-                                </div>
-                            </div>
-                        </div>
-                    @empty
-                        <div class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-xs text-slate-500">
-                            Belum ada item stok tersinkron.
-                        </div>
-                    @endforelse
+                <div class="relative h-[220px]">
+                    <canvas x-ref="usageCanvas"></canvas>
+                    <div x-show="!chartReady" class="absolute inset-0 flex items-center justify-center rounded-lg bg-slate-50 text-xs font-semibold text-slate-500">
+                        Grafik siap setelah Chart.js termuat.
+                    </div>
                 </div>
+            </div>
+
+            <div class="min-w-0 rounded-xl border border-slate-100 bg-white p-4 shadow-sm md:p-5">
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-800">Estimasi Sisa Stok</h3>
+                        <p class="text-[11px] text-slate-400">Item paling dekat habis berdasarkan pemakaian harian.</p>
+                    </div>
+                    <x-metric-hint title="Estimasi Sisa Stok" body="Grafik ini mengurutkan item dengan sisa hari terendah. Item tanpa pemakaian harian dianggap belum punya estimasi akurat." formula="stok / pemakaian_harian" source="inventory_items" />
+                </div>
+                <div class="relative h-[220px]">
+                    <canvas x-ref="durationCanvas"></canvas>
+                    <div x-show="!chartReady" class="absolute inset-0 flex items-center justify-center rounded-lg bg-slate-50 text-xs font-semibold text-slate-500">
+                        Grafik siap setelah Chart.js termuat.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm md:p-5">
+            <div class="mb-4 flex flex-col gap-3 border-b border-slate-100 pb-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <h3 class="text-base font-bold text-slate-900">Rekomendasi Restock</h3>
+                    <p class="mt-1 text-xs text-slate-500">
+                        {{ $restockView === 'all'
+                            ? 'Mode audit menampilkan semua stok, diurutkan dari prioritas restock tertinggi.'
+                            : 'Hanya menampilkan stok Critical dan Warning. Klik CTA untuk mencari supplier terbaik.' }}
+                    </p>
+                </div>
+                <div class="flex shrink-0 flex-wrap items-center gap-2">
+                    <div class="flex rounded-lg bg-slate-100 p-0.5">
+                        <a href="{{ route('inventory', request()->except('restock_view')) }}"
+                            class="rounded-md px-3 py-1.5 text-[11px] font-bold transition {{ $restockView === 'needs' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700' }}"
+                            style="text-decoration:none;">
+                            Stok Menipis
+                        </a>
+                        <a href="{{ route('inventory', array_merge(request()->except('restock_view'), ['restock_view' => 'all'])) }}"
+                            class="rounded-md px-3 py-1.5 text-[11px] font-bold transition {{ $restockView === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700' }}"
+                            style="text-decoration:none;">
+                            Semua Stok
+                        </a>
+                    </div>
+                    <x-metric-hint title="Rekomendasi Restock" body="Daftar ini diurutkan berdasarkan skor prioritas restock. Setelah dipilih, sistem mencari produk supplier yang cocok lalu meranking supplier dengan AHP-SAW." formula="status_weight + days_weight + lead_time_weight" source="inventory_items, produk/toko supplier, spk supplier" />
+                    <span class="rounded border border-emerald-100 bg-emerald-50 px-2 py-1 text-xs font-bold tracking-wide text-emerald-600">{{ count($recommendedRestocks) }} item</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                @forelse ($recommendedRestocks as $item)
+                    @php
+                        $pColor = ['Critical' => 'bg-rose-50 text-rose-700 border-rose-100', 'Warning' => 'bg-amber-50 text-amber-700 border-amber-100', 'Safe' => 'bg-slate-50 text-slate-600 border-slate-100'][$item['priority']] ?? 'bg-slate-50 text-slate-600 border-slate-100';
+                        $barColor = ['Critical' => 'bg-rose-500', 'Warning' => 'bg-amber-500', 'Safe' => 'bg-emerald-500'][$item['priority']] ?? 'bg-slate-400';
+                        $linked = $item['linked_product'];
+                    @endphp
+                    <div class="rounded-xl border border-slate-100 bg-slate-50/40 p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <h4 class="line-clamp-2 text-sm font-bold text-slate-900" title="{{ $item['name'] }}">{{ $item['name'] }}</h4>
+                                <p class="mt-1 text-xs text-slate-500">{{ $item['category'] }} - {{ $item['current_stock'] }}</p>
+                            </div>
+                            <span class="shrink-0 whitespace-nowrap rounded border px-2 py-1 text-[10px] font-bold {{ $pColor }}">{{ $item['priority'] }}</span>
+                        </div>
+
+                        <div class="mt-4">
+                            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500">
+                                <span>Sisa stok</span>
+                                <span class="{{ ($item['days_remaining'] ?? 999) <= $item['lead_time'] ? 'text-rose-600' : 'text-slate-700' }}">{{ $item['days_label'] }}</span>
+                            </div>
+                            <div class="mt-2 h-2 overflow-hidden rounded-full bg-white">
+                                <div class="h-full rounded-full {{ $barColor }}" style="width: {{ $item['coverage_percent'] }}%"></div>
+                            </div>
+                            <p class="mt-2 text-[11px] text-slate-500">Lead time {{ $item['lead_time'] }} hari, safety stock {{ $item['safety_stock_days'] }} hari, reorder point {{ $item['reorder_point'] }} {{ $item['reorder_point_source'] }}.</p>
+                        </div>
+
+                        <div class="mt-4 rounded-lg {{ $linked ? 'bg-emerald-50 text-emerald-800' : 'bg-sky-50 text-sky-800' }} px-3 py-2 text-xs">
+                            <p class="font-bold">{{ $linked ? 'Produk favorit tersimpan' : 'Supplier dicari otomatis' }}</p>
+                            <p class="mt-0.5 line-clamp-2">
+                                {{ $linked ? $linked['name'].' - '.$linked['store'] : 'Sistem akan mencari produk yang cocok dari katalog supplier, lalu memberi urutan rekomendasi.' }}
+                            </p>
+                        </div>
+
+                        <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                            <span class="rounded border border-slate-100 bg-white px-2 py-1 font-mono text-[11px] text-slate-600">Score {{ $item['score'] }}</span>
+                            <div class="flex flex-wrap gap-1.5">
+                                @if($canAccessSupplierOrders)
+                                    <a href="{{ $item['recommend_url'] }}" class="rounded-md bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-slate-700" style="text-decoration:none;">
+                                        Cari Supplier Terbaik
+                                    </a>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                @empty
+                    <div class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-xs text-slate-500 md:col-span-2 xl:col-span-3">
+                        {{ $restockView === 'all'
+                            ? 'Belum ada item stok tersinkron.'
+                            : 'Tidak ada stok yang menipis saat ini. Gunakan mode Semua Stok jika ingin melihat seluruh inventaris.' }}
+                    </div>
+                @endforelse
             </div>
         </div>
 
@@ -258,7 +287,7 @@
                                 <th class="pb-2 text-right font-medium">Stok</th>
                                 <th class="pb-2 text-right font-medium">Pakai/Hari</th>
                                 <th class="pb-2 text-right font-medium">Est. Habis</th>
-                                <th class="pb-2 font-medium">Produk Supplier</th>
+                                <th class="pb-2 font-medium">Alur Restock</th>
                                 <th class="pb-2 text-center font-medium">Status</th>
                                 <th class="pb-2 text-right font-medium">Aksi</th>
                             </tr>
@@ -295,10 +324,10 @@
                                     <td class="py-2.5 text-right text-[11px] font-medium {{ ($item['days_left'] ?? 999) <= 5 ? 'text-rose-600' : 'text-slate-700' }}">{{ $item['days_left_label'] }}</td>
                                     <td class="py-2.5 text-xs">
                                         @if($linked)
-                                            <p class="font-semibold text-slate-800">{{ $linked['name'] }}</p>
-                                            <p class="text-[10px] text-slate-500">{{ $linked['store'] }}</p>
+                                            <p class="font-semibold text-slate-800">Produk favorit tersedia</p>
+                                            <p class="text-[10px] text-slate-500">{{ $linked['name'] }} - {{ $linked['store'] }}</p>
                                         @else
-                                            <span class="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Belum mapping</span>
+                                            <span class="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">Cari otomatis via SPK</span>
                                         @endif
                                     </td>
                                     <td class="py-2.5 text-center">
@@ -309,17 +338,15 @@
                                             <button @click="openDetail(@js($item))" class="rounded-md bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100">
                                                 Detail
                                             </button>
-                                            @if($linked)
-                                                <form method="POST" action="{{ route('inventory.items.restock-order', $item['raw_id']) }}">
-                                                    @csrf
-                                                    <button type="submit" class="rounded-md bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 transition hover:bg-emerald-100">
-                                                        Pesan
-                                                    </button>
-                                                </form>
-                                            @else
-                                                <button @click="openLink(@js($item))" class="rounded-md bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 transition hover:bg-amber-100">
-                                                    Hubungkan
+                                            @if($canAccessSupplierOrders)
+                                                <button @click="openConfig(@js($item))" class="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50">
+                                                    Atur
                                                 </button>
+                                            @endif
+                                            @if($canAccessSupplierOrders)
+                                                <a href="{{ route('inventory.items.supplier-recommendations', $item['raw_id']) }}" class="rounded-md bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-slate-700" style="text-decoration:none;">
+                                                    Cari Supplier
+                                                </a>
                                             @endif
                                         </div>
                                     </td>
@@ -363,6 +390,67 @@
                         <p class="rounded-lg border border-dashed border-slate-200 py-8 text-center text-xs text-slate-400">Belum ada pergerakan stok.</p>
                     @endforelse
                 </div>
+            </div>
+        </div>
+
+        <div x-show="showConfigModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="showConfigModal=false" style="display:none;">
+            <div class="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                <div class="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-sm font-bold text-slate-900">Atur Batas Restock</h3>
+                            <x-metric-hint title="Atur Batas Restock" body="Konfigurasi ini hanya mengatur keputusan restock di Laravel. Stok utama tetap berasal dari mobile/API Node.js." formula="reorder point auto = max(stok minimum, pemakaian harian x (lead time + safety stock))" source="inventory_items" />
+                        </div>
+                        <p class="mt-0.5 text-xs text-slate-500" x-text="configItem ? `${configItem.name} - stok ${configItem.stock_label}` : ''"></p>
+                    </div>
+                    <button @click="showConfigModal=false" class="text-slate-400 hover:text-slate-600">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                <form method="POST" :action="configAction" class="space-y-5 px-6 py-5">
+                    @csrf
+                    @method('PATCH')
+
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <label class="block">
+                            <span class="mb-1.5 block text-xs font-bold text-slate-700">Lead time supplier</span>
+                            <input type="number" min="1" max="60" name="lead_time_days" x-model="configForm.lead_time_days" required
+                                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none">
+                            <span class="mt-1 block text-[10px] text-slate-400">Hari dari pesan sampai barang tersedia.</span>
+                        </label>
+                        <label class="block">
+                            <span class="mb-1.5 block text-xs font-bold text-slate-700">Safety stock</span>
+                            <input type="number" min="0" max="60" name="safety_stock_days" x-model="configForm.safety_stock_days" required
+                                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none">
+                            <span class="mt-1 block text-[10px] text-slate-400">Cadangan hari agar stok tidak terlalu mepet.</span>
+                        </label>
+                        <label class="block">
+                            <span class="mb-1.5 block text-xs font-bold text-slate-700">Reorder point manual</span>
+                            <input type="number" min="0" step="0.01" name="reorder_point_override" x-model="configForm.reorder_point_override"
+                                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                                placeholder="Kosongkan untuk auto">
+                            <span class="mt-1 block text-[10px] text-slate-400">Opsional, kosongkan agar sistem hitung otomatis.</span>
+                        </label>
+                    </div>
+
+                    <div class="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                        <p class="font-bold text-slate-800">Acuan saat ini</p>
+                        <div class="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+                            <span>Minimum: <b x-text="configItem?.minimum_stock ?? '-'"></b></span>
+                            <span>Pakai/hari: <b x-text="configItem?.daily_usage_label ?? '-'"></b></span>
+                            <span>Sisa: <b x-text="configItem?.days_left_label ?? '-'"></b></span>
+                            <span>Reorder: <b x-text="configItem?.reorder_point ?? '-'"></b></span>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p class="text-xs text-slate-500">Perubahan ini akan dipakai saat sinkronisasi mobile berikutnya dan saat rekomendasi restock dihitung.</p>
+                        <button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700">
+                            Simpan Batas
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
 
@@ -418,9 +506,11 @@
                     <template x-if="linkItem && linkItem.supplier_candidates.length === 0">
                         <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center">
                             <p class="text-sm font-semibold text-slate-700">Belum ada kandidat produk yang cocok.</p>
-                            <a :href="`{{ route('spk.suppliers.products') }}?search=${encodeURIComponent(linkItem.name)}`" class="mt-3 inline-flex rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white" style="text-decoration:none;">
-                                Cari di Marketplace Supplier
-                            </a>
+                            @if($canAccessSupplierOrders)
+                                <a :href="`{{ route('spk.suppliers.products') }}?search=${encodeURIComponent(linkItem.name)}`" class="mt-3 inline-flex rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white" style="text-decoration:none;">
+                                    Cari di Marketplace Supplier
+                                </a>
+                            @endif
                         </div>
                     </template>
                 </div>
@@ -500,13 +590,25 @@
                 usageFilter: 'all',
                 chartReady: false,
                 chartAttempts: 0,
+                showConfigModal: false,
                 showLinkModal: false,
                 showDetailModal: false,
+                configItem: null,
                 linkItem: null,
                 detailItem: null,
                 detailMovements: [],
+                configForm: {
+                    lead_time_days: 1,
+                    safety_stock_days: 5,
+                    reorder_point_override: '',
+                },
                 _consumptionChart: null,
                 _usageChart: null,
+                _durationChart: null,
+
+                get configAction() {
+                    return this.configItem ? `{{ url('/inventory/items') }}/${this.configItem.raw_id}/restock-config` : '#';
+                },
 
                 get linkAction() {
                     return this.linkItem ? `{{ url('/inventory/items') }}/${this.linkItem.raw_id}/supplier-links` : '#';
@@ -526,6 +628,7 @@
                     this.$nextTick(() => {
                         this.renderConsumption();
                         this.renderUsage();
+                        this.renderDuration();
                     });
                 },
 
@@ -543,6 +646,16 @@
                 openLink(item) {
                     this.linkItem = item;
                     this.showLinkModal = true;
+                },
+
+                openConfig(item) {
+                    this.configItem = item;
+                    this.configForm = {
+                        lead_time_days: item.lead_time || 1,
+                        safety_stock_days: item.safety_stock_days ?? 5,
+                        reorder_point_override: item.reorder_point_override ?? '',
+                    };
+                    this.showConfigModal = true;
                 },
 
                 async openDetail(item) {
@@ -565,6 +678,7 @@
                         { label: 'Stok', value: this.detailItem.stock_label },
                         { label: 'Pakai/Hari', value: this.detailItem.daily_usage_label },
                         { label: 'Sisa', value: this.detailItem.days_left_label },
+                        { label: 'Reorder', value: `${this.detailItem.reorder_point} (${this.detailItem.reorder_point_source})` },
                         { label: 'Supplier', value: this.detailItem.linked_product?.store || 'Belum mapping' },
                     ];
                 },
@@ -596,6 +710,54 @@
                             scales: {
                                 x: { grid: { display: false }, ticks: { font: { size: 9 }, color: '#94A3B8' } },
                                 y: { grid: { color: 'rgba(15,23,42,0.06)' }, ticks: { font: { size: 9 }, color: '#94A3B8' } },
+                            },
+                        },
+                    });
+                },
+
+                renderDuration() {
+                    if (!this.chartReady) return;
+                    const ctx = this.$refs.durationCanvas;
+                    if (!ctx) return;
+                    if (this._durationChart) this._durationChart.destroy();
+
+                    const labels = @js($charts['stockDuration']['labels']);
+                    const statuses = @js($charts['stockDuration']['statuses']);
+                    const colors = statuses.map((status) => {
+                        if (status === 'critical') return '#E11D48';
+                        if (status === 'warning') return '#F59E0B';
+                        return '#10B981';
+                    });
+
+                    this._durationChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels,
+                            datasets: [{
+                                label: 'Sisa hari',
+                                data: @js($charts['stockDuration']['days']),
+                                backgroundColor: colors,
+                                borderRadius: 6,
+                            }],
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        afterLabel(context) {
+                                            const stocks = @js($charts['stockDuration']['stocks']);
+                                            return `Stok: ${stocks[context.dataIndex] || '-'}`;
+                                        },
+                                    },
+                                },
+                            },
+                            scales: {
+                                x: { grid: { color: 'rgba(15,23,42,0.06)' }, ticks: { font: { size: 9 }, color: '#94A3B8' } },
+                                y: { grid: { display: false }, ticks: { font: { size: 9 }, color: '#64748B' } },
                             },
                         },
                     });

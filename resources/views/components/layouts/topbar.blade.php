@@ -16,6 +16,9 @@
 //         ];
 //     });
 
+$role = session('user.role');
+$canSeeIotNotifications = in_array($role, ['pjawab', 'owner', 'admin', 'inventor'], true);
+
 $notifications = session('user.role') === 'supplier' ? collect() : collect([
     [
         'id' => 1,
@@ -34,9 +37,10 @@ $notifications = session('user.role') === 'supplier' ? collect() : collect([
         'created_at' => '1 jam lalu',
     ],
 ]);
+$notifications = collect();
 
-if (session('user.role') !== 'supplier') {
-    $iotNotifications = \Illuminate\Support\Facades\Schema::hasTable('iot_device_log')
+if ($role !== 'supplier') {
+    $iotNotifications = $canSeeIotNotifications && \Illuminate\Support\Facades\Schema::hasTable('iot_device_log')
         ? \App\Models\IotDeviceLog::with('device')
             ->whereIn('logType', ['WARNING', 'ERROR'])
             ->latest('createdAt')

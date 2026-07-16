@@ -6,28 +6,31 @@
         'kausalitas' => 'Engine 3 - Kausalitas',
     ];
     $groupHints = [
-        'lingkungan' => 'Input sensor seperti suhu, kelembapan, dan amonia. Outputnya status lingkungan.',
-        'kesehatan' => 'Input produktivitas seperti HDP, pakan, dan mortalitas. Outputnya indeks kesehatan.',
-        'kausalitas' => 'Input label dari engine sebelumnya. Outputnya diagnosis dan arah tindakan.',
+        'lingkungan' => 'Sensor kandang',
+        'kesehatan' => 'Laporan produksi',
+        'kausalitas' => 'Diagnosis gabungan',
     ];
     $groupStyles = [
         'lingkungan' => 'bg-emerald-50 text-emerald-700 border-emerald-100',
         'kesehatan' => 'bg-sky-50 text-sky-700 border-sky-100',
-        'kausalitas' => 'bg-violet-50 text-violet-700 border-violet-100',
+        'kausalitas' => 'bg-amber-50 text-amber-700 border-amber-100',
     ];
 @endphp
 
 <div class="space-y-4">
     <div class="rounded-2xl border border-gray-100 bg-white p-4" style="box-shadow: var(--shadow-sm);">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div class="min-w-0">
-                <h2 class="text-base font-semibold text-gray-900">Variabel & Membership Function</h2>
-                <p class="mt-1 max-w-3xl text-sm leading-6 text-gray-500">
-                    Mulai dari variabel input/output, lalu lengkapi himpunan fuzzy. Output tiap engine akan dipakai sebagai bahan rule berikutnya.
-                </p>
+                <div class="flex items-center gap-2">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-sm font-black text-emerald-700">1</span>
+                    <div>
+                        <h2 class="text-base font-semibold text-gray-900">Variabel & Set Fuzzy</h2>
+                        <p class="text-xs text-gray-500">Kelola parameter input/output dan membership.</p>
+                    </div>
+                </div>
             </div>
             <button type="button" @click="modal = 'addVariable'"
-                class="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90">
+                class="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                 Tambah Variabel
             </button>
@@ -59,8 +62,12 @@
                 </span>
             </label>
             <div class="flex gap-2 lg:self-end">
-                <button type="button" @click="expandAll()" class="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100 lg:flex-none">Buka semua</button>
-                <button type="button" @click="collapseAll()" class="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100 lg:flex-none">Tutup semua</button>
+                <button type="button" @click="expandAll()" class="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 lg:flex-none" title="Tampilkan detail semua variabel">
+                    Buka
+                </button>
+                <button type="button" @click="collapseAll()" class="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 lg:flex-none" title="Sembunyikan detail semua variabel">
+                    Tutup
+                </button>
             </div>
         </div>
     </div>
@@ -84,7 +91,7 @@
                             </span>
                             <h3 class="text-sm font-semibold text-gray-900">{{ $groupLabel }}</h3>
                         </div>
-                        <p class="mt-1 text-sm leading-6 text-gray-500">{{ $groupHints[$groupKey] }}</p>
+                         <p class="mt-0.5 text-xs text-gray-500">{{ $groupHints[$groupKey] }}</p>
                     </div>
                     <div class="flex gap-2 text-xs font-medium text-gray-500">
                         <span class="rounded-full bg-gray-100 px-2.5 py-1">{{ $groups[$groupKey]->count() }} variabel</span>
@@ -110,7 +117,7 @@
                                             @endif
                                         </div>
                                         @if($var->description)
-                                            <p class="mt-1 text-xs leading-5 text-gray-500">{{ $var->description }}</p>
+                                            <p class="mt-1 text-xs leading-5 text-gray-500">{{ \Illuminate\Support\Str::limit($var->description, 90) }}</p>
                                         @else
                                             <p class="mt-1 text-xs leading-5 text-gray-400">Belum ada deskripsi variabel.</p>
                                         @endif
@@ -169,16 +176,15 @@
                                     </div>
                                 @else
                                     <div class="rounded-xl border border-dashed border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                                        Variabel ini belum memiliki membership function. Tambahkan minimal satu set agar bisa digunakan dalam rule.
+                                        Belum ada set fuzzy. Tambahkan set agar variabel dapat dipakai rule.
                                     </div>
                                 @endif
 
                                 <div class="flex flex-wrap items-center justify-between gap-3">
                                     <div>
                                         <span class="text-xs font-semibold uppercase tracking-wider text-gray-500">Himpunan fuzzy</span>
-                                        <p class="mt-1 text-xs text-gray-400">Gunakan urutan titik a, b, c, d dari kiri ke kanan.</p>
                                     </div>
-                                    <button type="button" @click="editSet = { variable_id: '{{ $var->id }}' }; modal = 'addSet'" class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100">Tambah Set</button>
+                                    <button type="button" @click="editSet = { variable_id: '{{ $var->id }}' }; modal = 'addSet'" class="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700">Tambah Set</button>
                                 </div>
 
                                 <div class="overflow-x-auto rounded-xl border border-gray-100">

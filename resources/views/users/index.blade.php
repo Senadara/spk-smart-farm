@@ -60,7 +60,10 @@
                     </thead>
                     <tbody class="divide-y divide-gray-50">
                         @foreach ($karyawan as $k)
-                        <tr class="hover:bg-gray-50/30 transition-colors group">
+                        @php
+                            $isActive = (bool) $k->isActive;
+                        @endphp
+                        <tr class="hover:bg-gray-50/30 transition-colors group {{ $isActive ? '' : 'bg-slate-50/70' }}">
                             <td class="px-6 py-4">
                                 <div class="flex items-center gap-4">
                                     <img src="{{ $k->avatarUrl ?? 'https://api.dicebear.com/9.x/thumbs/svg?seed='.$k->name }}" alt="Avatar" class="w-10 h-10 rounded-full bg-gray-100 object-cover border border-gray-200">
@@ -71,10 +74,17 @@
                                 </div>
                             </td>
                             <td class="px-6 py-4">
-                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                    Aktif
-                                </span>
+                                @if($isActive)
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                        Aktif
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                        Nonaktif
+                                    </span>
+                                @endif
                             </td>
                             <td class="px-6 py-4 text-sm text-gray-500 font-medium">
                                 {{ $k->createdAt ? \Carbon\Carbon::parse($k->createdAt)->translatedFormat('d M Y') : '-' }}
@@ -84,13 +94,23 @@
                                     <button @click="openEdit('{{ $k->id }}', '{{ addslashes($k->name) }}', '{{ addslashes($k->email) }}')" class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors tooltip" title="Edit">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
                                     </button>
-                                    <form action="{{ route('users.destroy', $k->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Peringatan: Menghapus karyawan akan menyebabkan data terkait mungkin tidak memiliki penanggung jawab. Lanjutkan?');">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors tooltip" title="Hapus">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                        </button>
-                                    </form>
+                                    @if($isActive)
+                                        <form action="{{ route('users.destroy', $k->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Nonaktifkan akun petugas ini? Petugas tidak bisa login, tetapi data histori tetap tersimpan.');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors tooltip" title="Nonaktifkan">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 11-12.728 0M12 3v9"/></svg>
+                                            </button>
+                                        </form>
+                                    @else
+                                        <form action="{{ route('users.activate', $k->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Aktifkan kembali akun petugas ini?');">
+                                            @csrf
+                                            @method('PATCH')
+                                            <button type="submit" class="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100" title="Aktifkan kembali">
+                                                Aktifkan
+                                            </button>
+                                        </form>
+                                    @endif
                                 </div>
                             </td>
                         </tr>

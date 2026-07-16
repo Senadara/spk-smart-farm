@@ -6,11 +6,13 @@ use Tests\TestCase;
 use App\Services\AHPService;
 use App\Models\SpkParameter;
 use App\Models\SpkAhpPerbandingan;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\User;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Str;
 
 class AHPServiceTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     public function test_ahp_calculation_returns_valid_cr()
     {
@@ -20,20 +22,29 @@ class AHPServiceTest extends TestCase
         $param3 = SpkParameter::create(['nama_parameter' => 'Kecepatan', 'tipe' => 'benefit']);
 
         // Set comparisons (1 vs 2, 1 vs 3, 2 vs 3)
-        // Let's make a moderately consistent matrix
-        $userId = 1;
+        // Consistent matrix: Harga > Kualitas > Kecepatan.
+        $userId = Str::uuid()->toString();
+        User::query()->create([
+            'id' => $userId,
+            'name' => 'AHP Tester',
+            'email' => Str::uuid().'@test.local',
+            'password' => 'password',
+            'role' => 'pjawab',
+            'isActive' => true,
+            'isDeleted' => false,
+        ]);
         
         SpkAhpPerbandingan::create([
             'user_id' => $userId,
             'parameter_1_id' => $param1->id,
             'parameter_2_id' => $param2->id,
-            'nilai_skala' => 3
+            'nilai_skala' => 2
         ]);
         SpkAhpPerbandingan::create([
             'user_id' => $userId,
             'parameter_1_id' => $param1->id,
             'parameter_2_id' => $param3->id,
-            'nilai_skala' => 5
+            'nilai_skala' => 4
         ]);
         SpkAhpPerbandingan::create([
             'user_id' => $userId,

@@ -417,7 +417,8 @@ class DashboardController extends Controller
             return 'critical';
         }
 
-        if ($item->stock <= $item->reorder_point || ($daysLeft !== null && $daysLeft <= (int) $item->lead_time_days + 5)) {
+        $warningDays = (int) $item->lead_time_days + max(1, (int) ($item->safety_stock_days ?? 5));
+        if ($item->stock <= $item->reorder_point || ($daysLeft !== null && $daysLeft <= $warningDays)) {
             return 'warning';
         }
 

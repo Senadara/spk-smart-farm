@@ -70,6 +70,12 @@ class SAWRecommenderService
                     continue;
                 }
 
+                if ($this->isDistanceParameter($param)) {
+                    $valuesByParameter[$param->id] = $this->distanceKmValue($suppliers[$sid], $userId);
+
+                    continue;
+                }
+
                 $pv = $paramValues->where('supplier_id', $sid)->where('parameter_id', $param->id)->first();
                 if ($pv) {
                     $valuesByParameter[$param->id] = (float) $pv->value;
@@ -162,6 +168,8 @@ class SAWRecommenderService
             foreach ($parameters as $param) {
                 if ($this->isDeliveryTimeParameter($param)) {
                     $val = $this->deliveryDaysValue($supplier, $userId);
+                } elseif ($this->isDistanceParameter($param)) {
+                    $val = $this->distanceKmValue($supplier, $userId);
                 } else {
                     $pv = $paramValues->where('supplier_id', $supplier->id)
                         ->where('parameter_id', $param->id)
@@ -227,6 +235,11 @@ class SAWRecommenderService
         return str_contains(strtolower($parameter->nama_parameter), 'kualitas');
     }
 
+    private function isDistanceParameter(SpkParameter $parameter): bool
+    {
+        return str_contains(strtolower($parameter->nama_parameter), 'jarak');
+    }
+
     private function neutralQualityRating(): float
     {
         return 3.0;
@@ -239,6 +252,11 @@ class SAWRecommenderService
         return $this->distanceService->estimatedDeliveryDays($distance) ?? 99.0;
     }
 
+    private function distanceKmValue(MasterSupplier $supplier, ?string $userId): float
+    {
+        return $this->distanceService->distanceToSupplier($supplier, $userId) ?? 999.0;
+    }
+
     /**
      * @param  \Illuminate\Support\Collection<int, SpkSupplierParameterValue>  $storedValues
      * @param  \Illuminate\Support\Collection<int, SpkParameter>  $parameters
@@ -249,6 +267,7 @@ class SAWRecommenderService
     {
         $values = collect($storedValues);
         $deliveryParameters = $parameters->filter(fn (SpkParameter $param) => $this->isDeliveryTimeParameter($param));
+        $distanceParameters = $parameters->filter(fn (SpkParameter $param) => $this->isDistanceParameter($param));
         $qualityParameters = $parameters->filter(fn (SpkParameter $param) => $this->isQualityParameter($param));
 
         foreach ($deliveryParameters as $parameter) {
@@ -257,6 +276,16 @@ class SAWRecommenderService
                 $row->supplier_id = $supplier->id;
                 $row->parameter_id = $parameter->id;
                 $row->value = $this->deliveryDaysValue($supplier, $userId);
+                $values->push($row);
+            }
+        }
+
+        foreach ($distanceParameters as $parameter) {
+            foreach ($suppliers as $supplier) {
+                $row = new stdClass;
+                $row->supplier_id = $supplier->id;
+                $row->parameter_id = $parameter->id;
+                $row->value = $this->distanceKmValue($supplier, $userId);
                 $values->push($row);
             }
         }

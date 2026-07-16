@@ -20,19 +20,21 @@
                 <p class="mt-2 text-sm text-gray-500">Alur dibuat sederhana untuk pembelian kebutuhan peternakan. Pembayaran tetap dikonfirmasi langsung dengan supplier.</p>
             </div>
 
-            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:w-[520px]">
-                <a href="{{ route('spk.suppliers.index') }}" class="rounded-lg bg-emerald-600 px-4 py-3 text-center text-sm font-bold text-white hover:bg-emerald-700">
-                    Cari Toko
-                </a>
-                <a href="{{ route('spk.suppliers.products') }}" class="rounded-lg border border-gray-200 bg-white px-4 py-3 text-center text-sm font-bold text-gray-700 hover:bg-gray-50">
-                    Bandingkan Barang
-                </a>
-                <a href="{{ route('spk.suppliers.orders.index') }}" class="rounded-lg border border-gray-200 bg-white px-4 py-3 text-center text-sm font-bold text-gray-700 hover:bg-gray-50">
-                    Pesanan Saya
-                    @if(($orderSummary['active'] ?? 0) > 0)
-                        <span class="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">{{ $orderSummary['active'] }}</span>
-                    @endif
-                </a>
+            <div class="space-y-2 lg:w-[560px]">
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <a href="{{ route('spk.suppliers.index') }}" class="rounded-lg bg-emerald-600 px-4 py-3 text-center text-sm font-bold text-white hover:bg-emerald-700">
+                        Cari Toko
+                    </a>
+                    <a href="{{ route('spk.suppliers.products') }}" class="rounded-lg border border-gray-200 bg-white px-4 py-3 text-center text-sm font-bold text-gray-700 hover:bg-gray-50">
+                        Bandingkan Barang
+                    </a>
+                    <a href="{{ route('spk.suppliers.orders.index') }}" class="rounded-lg border border-gray-200 bg-white px-4 py-3 text-center text-sm font-bold text-gray-700 hover:bg-gray-50">
+                        Pesanan Saya
+                        @if(($orderSummary['active'] ?? 0) > 0)
+                            <span class="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">{{ $orderSummary['active'] }}</span>
+                        @endif
+                    </a>
+                </div>
             </div>
         </div>
 
@@ -143,7 +145,7 @@
                         @endif
                     </div>
 
-                    <div class="mt-4 flex gap-2">
+                    <div class="mt-4 flex flex-wrap gap-2">
                         <a href="{{ route('spk.suppliers.show', $supplier['id']) }}" class="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-center text-sm font-bold text-white hover:bg-emerald-700">
                             Lihat Barang
                         </a>

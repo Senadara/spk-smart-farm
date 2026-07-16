@@ -21,6 +21,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\View\View;
 
 class SupplierRecommendationController extends Controller
 {
@@ -50,6 +52,7 @@ class SupplierRecommendationController extends Controller
 
         $suppliers = $query->orderBy('nama')->get()
             ->map(fn ($s) => $this->formatSupplierCard($s, $dssActorId))
+            ->filter(fn (array $supplier) => $supplier['store_status'] === null || $supplier['store_status'] === 'active')
             ->sortBy(fn (array $supplier) => $supplier['distance_value'] ?? 9999)
             ->values();
         $orderSummary = $this->orderSummary($dssActorId);
@@ -60,6 +63,87 @@ class SupplierRecommendationController extends Controller
             'search' => $search,
             'orderSummary' => $orderSummary,
         ]);
+    }
+
+    public function create(): View
+    {
+        return view('spk.suppliers.form', [
+            'supplier' => null,
+            'store' => null,
+            'categoryOptions' => SupplierProductCategory::activeOptions(),
+            'selectedCategories' => [],
+        ]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $validated = $this->validateManagedSupplier($request);
+        $phone = $this->normalizeWhatsApp($validated['whatsapp']);
+        $categories = $this->normalizeSupplierCategories($validated['kategori'] ?? []);
+
+        $supplier = DB::transaction(function () use ($validated, $phone, $categories) {
+            $supplier = MasterSupplier::query()->create([
+                'nama' => $validated['nama'],
+                'alamat' => $validated['alamat'],
+                'latitude' => $validated['latitude'] ?? null,
+                'longitude' => $validated['longitude'] ?? null,
+                'kontak' => $phone,
+                'deskripsi' => $validated['deskripsi'] ?? null,
+                'kategori' => $categories,
+                'rating' => 0,
+                'jarak_km' => null,
+            ]);
+
+            $this->syncManagedSupplierStore($supplier, null, $categories);
+
+            return $supplier;
+        });
+
+        return redirect()
+            ->route('spk.suppliers.show', $supplier->id)
+            ->with('success', 'Mitra supplier berhasil ditambahkan. Data lokasi dan WhatsApp sudah siap dipakai untuk pencarian dan estimasi jarak.');
+    }
+
+    public function edit(MasterSupplier $supplier): View
+    {
+        $store = $this->storeForSupplier($supplier);
+
+        return view('spk.suppliers.form', [
+            'supplier' => $supplier,
+            'store' => $store,
+            'categoryOptions' => SupplierProductCategory::activeOptions(),
+            'selectedCategories' => $this->supplierCategoryArray($supplier->kategori),
+        ]);
+    }
+
+    public function update(Request $request, MasterSupplier $supplier): RedirectResponse
+    {
+        $validated = $this->validateManagedSupplier($request);
+        $phone = $this->normalizeWhatsApp($validated['whatsapp']);
+        $categories = $this->normalizeSupplierCategories($validated['kategori'] ?? []);
+        $store = $this->storeForSupplier($supplier);
+
+        DB::transaction(function () use ($supplier, $store, $validated, $phone, $categories) {
+            $supplier->update([
+                'nama' => $validated['nama'],
+                'alamat' => $validated['alamat'],
+                'latitude' => $validated['latitude'] ?? null,
+                'longitude' => $validated['longitude'] ?? null,
+                'kontak' => $phone,
+                'deskripsi' => $validated['deskripsi'] ?? null,
+                'kategori' => $categories,
+            ]);
+
+            $this->syncManagedSupplierStore($supplier, $store, $categories);
+
+            SpkRanking::query()
+                ->where('supplier_id', $supplier->id)
+                ->update(['is_valid' => false]);
+        });
+
+        return redirect()
+            ->route('spk.suppliers.show', $supplier->id)
+            ->with('success', 'Data mitra supplier berhasil diperbarui.');
     }
 
     public function products(Request $request)
@@ -79,7 +163,9 @@ class SupplierRecommendationController extends Controller
             ->with('store')
             ->where('isDeleted', false)
             ->where('stok', '>', 0)
-            ->whereHas('store', fn ($query) => $query->where('isDeleted', false));
+            ->whereHas('store', fn ($query) => $query
+                ->where('isDeleted', false)
+                ->where('tokoStatus', 'active'));
 
         if ($search) {
             $productsQuery->where(function ($query) use ($search) {
@@ -130,6 +216,9 @@ class SupplierRecommendationController extends Controller
         ]);
 
         $product = SupplierProduct::query()
+            ->whereHas('store', fn ($query) => $query
+                ->where('isDeleted', false)
+                ->where('tokoStatus', 'active'))
             ->where('id', $validated['product_id'])
             ->where('isDeleted', false)
             ->where('stok', '>', 0)
@@ -186,6 +275,9 @@ class SupplierRecommendationController extends Controller
             ->with('store')
             ->whereIn('id', $cart->keys())
             ->where('isDeleted', false)
+            ->whereHas('store', fn ($query) => $query
+                ->where('isDeleted', false)
+                ->where('tokoStatus', 'active'))
             ->get();
 
         if ($products->isEmpty()) {
@@ -242,6 +334,7 @@ class SupplierRecommendationController extends Controller
         $hargaParam = SpkParameter::where('nama_parameter', 'like', '%Harga%')->first();
         $dssActorId = SpkDssActorId::resolve($request);
         $store = $this->storeForSupplier($supplier);
+        abort_if($store && $store->tokoStatus !== 'active', 404);
         $storeProducts = $store
             ? $store->products()
                 ->where('isDeleted', false)
@@ -277,6 +370,7 @@ class SupplierRecommendationController extends Controller
     {
         $supplier = MasterSupplier::query()->findOrFail($id);
         $store = $this->storeForSupplier($supplier);
+        abort_if($store && $store->tokoStatus !== 'active', 404);
         if (! $store) {
             return back()->with('error', 'Supplier ini belum terhubung ke toko pemesanan sederhana.');
         }
@@ -447,6 +541,107 @@ class SupplierRecommendationController extends Controller
         return back()->with('success', 'Pesanan berhasil dibatalkan.');
     }
 
+    private function validateManagedSupplier(Request $request): array
+    {
+        $categoryOptions = SupplierProductCategory::activeOptions()->all();
+
+        return $request->validate([
+            'nama' => 'required|string|max:255',
+            'whatsapp' => ['required', 'string', 'max:30', 'regex:/^[0-9+\-\s().]+$/'],
+            'alamat' => 'required|string|max:500',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
+            'kategori' => 'required|array|min:1',
+            'kategori.*' => ['required', 'string', Rule::in($categoryOptions)],
+            'deskripsi' => 'nullable|string|max:2000',
+        ], [
+            'whatsapp.regex' => 'Nomor WhatsApp hanya boleh berisi angka, spasi, tanda +, tanda -, titik, atau kurung.',
+            'kategori.required' => 'Pilih minimal satu kategori supplier.',
+            'kategori.min' => 'Pilih minimal satu kategori supplier.',
+            'kategori.*.in' => 'Kategori supplier harus dipilih dari daftar master kategori.',
+        ]);
+    }
+
+    private function normalizeWhatsApp(string $value): string
+    {
+        $digits = preg_replace('/[^0-9]/', '', $value) ?? '';
+
+        if (str_starts_with($digits, '0')) {
+            return '62'.substr($digits, 1);
+        }
+
+        if (str_starts_with($digits, '8')) {
+            return '62'.$digits;
+        }
+
+        if (str_starts_with($digits, '620')) {
+            return '62'.substr($digits, 3);
+        }
+
+        return $digits;
+    }
+
+    private function normalizeSupplierCategories(array $categories): string
+    {
+        $allowed = SupplierProductCategory::activeOptions();
+
+        return collect($categories)
+            ->map(fn ($category) => trim((string) $category))
+            ->filter(fn ($category) => $category !== '' && $allowed->contains($category))
+            ->unique()
+            ->values()
+            ->implode(',');
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function supplierCategoryArray(?string $categories): array
+    {
+        $allowed = SupplierProductCategory::activeOptions();
+
+        return collect(explode(',', (string) $categories))
+            ->map(fn ($category) => trim($category))
+            ->filter()
+            ->map(fn ($category) => $allowed->first(
+                fn ($option) => Str::lower($option) === Str::lower($category)
+            ))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function syncManagedSupplierStore(MasterSupplier $supplier, ?SupplierStore $store, string $categories): SupplierStore
+    {
+        $store ??= $this->storeForSupplier($supplier);
+
+        $payload = [
+            'nama' => $supplier->nama,
+            'phone' => $supplier->kontak,
+            'alamat' => $supplier->alamat,
+            'latitude' => $supplier->latitude,
+            'longitude' => $supplier->longitude,
+            'deskripsi' => $supplier->deskripsi,
+            'kategori' => $categories,
+            'isDeleted' => false,
+            'tokoStatus' => $store?->tokoStatus ?: 'active',
+            'TypeToko' => $store?->TypeToko ?: 'umkm',
+        ];
+
+        if ($store) {
+            $store->fill($payload);
+            $store->save();
+
+            return $store;
+        }
+
+        return SupplierStore::query()->create([
+            'id' => Str::uuid()->toString(),
+            'userId' => null,
+            ...$payload,
+        ]);
+    }
+
     private function formatSupplierCard(MasterSupplier $s, ?string $userId = null): array
     {
         $categories = $s->kategori ? explode(',', $s->kategori) : [];
@@ -469,6 +664,7 @@ class SupplierRecommendationController extends Controller
             'distance_value' => $distance,
             'delivery_estimate' => $this->distanceService->deliveryEstimateLabel($distance),
             'has_store' => $store !== null,
+            'store_status' => $store?->tokoStatus,
             'store_product_count' => $productCount,
             'maps_url' => $mapsUrl,
             'score' => $this->supplierDisplayScore($s, $userId, $distance, $productCount),

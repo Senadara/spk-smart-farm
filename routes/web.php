@@ -8,6 +8,8 @@ use App\Http\Controllers\Iot\IotController;
 use App\Http\Controllers\Perkebunan\PerkebunanController;
 use App\Http\Controllers\Peternakan\PeternakanController;
 use App\Http\Controllers\Profile\ProfileController;
+use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\SuperAdmin\SupplierAdminController;
 use App\Http\Controllers\Supplier\SupplierPanelController;
 use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
@@ -41,6 +43,11 @@ Route::get('/', function () {
 Route::middleware('guest.api')->group(function () {
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
+    Route::get('/register', [RegisterController::class, 'index'])->name('register');
+    Route::get('/register/owner', [RegisterController::class, 'owner'])->name('register.owner');
+    Route::post('/register/owner', [RegisterController::class, 'storeOwner'])->name('register.owner.store');
+    Route::get('/register/supplier', [RegisterController::class, 'supplier'])->name('register.supplier');
+    Route::post('/register/supplier', [RegisterController::class, 'storeSupplier'])->name('register.supplier.store');
 });
 
 // Webhook IoT - HARUS di luar auth.api agar device IoT bisa kirim data tanpa login
@@ -73,7 +80,7 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
     });
 
     // SPK Supplier Recommendations (AHP-SAW DSS)
-    Route::prefix('spk-suppliers')->group(function () {
+    Route::middleware('role:pjawab,owner,admin')->prefix('spk-suppliers')->group(function () {
         Route::get('/', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'index'])->name('spk.suppliers.index');
         Route::get('/products', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'products'])->name('spk.suppliers.products');
         Route::get('/dss/config', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'config'])->name('spk.suppliers.dss.config');
@@ -105,7 +112,7 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
     });
 
     // IoT Management
-    Route::prefix('iot')->group(function () {
+    Route::middleware('role:pjawab,owner,admin,inventor')->prefix('iot')->group(function () {
         Route::get('/', [IotController::class, 'dashboard'])->name('iot.dashboard');
         Route::get('/devices', [IotController::class, 'devices'])->name('iot.devices');
         Route::get('/config', [IotController::class, 'config'])->name('iot.config');
@@ -151,20 +158,25 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
         Route::post('/items', [InventoryController::class, 'store'])->name('items.store');
         Route::get('/items/{item}', [InventoryController::class, 'show'])->name('items.show');
         Route::post('/items/{item}/adjust', [InventoryController::class, 'adjust'])->name('items.adjust');
-        Route::post('/items/{item}/supplier-links', [InventoryController::class, 'storeSupplierLink'])->name('items.supplier-links.store');
-        Route::post('/items/{item}/restock-order', [InventoryController::class, 'orderRestock'])->name('items.restock-order');
-        Route::post('/purchase-order', [InventoryController::class, 'purchaseOrder'])->name('purchase-order');
+        Route::middleware('role:pjawab,owner,admin')->group(function () {
+            Route::post('/items/{item}/supplier-links', [InventoryController::class, 'storeSupplierLink'])->name('items.supplier-links.store');
+            Route::post('/items/{item}/restock-order', [InventoryController::class, 'orderRestock'])->name('items.restock-order');
+            Route::get('/items/{item}/supplier-recommendations', [InventoryController::class, 'supplierRecommendations'])->name('items.supplier-recommendations');
+            Route::patch('/items/{item}/restock-config', [InventoryController::class, 'updateRestockConfig'])->name('items.restock-config');
+            Route::post('/purchase-order', [InventoryController::class, 'purchaseOrder'])->name('purchase-order');
+        });
         Route::get('/analysis', [InventoryController::class, 'analysis'])->name('analysis');
     });
 
     // Data Master (DASH-02)
-    Route::get('/data-master', [DataMasterController::class, 'index'])->name('data-master.index');
+    Route::middleware('role:pjawab,owner,admin')->get('/data-master', [DataMasterController::class, 'index'])->name('data-master.index');
 
     // Pengaturan (Settings Hub)
-    Route::get('/settings', [\App\Http\Controllers\Settings\SettingsController::class, 'index'])->name('settings.index');
+    Route::middleware('role:pjawab,owner,admin')->get('/settings', [\App\Http\Controllers\Settings\SettingsController::class, 'index'])->name('settings.index');
 
     // Manajemen Karyawan / Petugas (Khusus Owner)
     Route::middleware('role:pjawab')->group(function () {
+        Route::patch('/users/{id}/activate', [UserManagementController::class, 'activate'])->name('users.activate');
         Route::resource('users', UserManagementController::class)->except(['create', 'show', 'edit']);
     });
 
@@ -194,7 +206,7 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
     });
 
     // Supplier Management & SPK AHP-SAW Config
-    Route::prefix('supplier-spk')->group(function () {
+    Route::middleware('role:pjawab,owner,admin')->prefix('supplier-spk')->group(function () {
         Route::apiResource('suppliers', \App\Http\Controllers\SupplierController::class);
         Route::get('parameters', [\App\Http\Controllers\SpkParameterController::class, 'index'])->name('spk.parameters.index');
         Route::post('parameters', [\App\Http\Controllers\SpkParameterController::class, 'store'])->name('spk.parameters.store');
@@ -210,6 +222,16 @@ Route::middleware('auth.api')->group(function () {
     Route::get('/profil', [ProfileController::class, 'show'])->name('profile');
     Route::patch('/profil/farm-location', [ProfileController::class, 'updateFarm'])->name('profile.farm-location');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+    Route::middleware('role:admin')->prefix('super-admin')->name('superadmin.')->group(function () {
+        Route::get('/suppliers', [SupplierAdminController::class, 'index'])->name('suppliers.index');
+        Route::get('/suppliers/create', [SupplierAdminController::class, 'create'])->name('suppliers.create');
+        Route::post('/suppliers', [SupplierAdminController::class, 'store'])->name('suppliers.store');
+        Route::get('/suppliers/{supplier}/edit', [SupplierAdminController::class, 'edit'])->name('suppliers.edit')->whereNumber('supplier');
+        Route::put('/suppliers/{supplier}', [SupplierAdminController::class, 'update'])->name('suppliers.update')->whereNumber('supplier');
+        Route::patch('/supplier-stores/{store}/approve', [SupplierAdminController::class, 'approve'])->name('supplier-stores.approve');
+        Route::patch('/supplier-stores/{store}/reject', [SupplierAdminController::class, 'reject'])->name('supplier-stores.reject');
+    });
 
     Route::middleware('role:supplier')->prefix('supplier')->name('supplier.')->group(function () {
         Route::get('/', [SupplierPanelController::class, 'dashboard'])->name('dashboard');
