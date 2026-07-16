@@ -31,44 +31,50 @@
             'label' => 'Engine 3',
             'title' => 'Kausalitas',
             'hint' => 'Menggabungkan hasil engine 1 dan 2 menjadi diagnosis.',
-            'tone' => 'violet',
+            'tone' => 'amber',
         ],
     ];
 
     $stepCards = [
         [
             'number' => '1',
-            'title' => 'Pilih Profil',
-            'body' => 'Pilih konfigurasi sesuai komoditas. Aktifkan profil jika sudah siap dipakai.',
+            'title' => 'Profil',
+            'body' => 'Pilih konfigurasi aktif.',
             'status' => $activeProfile ? 'Siap' : 'Kosong',
             'state' => $activeProfile ? 'ok' : 'warn',
+            'tone' => 'gray',
         ],
         [
             'number' => '2',
-            'title' => 'Atur Variabel',
-            'body' => 'Buat input, output, dan membership function untuk tiap engine.',
+            'title' => 'Variabel',
+            'body' => 'Input, output, dan set fuzzy.',
             'status' => $stats['totalVariables'] . ' variabel',
             'state' => $stats['totalVariables'] > 0 ? 'ok' : 'warn',
+            'tone' => 'emerald',
         ],
         [
             'number' => '3',
-            'title' => 'Hubungkan Data',
-            'body' => 'Pastikan variabel input membaca data IoT, laporan, function, atau database.',
+            'title' => 'Sumber',
+            'body' => 'Mapping nilai dari data sistem.',
             'status' => $configuredInputCount . '/' . $inputCount . ' sumber',
             'state' => $unconfiguredInputCount === 0 ? 'ok' : 'warn',
+            'tone' => 'sky',
         ],
         [
             'number' => '4',
-            'title' => 'Susun Rule',
-            'body' => 'Buat aturan IF-THEN untuk menghasilkan output dan rekomendasi SPK.',
+            'title' => 'Rule',
+            'body' => 'IF-THEN untuk diagnosis.',
             'status' => $stats['totalRules'] . ' rule',
             'state' => $stats['totalRules'] > 0 ? 'ok' : 'warn',
+            'tone' => 'amber',
         ],
     ];
 @endphp
 
-<div x-data="fuzzyConfig()" class="space-y-5">
-    <div class="flex flex-wrap items-start justify-between gap-4">
+<div x-data="fuzzyConfig()" class="space-y-4">
+    <div class="overflow-hidden rounded-2xl border border-gray-100 bg-white" style="box-shadow: var(--shadow-sm);">
+        <div class="h-1 bg-[var(--color-primary)]"></div>
+        <div class="flex flex-wrap items-center justify-between gap-4 p-5">
         <div class="min-w-0">
             <div class="mb-1 flex items-center gap-2 text-sm">
                 <a href="{{ route('settings.index') }}" class="text-gray-400 transition-colors hover:text-gray-600">Pengaturan</a>
@@ -76,25 +82,24 @@
                 <span class="font-medium text-gray-600">Fuzzy Mamdani</span>
             </div>
             <h1 class="text-2xl font-bold text-[var(--color-gray-900)]">Konfigurasi Fuzzy Mamdani</h1>
-            <p class="mt-1 max-w-3xl text-sm leading-6 text-[var(--color-gray-500)]">
-                Kelola alur fuzzy dari profil komoditas, variabel, membership function, sumber data, sampai rule inferensi.
-            </p>
+            <p class="mt-1 text-sm text-[var(--color-gray-500)]">Atur profil, variabel, sumber data, dan rule SPK.</p>
         </div>
 
         <div class="flex flex-wrap gap-2">
             <button type="button" @click="modal = 'addProfile'"
-                class="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100">
+                class="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-                Tambah Profil
+                Profil Baru
             </button>
             <form action="{{ route('settings.fuzzy.reset') }}" method="POST" onsubmit="return confirm('Semua konfigurasi fuzzy akan di-reset ke default. Lanjutkan?');">
                 @csrf
                 <button type="submit"
-                    class="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-50">
+                    class="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm font-semibold text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-50">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                    Reset Default
+                    Reset
                 </button>
             </form>
+        </div>
         </div>
     </div>
 
@@ -119,9 +124,9 @@
         </div>
     @endif
 
-    <div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
-        <section class="rounded-2xl border border-gray-100 bg-white p-5" style="box-shadow: var(--shadow-sm);">
-            <div class="flex flex-wrap items-start justify-between gap-4">
+    <div class="space-y-4">
+        <section class="rounded-2xl border border-gray-100 bg-white p-4" style="box-shadow: var(--shadow-sm);">
+            <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <h2 class="text-base font-semibold text-gray-900">Profil Konfigurasi</h2>
@@ -135,9 +140,6 @@
                             @endif
                         @endif
                     </div>
-                    <p class="mt-1 text-sm leading-6 text-gray-500">
-                        Satu profil mewakili konfigurasi fuzzy untuk satu komoditas atau versi aturan tertentu.
-                    </p>
                 </div>
 
                 @if($activeProfile && ! $activeProfile->is_active)
@@ -150,7 +152,7 @@
                 @endif
             </div>
 
-            <form method="GET" action="{{ route('settings.fuzzy.index') }}" class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+            <form method="GET" action="{{ route('settings.fuzzy.index') }}" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
                 <div>
                     <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">Profil yang sedang diedit</label>
                     <select name="profile_id" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm transition-all focus:border-[var(--color-primary)] focus:outline-none" onchange="this.form.submit()">
@@ -168,147 +170,191 @@
             </form>
 
             @if($activeProfile)
-                <div class="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <div class="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
+                <div class="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
+                    <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
                         <div class="text-[11px] font-semibold uppercase text-gray-400">Nama</div>
-                        <div class="mt-1 truncate text-sm font-semibold text-gray-800">{{ $activeProfile->name }}</div>
+                        <div class="truncate text-sm font-semibold text-gray-800">{{ $activeProfile->name }}</div>
                     </div>
-                    <div class="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
+                    <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
                         <div class="text-[11px] font-semibold uppercase text-gray-400">Komoditas</div>
-                        <div class="mt-1 truncate text-sm font-semibold text-gray-800">{{ $activeProfile->commodity->nama ?? '-' }}</div>
+                        <div class="truncate text-sm font-semibold text-gray-800">{{ $activeProfile->commodity->nama ?? '-' }}</div>
                     </div>
-                    <div class="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
+                    <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
                         <div class="text-[11px] font-semibold uppercase text-gray-400">Versi</div>
-                        <div class="mt-1 text-sm font-semibold text-gray-800">{{ $activeProfile->version ?: '-' }}</div>
+                        <div class="text-sm font-semibold text-gray-800">{{ $activeProfile->version ?: '-' }}</div>
                     </div>
-                    <div class="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
+                    <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
                         <div class="text-[11px] font-semibold uppercase text-gray-400">Reviewer</div>
-                        <div class="mt-1 truncate text-sm font-semibold text-gray-800">{{ $activeProfile->reviewed_by ?: 'Belum ditetapkan' }}</div>
+                        <div class="truncate text-sm font-semibold text-gray-800">{{ $activeProfile->reviewed_by ?: '-' }}</div>
                     </div>
                 </div>
             @endif
         </section>
 
-        <aside class="rounded-2xl border border-gray-100 bg-white p-5" style="box-shadow: var(--shadow-sm);">
-            <div class="flex items-start justify-between gap-3">
+        <aside class="rounded-2xl border border-emerald-100 bg-white p-4" style="box-shadow: var(--shadow-sm);">
+            <div class="grid grid-cols-1 gap-3 xl:grid-cols-[220px_minmax(260px,1fr)_280px] xl:items-center">
+                <div class="flex items-start justify-between gap-3 xl:block">
+                    <div>
+                        <h2 class="text-base font-semibold text-gray-900">Kesiapan SPK</h2>
+                        <p class="mt-0.5 text-xs text-gray-500">Ringkasan konfigurasi aktif.</p>
+                    </div>
+                    <span class="rounded-full border px-2.5 py-1 text-xs font-bold {{ $unconfiguredInputCount === 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700' }}">
+                        {{ $sourceCompletion }}%
+                    </span>
+                </div>
+
                 <div>
-                    <h2 class="text-base font-semibold text-gray-900">Kesiapan SPK</h2>
-                    <p class="mt-1 text-sm leading-6 text-gray-500">Ringkasan cepat sebelum konfigurasi dipakai untuk evaluasi.</p>
+                    <div class="mb-2 flex items-center justify-between text-xs font-medium text-gray-500">
+                        <span>Sumber data input</span>
+                        <span>{{ $configuredInputCount }} dari {{ $inputCount }} terhubung</span>
+                    </div>
+                    <div class="h-2 overflow-hidden rounded-full bg-gray-100">
+                        <div class="h-full rounded-full {{ $unconfiguredInputCount === 0 ? 'bg-emerald-500' : 'bg-amber-500' }}" style="width: {{ $sourceCompletion }}%"></div>
+                    </div>
+                    @if($unconfiguredInputCount > 0)
+                        <p class="mt-2 text-xs leading-5 text-amber-700">{{ $unconfiguredInputCount }} input belum tersambung.</p>
+                    @else
+                        <p class="mt-2 text-xs leading-5 text-emerald-700">Semua input utama tersambung.</p>
+                    @endif
                 </div>
-                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $unconfiguredInputCount === 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">
-                    {{ $sourceCompletion }}%
-                </span>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="rounded-lg border border-emerald-100 bg-white/80 px-2 py-2 text-center">
+                        <div class="text-lg font-bold text-emerald-700">{{ $stats['totalVariables'] }}</div>
+                        <div class="text-[11px] font-semibold text-gray-500">Variabel</div>
+                    </div>
+                    <div class="rounded-lg border border-sky-100 bg-white/80 px-2 py-2 text-center">
+                        <div class="text-lg font-bold text-sky-700">{{ $stats['totalSources'] }}</div>
+                        <div class="text-[11px] font-semibold text-gray-500">Mapping</div>
+                    </div>
+                    <div class="rounded-lg border border-amber-100 bg-white px-2 py-2 text-center">
+                        <div class="text-lg font-bold text-amber-700">{{ $stats['totalRules'] }}</div>
+                        <div class="text-[11px] font-semibold text-gray-500">Rule</div>
+                    </div>
+                </div>
             </div>
 
-            <div class="mt-4">
-                <div class="mb-2 flex items-center justify-between text-xs font-medium text-gray-500">
-                    <span>Sumber data input</span>
-                    <span>{{ $configuredInputCount }} dari {{ $inputCount }} terhubung</span>
-                </div>
-                <div class="h-2 overflow-hidden rounded-full bg-gray-100">
-                    <div class="h-full rounded-full {{ $unconfiguredInputCount === 0 ? 'bg-emerald-500' : 'bg-amber-500' }}" style="width: {{ $sourceCompletion }}%"></div>
-                </div>
-                @if($unconfiguredInputCount > 0)
-                    <p class="mt-2 text-xs leading-5 text-amber-700">{{ $unconfiguredInputCount }} variabel input belum punya sumber data. Nilai dapat terbaca 0 saat evaluasi.</p>
-                @else
-                    <p class="mt-2 text-xs leading-5 text-emerald-700">Semua variabel input non-kausalitas sudah terhubung ke sumber data.</p>
-                @endif
-            </div>
-
-            <div class="mt-4 grid grid-cols-3 gap-2">
-                <div class="rounded-lg bg-gray-50 p-3 text-center">
-                    <div class="text-lg font-bold text-gray-900">{{ $stats['totalVariables'] }}</div>
-                    <div class="text-[11px] font-medium text-gray-500">Variabel</div>
-                </div>
-                <div class="rounded-lg bg-gray-50 p-3 text-center">
-                    <div class="text-lg font-bold text-gray-900">{{ $stats['totalSets'] }}</div>
-                    <div class="text-[11px] font-medium text-gray-500">MF</div>
-                </div>
-                <div class="rounded-lg bg-gray-50 p-3 text-center">
-                    <div class="text-lg font-bold text-gray-900">{{ $stats['totalRules'] }}</div>
-                    <div class="text-[11px] font-medium text-gray-500">Rule</div>
-                </div>
+            <div class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                @foreach($engineMeta as $groupKey => $meta)
+                    @php
+                        $engineToneClasses = [
+                            'emerald' => 'border-emerald-100 bg-emerald-50 text-emerald-800',
+                            'sky' => 'border-sky-100 bg-sky-50 text-sky-800',
+                            'amber' => 'border-amber-100 bg-amber-50 text-amber-800',
+                        ][$meta['tone']];
+                    @endphp
+                    <div class="rounded-lg border {{ $engineToneClasses }} px-3 py-2">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="text-[10px] font-black uppercase tracking-wide opacity-75">{{ $meta['label'] }}</div>
+                                <div class="truncate text-xs font-bold">{{ $meta['title'] }}</div>
+                            </div>
+                            <div class="flex flex-shrink-0 items-center gap-1.5 text-[11px] font-bold">
+                                <span class="rounded-md bg-white/75 px-1.5 py-0.5">{{ ($variablesByGroup[$groupKey] ?? collect())->count() }} var</span>
+                                <span class="rounded-md bg-white/75 px-1.5 py-0.5">{{ ($rulesByGroup[$groupKey] ?? collect())->count() }} rule</span>
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
             </div>
         </aside>
     </div>
 
-    <section class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-        @foreach($stepCards as $step)
-            <div class="rounded-2xl border border-gray-100 bg-white p-4" style="box-shadow: var(--shadow-sm);">
-                <div class="flex items-start gap-3">
-                    <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg {{ $step['state'] === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }} text-sm font-bold">
-                        {{ $step['number'] }}
-                    </div>
-                    <div class="min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <h3 class="text-sm font-semibold text-gray-900">{{ $step['title'] }}</h3>
-                            <span class="rounded-full px-2 py-0.5 text-[10px] font-bold {{ $step['state'] === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">{{ $step['status'] }}</span>
+    <details class="rounded-2xl border border-gray-100 bg-white p-4" style="box-shadow: var(--shadow-sm);">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
+            <div>
+                <h2 class="text-sm font-bold text-gray-900">Alur konfigurasi</h2>
+                <p class="text-xs text-gray-500">Buka saat perlu cek urutan kerja.</p>
+            </div>
+            <span class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm">Lihat alur</span>
+        </summary>
+        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            @foreach($stepCards as $step)
+                @php
+                    $stepTone = [
+                        'gray' => [
+                            'card' => 'border-gray-200 bg-gray-50 hover:border-gray-300',
+                            'number' => 'bg-gray-700 text-white shadow-sm',
+                            'title' => 'text-gray-900',
+                        ],
+                        'emerald' => [
+                            'card' => 'border-emerald-200 bg-emerald-50 hover:border-emerald-300',
+                            'number' => 'bg-[var(--color-primary)] text-white shadow-sm',
+                            'title' => 'text-emerald-900',
+                        ],
+                        'sky' => [
+                            'card' => 'border-sky-200 bg-sky-50 hover:border-sky-300',
+                            'number' => 'bg-sky-600 text-white shadow-sm',
+                            'title' => 'text-sky-900',
+                        ],
+                        'amber' => [
+                            'card' => 'border-amber-200 bg-amber-50 hover:border-amber-300',
+                            'number' => 'bg-amber-500 text-white shadow-sm',
+                            'title' => 'text-amber-900',
+                        ],
+                    ][$step['tone']];
+                @endphp
+                <div class="rounded-xl border {{ $stepTone['card'] }} p-3 transition-all hover:-translate-y-0.5 hover:shadow-sm">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg {{ $stepTone['number'] }} text-sm font-bold">
+                            {{ $step['number'] }}
                         </div>
-                        <p class="mt-1 text-xs leading-5 text-gray-500">{{ $step['body'] }}</p>
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h3 class="text-sm font-semibold {{ $stepTone['title'] }}">{{ $step['title'] }}</h3>
+                                <span class="rounded-full border px-2 py-0.5 text-[10px] font-bold {{ $step['state'] === 'ok' ? 'border-emerald-200 bg-white/80 text-emerald-700' : 'border-amber-200 bg-white/80 text-amber-700' }}">{{ $step['status'] }}</span>
+                            </div>
+                            <p class="mt-1 text-xs leading-5 text-gray-600">{{ $step['body'] }}</p>
+                        </div>
                     </div>
                 </div>
-            </div>
-        @endforeach
-    </section>
+            @endforeach
+        </div>
+    </details>
 
-    <section class="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        @foreach($engineMeta as $groupKey => $meta)
-            @php
-                $toneClasses = [
-                    'emerald' => 'border-emerald-100 bg-emerald-50/50 text-emerald-700',
-                    'sky' => 'border-sky-100 bg-sky-50/50 text-sky-700',
-                    'violet' => 'border-violet-100 bg-violet-50/50 text-violet-700',
-                ][$meta['tone']];
-            @endphp
-            <div class="rounded-2xl border {{ $toneClasses }} p-4">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <div class="text-xs font-bold uppercase tracking-wide opacity-80">{{ $meta['label'] }}</div>
-                        <h3 class="mt-1 text-sm font-bold">{{ $meta['title'] }}</h3>
-                        <p class="mt-1 text-xs leading-5 opacity-80">{{ $meta['hint'] }}</p>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-lg font-bold">{{ ($variablesByGroup[$groupKey] ?? collect())->count() }}</div>
-                        <div class="text-[11px] font-medium opacity-75">variabel</div>
-                    </div>
-                </div>
-                <div class="mt-3 flex items-center gap-2 text-xs font-medium opacity-80">
-                    <span>{{ ($rulesByGroup[$groupKey] ?? collect())->count() }} rule</span>
-                    <span class="opacity-40">-</span>
-                    <span>{{ ($variablesByGroup[$groupKey] ?? collect())->sum(fn ($v) => $v->sets->count()) }} membership</span>
-                </div>
-            </div>
-        @endforeach
-    </section>
-
-    <div class="rounded-2xl border border-gray-100 bg-white p-2" style="box-shadow: var(--shadow-sm);">
-        <div class="grid grid-cols-1 gap-2 md:grid-cols-3">
+    <div class="sticky top-0 z-20 rounded-2xl border border-gray-200 bg-white/95 p-2 backdrop-blur" style="box-shadow: var(--shadow-sm);">
+        <div class="grid grid-cols-1 gap-2 md:grid-cols-3" role="tablist">
             <button type="button" @click="setTab('variables')"
-                :class="tab === 'variables' ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'"
-                class="rounded-xl px-4 py-3 text-left transition-colors">
-                <div class="flex items-center justify-between gap-3">
-                    <span class="text-sm font-bold">Variabel & MF</span>
-                    <span class="text-xs font-semibold">{{ $stats['totalVariables'] }}</span>
+                :aria-selected="tab === 'variables'"
+                :class="tab === 'variables' ? 'border-emerald-500 bg-emerald-600 text-white shadow-md shadow-emerald-200 ring-2 ring-emerald-100' : 'border-gray-200 bg-white text-gray-700 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800 hover:shadow-md'"
+                class="group cursor-pointer rounded-xl border px-4 py-3 text-left shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                role="tab">
+                <div class="flex items-center gap-3">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-black transition-colors" :class="tab === 'variables' ? 'bg-white/20 text-white ring-1 ring-white/30' : 'bg-emerald-100 text-emerald-700 group-hover:bg-white'">1</span>
+                    <div class="min-w-0">
+                        <span class="block text-sm font-bold">Variabel & Set</span>
+                        <span class="block text-xs opacity-80">{{ $stats['totalVariables'] }} variabel</span>
+                    </div>
+                    <svg class="ml-auto h-4 w-4 flex-shrink-0 transition-transform" :class="tab === 'variables' ? 'text-white' : 'text-emerald-500 group-hover:translate-x-0.5'" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                 </div>
-                <p class="mt-1 text-xs leading-5 opacity-80">Parameter input/output dan bentuk membership.</p>
             </button>
             <button type="button" @click="setTab('sources')"
-                :class="tab === 'sources' ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'"
-                class="rounded-xl px-4 py-3 text-left transition-colors">
-                <div class="flex items-center justify-between gap-3">
-                    <span class="text-sm font-bold">Sumber Data</span>
-                    <span class="text-xs font-semibold">{{ $stats['totalSources'] }}</span>
+                :aria-selected="tab === 'sources'"
+                :class="tab === 'sources' ? 'border-sky-500 bg-sky-600 text-white shadow-md shadow-sky-200 ring-2 ring-sky-100' : 'border-gray-200 bg-white text-gray-700 hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800 hover:shadow-md'"
+                class="group cursor-pointer rounded-xl border px-4 py-3 text-left shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                role="tab">
+                <div class="flex items-center gap-3">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-black transition-colors" :class="tab === 'sources' ? 'bg-white/20 text-white ring-1 ring-white/30' : 'bg-sky-100 text-sky-700 group-hover:bg-white'">2</span>
+                    <div class="min-w-0">
+                        <span class="block text-sm font-bold">Sumber Data</span>
+                        <span class="block text-xs opacity-80">{{ $stats['totalSources'] }} mapping</span>
+                    </div>
+                    <svg class="ml-auto h-4 w-4 flex-shrink-0 transition-transform" :class="tab === 'sources' ? 'text-white' : 'text-sky-500 group-hover:translate-x-0.5'" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                 </div>
-                <p class="mt-1 text-xs leading-5 opacity-80">Mapping data IoT, laporan, function, dan database.</p>
             </button>
             <button type="button" @click="setTab('rules')"
-                :class="tab === 'rules' ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'"
-                class="rounded-xl px-4 py-3 text-left transition-colors">
-                <div class="flex items-center justify-between gap-3">
-                    <span class="text-sm font-bold">Rule IF-THEN</span>
-                    <span class="text-xs font-semibold">{{ $stats['totalRules'] }}</span>
+                :aria-selected="tab === 'rules'"
+                :class="tab === 'rules' ? 'border-amber-500 bg-amber-500 text-white shadow-md shadow-amber-100 ring-2 ring-amber-100' : 'border-gray-200 bg-white text-gray-700 hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 hover:shadow-md'"
+                class="group cursor-pointer rounded-xl border px-4 py-3 text-left shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-amber-200"
+                role="tab">
+                <div class="flex items-center gap-3">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-black transition-colors" :class="tab === 'rules' ? 'bg-white/20 text-white ring-1 ring-white/30' : 'bg-amber-100 text-amber-700 group-hover:bg-white'">3</span>
+                    <div class="min-w-0">
+                        <span class="block text-sm font-bold">Rule IF-THEN</span>
+                        <span class="block text-xs opacity-80">{{ $stats['totalRules'] }} rule</span>
+                    </div>
+                    <svg class="ml-auto h-4 w-4 flex-shrink-0 transition-transform" :class="tab === 'rules' ? 'text-white' : 'text-amber-500 group-hover:translate-x-0.5'" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                 </div>
-                <p class="mt-1 text-xs leading-5 opacity-80">Aturan inferensi Mamdani yang menentukan output.</p>
             </button>
         </div>
     </div>

@@ -27,16 +27,18 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:w-[520px]">
-                <a href="{{ route('spk.suppliers.index') }}" class="rounded-lg border border-gray-200 bg-white px-4 py-3 text-center text-sm font-bold text-gray-700 hover:bg-gray-50">
-                    Cari Toko
-                </a>
-                <a href="{{ route('spk.suppliers.products') }}" class="rounded-lg border border-gray-200 bg-white px-4 py-3 text-center text-sm font-bold text-gray-700 hover:bg-gray-50">
-                    Bandingkan Barang
-                </a>
-                <a href="{{ route('spk.suppliers.orders.index') }}" class="rounded-lg bg-emerald-600 px-4 py-3 text-center text-sm font-bold text-white hover:bg-emerald-700">
-                    Pesanan Saya
-                </a>
+            <div class="space-y-2 lg:w-[560px]">
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <a href="{{ route('spk.suppliers.index') }}" class="rounded-lg border border-gray-200 bg-white px-4 py-3 text-center text-sm font-bold text-gray-700 hover:bg-gray-50">
+                        Cari Toko
+                    </a>
+                    <a href="{{ route('spk.suppliers.products') }}" class="rounded-lg border border-gray-200 bg-white px-4 py-3 text-center text-sm font-bold text-gray-700 hover:bg-gray-50">
+                        Bandingkan Barang
+                    </a>
+                    <a href="{{ route('spk.suppliers.orders.index') }}" class="rounded-lg bg-emerald-600 px-4 py-3 text-center text-sm font-bold text-white hover:bg-emerald-700">
+                        Pesanan Saya
+                    </a>
+                </div>
             </div>
         </div>
     </section>

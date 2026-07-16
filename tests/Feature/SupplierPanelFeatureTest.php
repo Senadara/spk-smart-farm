@@ -83,8 +83,9 @@ class SupplierPanelFeatureTest extends TestCase
     {
         Storage::fake('public');
 
-        $this->withSession($this->supplierSession())
+        $this->withSession(array_merge($this->supplierSession(), ['_token' => 'supplier-product-token']))
             ->post('/supplier/products', [
+                '_token' => 'supplier-product-token',
                 'nama' => 'Pakan Uji Supplier',
                 'deskripsi' => 'Produk dibuat melalui feature test.',
                 'kategori' => 'Pakan',
@@ -129,8 +130,9 @@ class SupplierPanelFeatureTest extends TestCase
             'isDeleted' => false,
         ]);
 
-        $this->withSession($this->supplierSession())
+        $this->withSession(array_merge($this->supplierSession(), ['_token' => 'supplier-other-product-token']))
             ->put("/supplier/products/{$otherProduct->id}", [
+                '_token' => 'supplier-other-product-token',
                 'nama' => 'Nama Disusupi',
                 'deskripsi' => 'Percobaan mengubah tenant lain.',
                 'stok' => 1,
@@ -151,9 +153,10 @@ class SupplierPanelFeatureTest extends TestCase
             ->assertSee('Vitamin')
             ->assertSee('Kategori berasal dari data master');
 
-        $this->withSession($this->supplierSession())
+        $this->withSession(array_merge($this->supplierSession(), ['_token' => 'supplier-invalid-category-token']))
             ->from('/supplier/products')
             ->post('/supplier/products', [
+                '_token' => 'supplier-invalid-category-token',
                 'nama' => 'Produk Kategori Bebas',
                 'deskripsi' => 'Kategori ini tidak boleh dibuat sembarangan.',
                 'kategori' => 'Kategori Buatan Sendiri',
@@ -189,8 +192,11 @@ class SupplierPanelFeatureTest extends TestCase
             'isDeleted' => false,
         ]);
 
-        $this->withSession($this->supplierSession())
-            ->patch("/supplier/orders/{$order->id}/status", ['status' => 'diterima'])
+        $this->withSession(array_merge($this->supplierSession(), ['_token' => 'supplier-order-status-token']))
+            ->patch("/supplier/orders/{$order->id}/status", [
+                '_token' => 'supplier-order-status-token',
+                'status' => 'diterima',
+            ])
             ->assertRedirect();
 
         Http::assertSent(fn (HttpRequest $request) => str_ends_with($request->url(), '/store/pesanan/status')
@@ -217,8 +223,11 @@ class SupplierPanelFeatureTest extends TestCase
             'isDeleted' => false,
         ]);
 
-        $this->withSession($this->supplierSession())
-            ->patch("/supplier/orders/{$otherOrder->id}/status", ['status' => 'diterima'])
+        $this->withSession(array_merge($this->supplierSession(), ['_token' => 'supplier-cross-order-token']))
+            ->patch("/supplier/orders/{$otherOrder->id}/status", [
+                '_token' => 'supplier-cross-order-token',
+                'status' => 'diterima',
+            ])
             ->assertNotFound();
     }
 

@@ -6,17 +6,33 @@ use App\Http\Controllers\Controller;
 use App\Models\InventoryItem;
 use App\Models\InventoryMovement;
 use App\Models\InventorySupplierProductLink;
+use App\Models\MasterProduk;
+use App\Models\MasterSupplier;
+use App\Models\SpkAhpBobot;
+use App\Models\SpkParameter;
+use App\Models\SpkRanking;
+use App\Models\SpkSupplierParameterValue;
 use App\Models\SupplierProduct;
+use App\Models\SupplierStore;
 use App\Services\Inventory\MobileInventorySyncService;
+use App\Services\SAWRecommenderService;
+use App\Services\SupplierDistanceService;
+use App\Support\SpkDssActorId;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\View\View;
 
 class InventoryController extends Controller
 {
-    public function __construct(private MobileInventorySyncService $mobileInventorySync) {}
+    public function __construct(
+        private MobileInventorySyncService $mobileInventorySync,
+        private SAWRecommenderService $sawRecommender,
+        private SupplierDistanceService $distanceService,
+    ) {}
 
-    public function index()
+    public function index(Request $request)
     {
         $this->mobileInventorySync->sync();
 
@@ -32,7 +48,8 @@ class InventoryController extends Controller
         $barnMap = $this->barnMap();
         $inventoryItems = $items->map(fn (InventoryItem $item) => $this->formatItem($item, $barnMap))->values()->all();
         $kpi = $this->getKpiMetrics($inventoryItems);
-        $recommendedRestocks = $this->getSpkRestockRanking($inventoryItems);
+        $restockView = $request->query('restock_view') === 'all' ? 'all' : 'needs';
+        $recommendedRestocks = $this->getSpkRestockRanking($inventoryItems, $restockView === 'all');
         $charts = $this->getChartData($items, $barnMap);
         $movementLog = $this->getMovementLog($barnMap);
         $categoryOptions = $items->pluck('category')->unique()->sort()->values()->all();
@@ -49,7 +66,8 @@ class InventoryController extends Controller
             'charts',
             'movementLog',
             'categoryOptions',
-            'barnOptions'
+            'barnOptions',
+            'restockView'
         ));
     }
 
@@ -143,6 +161,61 @@ class InventoryController extends Controller
             ->with('success', "{$product->nama} ditambahkan ke keranjang restock sebanyak {$quantity} {$product->satuan}.");
     }
 
+    public function updateRestockConfig(Request $request, InventoryItem $item): RedirectResponse
+    {
+        $validated = $request->validate([
+            'lead_time_days' => 'required|integer|min:1|max:60',
+            'safety_stock_days' => 'required|integer|min:0|max:60',
+            'reorder_point_override' => 'nullable|numeric|min:0|max:999999999',
+        ], [
+            'lead_time_days.required' => 'Lead time wajib diisi.',
+            'safety_stock_days.required' => 'Safety stock wajib diisi.',
+        ]);
+
+        $leadTime = (int) $validated['lead_time_days'];
+        $safetyDays = (int) $validated['safety_stock_days'];
+        $override = $validated['reorder_point_override'] ?? null;
+        $reorderPoint = $override !== null
+            ? (float) $override
+            : $this->autoReorderPoint($item, $leadTime, $safetyDays);
+
+        $item->update([
+            'lead_time_days' => $leadTime,
+            'safety_stock_days' => $safetyDays,
+            'reorder_point_override' => $override,
+            'reorder_point' => round($reorderPoint, 2),
+        ]);
+
+        return redirect()
+            ->route('inventory')
+            ->with('success', 'Konfigurasi restock berhasil diperbarui.');
+    }
+
+    public function supplierRecommendations(Request $request, InventoryItem $item): View
+    {
+        $this->mobileInventorySync->sync();
+
+        $item->refresh()->load([
+            'supplier',
+            'preferredSupplierProductLink.product.store',
+        ]);
+
+        $barnMap = $this->barnMap();
+        $formattedItem = $this->formatItem($item, $barnMap);
+        $restockNeed = $this->restockNeedFor($item);
+        $userId = SpkDssActorId::resolve($request);
+        $rankingResult = $this->rankSupplierProductsForRestock($item, $userId, $restockNeed);
+
+        return view('inventory.restock-recommendations', [
+            'item' => $formattedItem,
+            'restockNeed' => $restockNeed,
+            'recommendations' => $rankingResult['recommendations'],
+            'spkSummary' => $rankingResult['summary'],
+            'cart' => $this->supplierCartSummary($request),
+            'fallbackSearchUrl' => route('spk.suppliers.products', ['search' => $item->name]),
+        ]);
+    }
+
     public function purchaseOrder()
     {
         $this->mobileInventorySync->sync();
@@ -159,7 +232,11 @@ class InventoryController extends Controller
             ->take(8)
             ->values()
             ->map(function (array $item) {
-                $target = max((float) $item['reorder_point'], (float) $item['minimum_stock'] * 2, (float) $item['daily_usage'] * max(7, (int) $item['lead_time']));
+                $target = max(
+                    (float) $item['reorder_point'],
+                    (float) $item['minimum_stock'] * 2,
+                    (float) $item['daily_usage'] * max(7, (int) $item['lead_time'] + (int) $item['safety_stock_days'])
+                );
                 $qty = max(1, ceil($target - (float) $item['stock']));
                 $linked = $item['linked_product'] ?? null;
 
@@ -215,9 +292,12 @@ class InventoryController extends Controller
         ];
     }
 
-    private function getSpkRestockRanking(array $inventoryItems): array
+    private function getSpkRestockRanking(array $inventoryItems, bool $showAll = false): array
     {
         $items = collect($inventoryItems)
+            ->when(! $showAll, fn ($collection) => $collection->filter(
+                fn (array $item) => in_array($item['status'], ['critical', 'warning'], true)
+            ))
             ->sortByDesc('restock_score')
             ->take(5)
             ->values();
@@ -236,9 +316,16 @@ class InventoryController extends Controller
                 'supplier' => $item['supplier'] ?: 'Belum dipilih',
                 'price' => '-',
                 'lead_time' => $item['lead_time'],
+                'safety_stock_days' => $item['safety_stock_days'],
+                'minimum_stock' => $item['minimum_stock'],
+                'reorder_point' => $item['reorder_point'],
+                'reorder_point_override' => $item['reorder_point_override'],
+                'reorder_point_source' => $item['reorder_point_source'],
+                'coverage_percent' => $item['coverage_percent'],
                 'linked_product' => $item['linked_product'],
                 'supplier_candidates' => $item['supplier_candidates'],
                 'order_url' => route('inventory.items.restock-order', $item['raw_id']),
+                'recommend_url' => route('inventory.items.supplier-recommendations', $item['raw_id']),
                 'link_url' => route('inventory.items.supplier-links.store', $item['raw_id']),
                 'needs_mapping' => empty($item['linked_product']),
             ];
@@ -272,6 +359,21 @@ class InventoryController extends Controller
         }
 
         $byBarn = $items->groupBy(fn ($item) => $barnMap[$item->unit_budidaya_id] ?? 'Umum');
+        $stockDuration = $items
+            ->map(function (InventoryItem $item) {
+                $daysLeft = $item->daily_usage > 0 ? (int) floor($item->stock / $item->daily_usage) : null;
+                $status = $this->statusFor($item, $daysLeft);
+
+                return [
+                    'label' => $item->name,
+                    'days' => $daysLeft,
+                    'status' => $status,
+                    'stock' => $this->numberLabel((float) $item->stock).' '.$item->unit,
+                ];
+            })
+            ->sortBy(fn (array $item) => $item['days'] ?? 9999)
+            ->take(8)
+            ->values();
 
         return [
             'consumptionTrend' => [
@@ -283,6 +385,12 @@ class InventoryController extends Controller
                 'labels' => $byBarn->keys()->values()->all(),
                 'pakan' => $byBarn->map(fn ($group) => round($group->where('category', 'Pakan')->sum('daily_usage'), 1))->values()->all(),
                 'vitamin' => $byBarn->map(fn ($group) => round($group->where('category', 'Vitamin')->sum('daily_usage'), 1))->values()->all(),
+            ],
+            'stockDuration' => [
+                'labels' => $stockDuration->pluck('label')->all(),
+                'days' => $stockDuration->pluck('days')->map(fn ($days) => $days ?? 0)->all(),
+                'statuses' => $stockDuration->pluck('status')->all(),
+                'stocks' => $stockDuration->pluck('stock')->all(),
             ],
         ];
     }
@@ -324,6 +432,10 @@ class InventoryController extends Controller
             'minimum_stock' => round($item->minimum_stock, 2),
             'reorder_point' => round($item->reorder_point, 2),
             'lead_time' => $item->lead_time_days,
+            'safety_stock_days' => (int) ($item->safety_stock_days ?? 0),
+            'reorder_point_override' => $item->reorder_point_override !== null ? round((float) $item->reorder_point_override, 2) : null,
+            'reorder_point_source' => $item->reorder_point_override !== null ? 'Manual' : 'Auto',
+            'coverage_percent' => $this->coveragePercent($daysLeft, (int) $item->lead_time_days, (int) ($item->safety_stock_days ?? 0), $status),
             'days_left' => $daysLeft,
             'days_left_label' => $daysLeft === null ? '-' : $daysLeft.' Hari',
             'status' => $status,
@@ -363,7 +475,8 @@ class InventoryController extends Controller
             return 'critical';
         }
 
-        if ($item->stock <= $item->reorder_point || ($daysLeft !== null && $daysLeft <= $item->lead_time_days + 5)) {
+        $warningDays = $item->lead_time_days + max(1, (int) ($item->safety_stock_days ?? 5));
+        if ($item->stock <= $item->reorder_point || ($daysLeft !== null && $daysLeft <= $warningDays)) {
             return 'warning';
         }
 
@@ -404,29 +517,7 @@ class InventoryController extends Controller
 
     private function supplierCandidatesFor(InventoryItem $item): array
     {
-        $terms = collect(preg_split('/\s+/', strtolower($item->name.' '.$item->category)))
-            ->map(fn ($term) => trim($term))
-            ->filter(fn ($term) => strlen($term) >= 3)
-            ->take(5)
-            ->values();
-
-        $query = SupplierProduct::query()
-            ->with('store')
-            ->where('isDeleted', false)
-            ->where('stok', '>', 0)
-            ->whereHas('store', fn ($store) => $store->where('isDeleted', false));
-
-        $query->where(function ($inner) use ($item, $terms) {
-            $inner->where('kategori', 'like', '%'.$item->category.'%');
-
-            foreach ($terms as $term) {
-                $inner->orWhere('nama', 'like', '%'.$term.'%')
-                    ->orWhere('deskripsi', 'like', '%'.$term.'%')
-                    ->orWhere('kategori', 'like', '%'.$term.'%');
-            }
-        });
-
-        return $query
+        return $this->candidateProductQuery($item)
             ->orderByDesc('stok')
             ->limit(4)
             ->get()
@@ -444,12 +535,41 @@ class InventoryController extends Controller
             ->all();
     }
 
+    private function candidateProductQuery(InventoryItem $item)
+    {
+        $terms = collect(preg_split('/\s+/', strtolower($item->name.' '.$item->category)))
+            ->map(fn ($term) => trim($term))
+            ->filter(fn ($term) => strlen($term) >= 3)
+            ->take(5)
+            ->values();
+
+        $query = SupplierProduct::query()
+            ->with('store')
+            ->where('isDeleted', false)
+            ->where('stok', '>', 0)
+            ->whereHas('store', fn ($store) => $store
+                ->where('isDeleted', false)
+                ->where('tokoStatus', 'active'));
+
+        $query->where(function ($inner) use ($item, $terms) {
+            $inner->where('kategori', 'like', '%'.$item->category.'%');
+
+            foreach ($terms as $term) {
+                $inner->orWhere('nama', 'like', '%'.$term.'%')
+                    ->orWhere('deskripsi', 'like', '%'.$term.'%')
+                    ->orWhere('kategori', 'like', '%'.$term.'%');
+            }
+        });
+
+        return $query;
+    }
+
     private function recommendedSupplierQuantity(InventoryItem $item, InventorySupplierProductLink $link): int
     {
         $targetStock = max(
             (float) $item->reorder_point,
             (float) $item->minimum_stock * 2,
-            (float) $item->daily_usage * max(7, (int) $item->lead_time_days)
+            (float) $item->daily_usage * max(7, (int) $item->lead_time_days + (int) ($item->safety_stock_days ?? 0))
         );
 
         $neededInventoryQty = max(0.0, $targetStock - (float) $item->stock);
@@ -458,6 +578,460 @@ class InventoryController extends Controller
         }
 
         return max(1, (int) ceil($neededInventoryQty / max((float) $link->conversion_qty, 0.0001)));
+    }
+
+    private function autoReorderPoint(InventoryItem $item, int $leadTime, int $safetyDays): float
+    {
+        $usageBasedPoint = $item->daily_usage > 0
+            ? (float) $item->daily_usage * ($leadTime + $safetyDays)
+            : (float) $item->minimum_stock * 1.25;
+
+        return round(max((float) $item->minimum_stock, $usageBasedPoint), 2);
+    }
+
+    private function restockNeedFor(InventoryItem $item): array
+    {
+        $targetStock = $this->targetStockFor($item);
+        $neededInventoryQty = max(0.0, $targetStock - (float) $item->stock);
+        if ($neededInventoryQty <= 0) {
+            $neededInventoryQty = max((float) $item->minimum_stock, (float) $item->daily_usage, 1.0);
+        }
+
+        $daysLeft = $item->daily_usage > 0 ? (int) floor($item->stock / $item->daily_usage) : null;
+        $status = $this->statusFor($item, $daysLeft);
+        $leadTime = (int) $item->lead_time_days;
+        $safetyDays = (int) ($item->safety_stock_days ?? 0);
+
+        return [
+            'status' => $status,
+            'priority' => match ($status) {
+                'critical' => 'Segera',
+                'warning' => 'Perlu Dijadwalkan',
+                default => 'Cadangan',
+            },
+            'current_stock' => round((float) $item->stock, 2),
+            'current_label' => $this->numberLabel((float) $item->stock).' '.$item->unit,
+            'minimum_label' => $this->numberLabel((float) $item->minimum_stock).' '.$item->unit,
+            'target_stock' => round($targetStock, 2),
+            'target_label' => $this->numberLabel($targetStock).' '.$item->unit,
+            'needed_inventory_qty' => round($neededInventoryQty, 2),
+            'needed_label' => $this->numberLabel($neededInventoryQty).' '.$item->unit,
+            'daily_usage_label' => $this->numberLabel((float) $item->daily_usage).' '.$item->unit.'/hari',
+            'days_left' => $daysLeft,
+            'days_label' => $daysLeft === null ? 'Belum ada estimasi' : $daysLeft.' hari',
+            'lead_time_days' => $leadTime,
+            'safety_stock_days' => $safetyDays,
+            'reorder_point_label' => $this->numberLabel((float) $item->reorder_point).' '.$item->unit,
+            'message' => $this->restockMessage($status, $daysLeft, $leadTime, $safetyDays),
+        ];
+    }
+
+    private function targetStockFor(InventoryItem $item): float
+    {
+        return max(
+            (float) $item->reorder_point,
+            (float) $item->minimum_stock * 2,
+            (float) $item->daily_usage * max(7, (int) $item->lead_time_days + (int) ($item->safety_stock_days ?? 0))
+        );
+    }
+
+    private function restockMessage(string $status, ?int $daysLeft, int $leadTime, int $safetyDays): string
+    {
+        if ($status === 'critical') {
+            return $daysLeft === null
+                ? 'Stok sudah masuk zona kritis. Segera pilih supplier untuk restock.'
+                : "Sisa stok sekitar {$daysLeft} hari, lebih dekat dari lead time {$leadTime} hari.";
+        }
+
+        if ($status === 'warning') {
+            $buffer = $leadTime + max(1, $safetyDays);
+
+            return "Stok mendekati batas aman. Idealnya pesan sebelum sisa stok kurang dari {$buffer} hari.";
+        }
+
+        return 'Stok masih aman, tetapi rekomendasi ini bisa dipakai untuk menyiapkan cadangan pembelian.';
+    }
+
+    private function rankSupplierProductsForRestock(InventoryItem $item, ?string $userId, array $restockNeed): array
+    {
+        $products = $this->candidateProductQuery($item)
+            ->orderBy('harga')
+            ->limit(16)
+            ->get()
+            ->filter(fn (SupplierProduct $product) => $product->store !== null)
+            ->values();
+
+        if ($products->isEmpty()) {
+            return [
+                'recommendations' => [],
+                'summary' => [
+                    'mode' => 'empty',
+                    'title' => 'Belum ada produk supplier yang cocok',
+                    'description' => 'Sistem belum menemukan produk berdasarkan nama atau kategori item. Coba cari manual di katalog supplier.',
+                    'master_product' => null,
+                    'updated_at' => now()->format('d M Y H:i'),
+                ],
+            ];
+        }
+
+        $masterProduk = $this->resolveOrCreateMasterProdukForInventoryItem($item);
+        $rankingBySupplier = collect();
+        $usedSpk = false;
+
+        if ($masterProduk && $userId) {
+            $this->prepareRestockDssData($masterProduk, $products, $userId);
+            $rankings = $this->sawRecommender->getRecommendations($userId, $masterProduk->id, true);
+            $rankingBySupplier = $rankings->keyBy('supplier_id');
+            $usedSpk = $rankingBySupplier->isNotEmpty();
+        }
+
+        $minPrice = max(1, (int) $products->min('harga'));
+        $maxPrice = max($minPrice, (int) $products->max('harga'));
+
+        $recommendations = $products
+            ->map(function (SupplierProduct $product) use ($item, $userId, $restockNeed, $rankingBySupplier, $minPrice, $maxPrice) {
+                $store = $product->store;
+                $supplier = $store ? $this->supplierForStore($store) : null;
+                $distance = $store ? $this->distanceService->distanceToCoordinates($store->latitude, $store->longitude, $userId) : null;
+                $ranking = $supplier ? $rankingBySupplier->get($supplier->id) : null;
+                $score = $ranking
+                    ? (float) $ranking->final_score
+                    : $this->fallbackProductScore($product, $distance, $minPrice, $maxPrice);
+                $conversionQty = $this->guessConversionQty($item, $product);
+                $quantity = $this->recommendedProductQuantity($product, (float) $restockNeed['needed_inventory_qty'], $conversionQty);
+
+                return [
+                    'rank' => null,
+                    'product_id' => $product->id,
+                    'product_name' => $product->nama,
+                    'description' => $product->deskripsi,
+                    'category' => $product->kategori ?: 'Umum',
+                    'image' => $this->imageUrl($product->gambar),
+                    'store_name' => $store?->nama ?? 'Toko supplier',
+                    'store_location' => $store?->alamat ?? 'Alamat belum tersedia',
+                    'store_phone' => $store?->phone,
+                    'whatsapp_url' => $this->whatsappUrl($store?->phone, $item, $quantity, $product),
+                    'supplier_id' => $supplier?->id,
+                    'supplier_rating' => $supplier?->rating ? number_format((float) $supplier->rating, 1) : null,
+                    'price' => (int) $product->harga,
+                    'price_label' => 'Rp '.number_format((int) $product->harga, 0, ',', '.'),
+                    'stock' => (int) $product->stok,
+                    'unit' => $product->satuan,
+                    'quantity' => $quantity,
+                    'quantity_label' => $quantity.' '.$product->satuan,
+                    'subtotal' => $quantity * (int) $product->harga,
+                    'subtotal_label' => 'Rp '.number_format($quantity * (int) $product->harga, 0, ',', '.'),
+                    'conversion_label' => '1 '.$product->satuan.' ~ '.$this->numberLabel($conversionQty).' '.$item->unit,
+                    'distance_label' => $this->distanceService->distanceLabel($distance),
+                    'distance_value' => $distance,
+                    'delivery_label' => $this->distanceService->deliveryEstimateLabel($distance),
+                    'score' => round($score, 4),
+                    'score_percent' => (int) round(min(1, max(0, $score)) * 100),
+                    'score_source' => $ranking ? 'AHP-SAW' : 'Estimasi',
+                    'ranking_position' => $ranking?->ranking,
+                    'search_url' => route('spk.suppliers.products', ['search' => $product->nama]),
+                ];
+            })
+            ->sortBy([
+                ['score', 'desc'],
+                ['price', 'asc'],
+            ])
+            ->values()
+            ->map(function (array $recommendation, int $index) {
+                $recommendation['rank'] = $index + 1;
+
+                return $recommendation;
+            })
+            ->take(8)
+            ->all();
+
+        return [
+            'recommendations' => $recommendations,
+            'summary' => [
+                'mode' => $usedSpk ? 'spk' : 'fallback',
+                'title' => $usedSpk ? 'Diranking dengan AHP-SAW' : 'Diranking dengan estimasi awal',
+                'description' => $usedSpk
+                    ? 'Sistem memakai bobot AHP aktif dan metode SAW untuk memilih supplier sesuai kebutuhan restock.'
+                    : 'Sistem belum menemukan bobot AHP valid untuk user ini, jadi urutan memakai estimasi harga, jarak, dan ketersediaan stok.',
+                'master_product' => $masterProduk?->nama,
+                'updated_at' => now()->format('d M Y H:i'),
+            ],
+        ];
+    }
+
+    private function prepareRestockDssData(MasterProduk $masterProduk, $products, string $userId): void
+    {
+        $priceParameter = $this->parameterByKeyword('harga');
+        $qualityParameter = $this->parameterByKeyword('kualitas');
+        $supplierProducts = collect($products)
+            ->map(function (SupplierProduct $product) {
+                $store = $product->store;
+                $supplier = $store ? $this->supplierForStore($store) : null;
+
+                return $supplier ? ['supplier' => $supplier, 'product' => $product] : null;
+            })
+            ->filter()
+            ->groupBy(fn (array $row) => $row['supplier']->id)
+            ->map(fn ($rows) => collect($rows)->sortBy(fn (array $row) => (int) $row['product']->harga)->first())
+            ->values();
+
+        $supplierIds = $supplierProducts->pluck('supplier.id')->filter()->values()->all();
+        if (empty($supplierIds)) {
+            return;
+        }
+
+        DB::transaction(function () use ($masterProduk, $supplierProducts, $supplierIds, $priceParameter, $qualityParameter, $userId) {
+            $masterProduk->suppliers()->syncWithoutDetaching($supplierIds);
+
+            foreach ($supplierProducts as $row) {
+                /** @var MasterSupplier $supplier */
+                $supplier = $row['supplier'];
+                /** @var SupplierProduct $product */
+                $product = $row['product'];
+
+                if ($priceParameter) {
+                    SpkSupplierParameterValue::query()->updateOrCreate(
+                        [
+                            'supplier_id' => $supplier->id,
+                            'produk_id' => $masterProduk->id,
+                            'parameter_id' => $priceParameter->id,
+                        ],
+                        ['value' => max(1, (float) $product->harga)]
+                    );
+                }
+
+                if ($qualityParameter) {
+                    SpkSupplierParameterValue::query()->updateOrCreate(
+                        [
+                            'supplier_id' => $supplier->id,
+                            'produk_id' => $masterProduk->id,
+                            'parameter_id' => $qualityParameter->id,
+                        ],
+                        ['value' => $this->supplierQualityValue($supplier)]
+                    );
+                }
+            }
+
+            $this->ensureDefaultAhpWeights($userId);
+            SpkRanking::query()
+                ->where('user_id', $userId)
+                ->where('produk_id', $masterProduk->id)
+                ->update(['is_valid' => false]);
+        });
+    }
+
+    private function ensureDefaultAhpWeights(string $userId): void
+    {
+        $existingCount = SpkAhpBobot::query()
+            ->where('user_id', $userId)
+            ->count();
+
+        if ($existingCount > 0) {
+            return;
+        }
+
+        $parameters = SpkParameter::query()->get();
+        if ($parameters->isEmpty()) {
+            return;
+        }
+
+        $rawWeights = $parameters->mapWithKeys(function (SpkParameter $parameter) {
+            $name = strtolower($parameter->nama_parameter);
+            $weight = 0.1;
+            if (str_contains($name, 'harga')) {
+                $weight = 0.35;
+            } elseif (str_contains($name, 'jarak')) {
+                $weight = 0.30;
+            } elseif (str_contains($name, 'pengiriman') || str_contains($name, 'waktu')) {
+                $weight = 0.20;
+            } elseif (str_contains($name, 'kualitas')) {
+                $weight = 0.15;
+            }
+
+            return [$parameter->id => $weight];
+        });
+
+        $sum = max(0.0001, (float) $rawWeights->sum());
+        foreach ($parameters as $parameter) {
+            SpkAhpBobot::query()->updateOrCreate(
+                [
+                    'user_id' => $userId,
+                    'parameter_id' => $parameter->id,
+                ],
+                [
+                    'bobot' => round(((float) $rawWeights[$parameter->id]) / $sum, 6),
+                    'is_valid' => true,
+                ]
+            );
+        }
+    }
+
+    private function resolveOrCreateMasterProdukForInventoryItem(InventoryItem $item): ?MasterProduk
+    {
+        $name = trim((string) $item->name);
+        if ($name === '') {
+            return null;
+        }
+
+        $normalized = $this->normalizeProductName($name);
+        $masterProduk = MasterProduk::query()
+            ->get()
+            ->first(function (MasterProduk $produk) use ($normalized) {
+                $masterName = $this->normalizeProductName($produk->nama);
+
+                return $masterName === $normalized
+                    || str_contains($masterName, $normalized)
+                    || str_contains($normalized, $masterName);
+            });
+
+        return $masterProduk ?? MasterProduk::query()->firstOrCreate(
+            ['nama' => $name],
+            ['deskripsi' => 'Produk restock otomatis dari inventaris: '.$item->category]
+        );
+    }
+
+    private function supplierForStore(SupplierStore $store): ?MasterSupplier
+    {
+        $phone = preg_replace('/[^0-9]/', '', (string) $store->phone);
+        $supplier = MasterSupplier::query()
+            ->where(function ($query) use ($store, $phone) {
+                $query->where('nama', $store->nama);
+
+                if ($phone !== '') {
+                    $query->orWhereRaw("REPLACE(REPLACE(REPLACE(kontak, '+', ''), '-', ''), ' ', '') = ?", [$phone]);
+                }
+            })
+            ->first();
+
+        if ($supplier) {
+            $supplier->fill([
+                'alamat' => $supplier->alamat ?: $store->alamat,
+                'latitude' => $supplier->latitude ?? $store->latitude,
+                'longitude' => $supplier->longitude ?? $store->longitude,
+                'kontak' => $supplier->kontak ?: $store->phone,
+                'kategori' => $supplier->kategori ?: $store->kategori,
+            ])->save();
+
+            return $supplier;
+        }
+
+        return MasterSupplier::query()->create([
+            'nama' => $store->nama ?: 'Toko Supplier',
+            'alamat' => $store->alamat,
+            'latitude' => $store->latitude,
+            'longitude' => $store->longitude,
+            'kontak' => $store->phone,
+            'deskripsi' => $store->deskripsi,
+            'kategori' => $store->kategori ?: 'Pakan, Vitamin, Obat',
+            'rating' => 0,
+            'jarak_km' => null,
+            'logo_url' => $store->logoToko,
+        ]);
+    }
+
+    private function parameterByKeyword(string $keyword): ?SpkParameter
+    {
+        return SpkParameter::query()
+            ->where('nama_parameter', 'like', '%'.$keyword.'%')
+            ->first();
+    }
+
+    private function supplierQualityValue(MasterSupplier $supplier): float
+    {
+        $rating = (float) ($supplier->rating ?? 0);
+        if ($rating <= 0) {
+            return 3.0;
+        }
+
+        return round(max(1, min(5, $rating)), 2);
+    }
+
+    private function fallbackProductScore(SupplierProduct $product, ?float $distance, int $minPrice, int $maxPrice): float
+    {
+        $priceRange = max(1, $maxPrice - $minPrice);
+        $priceScore = 1 - (((int) $product->harga - $minPrice) / $priceRange);
+        $distanceScore = $distance !== null ? max(0.35, 1 - (min($distance, 80) / 100)) : 0.7;
+        $stockScore = min(1, max(0.35, (int) $product->stok / 50));
+
+        return round(($priceScore * 0.45) + ($distanceScore * 0.35) + ($stockScore * 0.20), 4);
+    }
+
+    private function recommendedProductQuantity(SupplierProduct $product, float $neededInventoryQty, float $conversionQty): int
+    {
+        $quantity = max(1, (int) ceil($neededInventoryQty / max($conversionQty, 0.0001)));
+
+        return max(1, min($quantity, max(1, (int) $product->stok)));
+    }
+
+    private function supplierCartSummary(Request $request): array
+    {
+        $cart = collect($request->session()->get('supplier_cart', []))
+            ->map(fn ($quantity) => (int) $quantity)
+            ->filter(fn ($quantity) => $quantity > 0);
+
+        if ($cart->isEmpty()) {
+            return [
+                'total_quantity' => 0,
+                'subtotal' => 0,
+            ];
+        }
+
+        $products = SupplierProduct::query()
+            ->whereIn('id', $cart->keys())
+            ->where('isDeleted', false)
+            ->get();
+
+        return [
+            'total_quantity' => (int) $cart->sum(),
+            'subtotal' => (int) $products->sum(fn (SupplierProduct $product) => (int) $product->harga * (int) ($cart[$product->id] ?? 0)),
+        ];
+    }
+
+    private function whatsappUrl(?string $phone, InventoryItem $item, int $quantity, SupplierProduct $product): ?string
+    {
+        $normalized = preg_replace('/[^0-9]/', '', (string) $phone);
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (Str::startsWith($normalized, '0')) {
+            $normalized = '62'.substr($normalized, 1);
+        }
+
+        $message = "Halo, saya ingin memesan {$quantity} {$product->satuan} {$product->nama} untuk restock {$item->name}.";
+
+        return 'https://wa.me/'.$normalized.'?text='.rawurlencode($message);
+    }
+
+    private function imageUrl(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        return Str::startsWith($path, ['http://', 'https://'])
+            ? $path
+            : asset('storage/'.$path);
+    }
+
+    private function normalizeProductName(string $name): string
+    {
+        $name = strtolower($name);
+        $name = preg_replace('/(\d+)\s+(kg|g|mg|ml|l|liter|dosis|butir)\b/', '$1$2', $name) ?? $name;
+        $name = preg_replace('/[^a-z0-9]+/', ' ', $name) ?? $name;
+
+        return trim($name);
+    }
+
+    private function coveragePercent(?int $daysLeft, int $leadTime, int $safetyDays, string $status): int
+    {
+        if ($daysLeft === null) {
+            return $status === 'optimal' ? 100 : 40;
+        }
+
+        $targetDays = max(1, $leadTime + max(1, $safetyDays));
+
+        return (int) max(3, min(100, round(($daysLeft / $targetDays) * 100)));
     }
 
     private function guessConversionQty(InventoryItem $item, SupplierProduct $product): float

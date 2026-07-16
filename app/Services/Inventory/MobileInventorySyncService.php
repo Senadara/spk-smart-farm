@@ -50,8 +50,10 @@ class MobileInventorySyncService
             $dailyUsage = $this->dailyUsage($row->id);
             $unit = $this->unitLabel($row);
             $category = $row->category_name ?: 'Umum';
-            $leadTime = $this->leadTimeFor($category);
-            $reorderPoint = max($minimumStock * 1.25, $dailyUsage * max(7, $leadTime));
+            $leadTime = max(1, (int) ($item?->lead_time_days ?? $this->leadTimeFor($category)));
+            $safetyStockDays = max(0, (int) ($item?->safety_stock_days ?? $this->safetyStockDaysFor($category)));
+            $reorderPointOverride = $item?->reorder_point_override;
+            $reorderPoint = $this->reorderPoint($minimumStock, $dailyUsage, $leadTime, $safetyStockDays, $reorderPointOverride);
 
             $payload = [
                 'sku' => $this->skuFor($row->id),
@@ -61,7 +63,7 @@ class MobileInventorySyncService
                 'unit' => $unit,
                 'daily_usage' => $dailyUsage > 0 ? $dailyUsage : (float) ($item?->daily_usage ?? 0),
                 'minimum_stock' => $minimumStock,
-                'reorder_point' => round($reorderPoint, 2),
+                'reorder_point' => $reorderPoint,
                 'lead_time_days' => $leadTime,
                 'unit_budidaya_id' => $this->latestUnitBudidayaId($row->id) ?? $item?->unit_budidaya_id,
                 'photo_path' => $row->gambar ?: $item?->photo_path,
@@ -72,6 +74,14 @@ class MobileInventorySyncService
 
             if (Schema::hasColumn('inventory_items', 'mobile_inventaris_id')) {
                 $payload['mobile_inventaris_id'] = $row->id;
+            }
+
+            if (Schema::hasColumn('inventory_items', 'safety_stock_days')) {
+                $payload['safety_stock_days'] = $safetyStockDays;
+            }
+
+            if (Schema::hasColumn('inventory_items', 'reorder_point_override')) {
+                $payload['reorder_point_override'] = $reorderPointOverride;
             }
 
             if ($item) {
@@ -198,6 +208,39 @@ class MobileInventorySyncService
         }
 
         return 4;
+    }
+
+    private function safetyStockDaysFor(string $category): int
+    {
+        $lower = strtolower($category);
+
+        if (str_contains($lower, 'pakan')) {
+            return 5;
+        }
+
+        if (str_contains($lower, 'vaksin') || str_contains($lower, 'obat') || str_contains($lower, 'vitamin')) {
+            return 3;
+        }
+
+        return 4;
+    }
+
+    private function reorderPoint(
+        float $minimumStock,
+        float $dailyUsage,
+        int $leadTime,
+        int $safetyStockDays,
+        mixed $override
+    ): float {
+        if ($override !== null && (float) $override >= 0) {
+            return round((float) $override, 2);
+        }
+
+        $usageBasedPoint = $dailyUsage > 0
+            ? $dailyUsage * ($leadTime + $safetyStockDays)
+            : $minimumStock * 1.25;
+
+        return round(max($minimumStock, $usageBasedPoint), 2);
     }
 
     private function notesFor(object $row): string

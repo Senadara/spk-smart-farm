@@ -4,6 +4,10 @@
 @section('breadcrumb', 'Analisa SPK')
 
 @section('content')
+    @php
+        $canAccessSuppliers = in_array(session('user.role'), ['pjawab', 'owner', 'admin'], true);
+    @endphp
+
     <div x-data="spkDashboard()" class="max-w-full space-y-6" x-cloak>
 
         {{-- HEADER & FILTERS --}}
@@ -257,6 +261,7 @@
         </div>
 
         {{-- 5. AHP-SAW SUPPLIER (Standalone Full Width) --}}
+        @if($canAccessSuppliers)
         <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
             <div class="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
                 <div>
@@ -309,6 +314,7 @@
                 @endforeach
             </div>
         </div>
+        @endif
 
 
 

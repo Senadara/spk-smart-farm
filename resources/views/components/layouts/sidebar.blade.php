@@ -1,5 +1,10 @@
 @php
-    $isSupplier = session('user.role') === 'supplier';
+    $role = session('user.role');
+    $isSupplier = $role === 'supplier';
+    $isSuperAdmin = $role === 'admin';
+    $canManageSettings = in_array($role, ['pjawab', 'owner', 'admin'], true);
+    $canAccessSupplierMenu = in_array($role, ['pjawab', 'owner', 'admin'], true);
+    $canAccessIot = in_array($role, ['pjawab', 'owner', 'admin', 'inventor'], true);
 @endphp
 
 @once
@@ -171,16 +176,20 @@
                                 Penugasan
                             </x-sidebar.menu-item>
                         </li>
-                        <li>
-                            <x-sidebar.menu-item :href="route('spk.suppliers.index')" :active="request()->routeIs('spk.suppliers.*')" icon="users">
-                                Daftar Supplier
-                            </x-sidebar.menu-item>
-                        </li>
-                        <li>
-                            <x-sidebar.menu-item :href="route('iot.dashboard')" :active="request()->routeIs('iot.*')" icon="iot">
-                                IoT
-                            </x-sidebar.menu-item>
-                        </li>
+                        @if($canAccessSupplierMenu)
+                            <li>
+                                <x-sidebar.menu-item :href="route('spk.suppliers.index')" :active="request()->routeIs('spk.suppliers.*')" icon="users">
+                                    Daftar Supplier
+                                </x-sidebar.menu-item>
+                            </li>
+                        @endif
+                        @if($canAccessIot)
+                            <li>
+                                <x-sidebar.menu-item :href="route('iot.dashboard')" :active="request()->routeIs('iot.*')" icon="iot">
+                                    IoT
+                                </x-sidebar.menu-item>
+                            </li>
+                        @endif
                     </ul>
                 </div>
             </div>
@@ -188,18 +197,27 @@
             {{-- Section: Settings --}}
             <div class="sidebar-bottom-area mt-auto pt-4 border-t border-[var(--color-gray-100)]">
                 <ul class="space-y-1 list-none p-0 m-0">
-                    @if(session('user') && isset(session('user')['role']) && session('user')['role'] === 'pjawab')
+                    @if($role === 'pjawab')
                         <li>
                             <x-sidebar.menu-item :href="route('users.index')" :active="request()->routeIs('users.*')" icon="users">
                                 Manajemen Karyawan
                             </x-sidebar.menu-item>
                         </li>
                     @endif
-                    <li>
-                        <x-sidebar.menu-item :href="route('settings.index')" :active="request()->routeIs('settings.*')" icon="settings">
-                            Pengaturan
-                        </x-sidebar.menu-item>
-                    </li>
+                    @if($canManageSettings)
+                        <li>
+                            <x-sidebar.menu-item :href="route('settings.index')" :active="request()->routeIs('settings.*')" icon="settings">
+                                Pengaturan
+                            </x-sidebar.menu-item>
+                        </li>
+                    @endif
+                    @if($isSuperAdmin)
+                        <li>
+                            <x-sidebar.menu-item :href="route('superadmin.suppliers.index')" :active="request()->routeIs('superadmin.*')" icon="users">
+                                Super Admin
+                            </x-sidebar.menu-item>
+                        </li>
+                    @endif
                 </ul>
             </div>
         @endif

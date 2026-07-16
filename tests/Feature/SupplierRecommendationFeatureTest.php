@@ -103,8 +103,9 @@ class SupplierRecommendationFeatureTest extends TestCase
 
     public function test_buyer_can_create_simple_supplier_order_without_payment_gateway(): void
     {
-        $buyer = $this->createUser('user');
+        $buyer = $this->createUser('pjawab');
         $supplierUser = $this->createUser('supplier');
+        $session = array_merge($this->sessionFor($buyer), ['_token' => 'supplier-order-token']);
 
         $store = SupplierStore::query()->create([
             'id' => Str::uuid()->toString(),
@@ -140,8 +141,9 @@ class SupplierRecommendationFeatureTest extends TestCase
             'isDeleted' => false,
         ]);
 
-        $this->withSession($this->sessionFor($buyer))
+        $this->withSession($session)
             ->post("/spk-suppliers/{$supplier->id}/orders", [
+                '_token' => 'supplier-order-token',
                 'product_id' => $product->id,
                 'quantity' => 3,
             ])
@@ -166,8 +168,9 @@ class SupplierRecommendationFeatureTest extends TestCase
 
     public function test_buyer_can_view_order_history_and_cancel_pending_order(): void
     {
-        $buyer = $this->createUser('user');
+        $buyer = $this->createUser('pjawab');
         $supplierUser = $this->createUser('supplier');
+        $session = array_merge($this->sessionFor($buyer), ['_token' => 'supplier-cancel-token']);
 
         $store = SupplierStore::query()->create([
             'id' => Str::uuid()->toString(),
@@ -208,15 +211,17 @@ class SupplierRecommendationFeatureTest extends TestCase
             'isDeleted' => false,
         ]);
 
-        $this->withSession($this->sessionFor($buyer))
+        $this->withSession($session)
             ->get('/spk-suppliers/orders')
             ->assertOk()
             ->assertSee('Toko Histori Uji')
             ->assertSee('Vitamin Histori Uji')
             ->assertSee('Batalkan Pesanan');
 
-        $this->withSession($this->sessionFor($buyer))
-            ->patch("/spk-suppliers/orders/{$order->id}/cancel")
+        $this->withSession($session)
+            ->patch("/spk-suppliers/orders/{$order->id}/cancel", [
+                '_token' => 'supplier-cancel-token',
+            ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -225,8 +230,9 @@ class SupplierRecommendationFeatureTest extends TestCase
 
     public function test_buyer_can_add_supplier_product_to_cart_and_checkout(): void
     {
-        $buyer = $this->createUser('user');
+        $buyer = $this->createUser('pjawab');
         $supplierUser = $this->createUser('supplier');
+        $session = array_merge($this->sessionFor($buyer), ['_token' => 'supplier-cart-token']);
 
         $store = SupplierStore::query()->create([
             'id' => Str::uuid()->toString(),
@@ -252,15 +258,16 @@ class SupplierRecommendationFeatureTest extends TestCase
             'isDeleted' => false,
         ]);
 
-        $this->withSession($this->sessionFor($buyer))
+        $this->withSession($session)
             ->get('/spk-suppliers/products?search=Pakan')
             ->assertOk()
             ->assertSee('Pakan Cart Uji')
             ->assertSee('Toko Cart Uji')
             ->assertSee('Keranjang');
 
-        $this->withSession($this->sessionFor($buyer))
+        $this->withSession($session)
             ->post('/spk-suppliers/cart', [
+                '_token' => 'supplier-cart-token',
                 'product_id' => $product->id,
                 'quantity' => 2,
             ])
@@ -268,10 +275,12 @@ class SupplierRecommendationFeatureTest extends TestCase
             ->assertSessionHas('success')
             ->assertSessionHas("supplier_cart.{$product->id}", 2);
 
-        $this->withSession(array_merge($this->sessionFor($buyer), [
+        $this->withSession(array_merge($session, [
             'supplier_cart' => [$product->id => 2],
         ]))
-            ->post('/spk-suppliers/cart/checkout')
+            ->post('/spk-suppliers/cart/checkout', [
+                '_token' => 'supplier-cart-token',
+            ])
             ->assertRedirect(route('spk.suppliers.orders.index'))
             ->assertSessionHas('success');
 
@@ -297,6 +306,129 @@ class SupplierRecommendationFeatureTest extends TestCase
             ->assertOk()
             ->assertSee('farm-location-picker-map')
             ->assertSee('Cari lokasi');
+    }
+
+    public function test_superadmin_can_add_manual_supplier_partner_with_location_and_whatsapp(): void
+    {
+        $admin = $this->createUser('admin');
+        $session = array_merge($this->sessionFor($admin), ['_token' => 'manual-supplier-token']);
+
+        $this->withSession($session)
+            ->get('/super-admin/suppliers/create')
+            ->assertOk()
+            ->assertSee('Tambah mitra supplier baru')
+            ->assertSee('managed-supplier-location-picker-map');
+
+        $this->withSession($session)
+            ->post('/super-admin/suppliers', [
+                '_token' => 'manual-supplier-token',
+                'nama' => 'Mitra Manual Uji',
+                'whatsapp' => '0812-3456-7890',
+                'kategori' => ['Pakan', 'Vitamin'],
+                'alamat' => 'Ngantang, Kabupaten Malang',
+                'latitude' => -7.8543000,
+                'longitude' => 112.3701000,
+                'deskripsi' => 'Supplier manual untuk uji tambah mitra.',
+            ])
+            ->assertRedirect(route('superadmin.suppliers.index', ['status' => 'active']));
+
+        $supplier = MasterSupplier::query()
+            ->where('nama', 'Mitra Manual Uji')
+            ->firstOrFail();
+
+        $this->assertSame('6281234567890', $supplier->kontak);
+        $this->assertSame('Pakan,Vitamin', $supplier->kategori);
+        $this->assertSame(-7.8543, round((float) $supplier->latitude, 4));
+        $this->assertSame(112.3701, round((float) $supplier->longitude, 4));
+
+        $this->assertDatabaseHas('toko', [
+            'nama' => 'Mitra Manual Uji',
+            'phone' => '6281234567890',
+            'alamat' => 'Ngantang, Kabupaten Malang',
+            'tokoStatus' => 'active',
+            'TypeToko' => 'umkm',
+            'isDeleted' => false,
+        ]);
+    }
+
+    public function test_owner_cannot_access_manual_supplier_management_from_supplier_catalog(): void
+    {
+        $owner = $this->createUser('pjawab');
+
+        $this->withSession($this->sessionFor($owner))
+            ->get('/spk-suppliers')
+            ->assertOk()
+            ->assertDontSee('Tambah Mitra Supplier')
+            ->assertDontSee('Tambah mitra supplier baru');
+
+        $this->withSession($this->sessionFor($owner))
+            ->get('/spk-suppliers/create')
+            ->assertNotFound();
+    }
+
+    public function test_pending_supplier_is_hidden_until_superadmin_approves_it(): void
+    {
+        $owner = $this->createUser('pjawab');
+        $admin = $this->createUser('admin');
+        $supplierUser = $this->createUser('supplier');
+
+        $store = SupplierStore::query()->create([
+            'id' => Str::uuid()->toString(),
+            'userId' => $supplierUser->id,
+            'nama' => 'Toko Pending Uji',
+            'phone' => '081240000099',
+            'alamat' => 'Malang',
+            'kategori' => 'Pakan',
+            'isDeleted' => false,
+            'tokoStatus' => 'request',
+            'TypeToko' => 'umkm',
+        ]);
+
+        $product = SupplierProduct::query()->create([
+            'id' => Str::uuid()->toString(),
+            'tokoId' => $store->id,
+            'nama' => 'Pakan Pending Uji',
+            'deskripsi' => 'Produk tidak boleh tampil sebelum approval.',
+            'kategori' => 'Pakan',
+            'stok' => 20,
+            'satuan' => 'Karung',
+            'harga' => 150000,
+            'isDeleted' => false,
+        ]);
+
+        $this->withSession($this->sessionFor($owner))
+            ->get('/spk-suppliers/products?search=Pending')
+            ->assertOk()
+            ->assertDontSee('Pakan Pending Uji');
+
+        $this->withSession(array_merge($this->sessionFor($owner), ['_token' => 'pending-cart-token']))
+            ->post('/spk-suppliers/cart', [
+                '_token' => 'pending-cart-token',
+                'product_id' => $product->id,
+                'quantity' => 1,
+            ])
+            ->assertNotFound();
+
+        $this->withSession(array_merge($this->sessionFor($admin), ['_token' => 'approve-supplier-token']))
+            ->patch("/super-admin/supplier-stores/{$store->id}/approve", [
+                '_token' => 'approve-supplier-token',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('toko', [
+            'id' => $store->id,
+            'tokoStatus' => 'active',
+        ]);
+        $this->assertDatabaseHas('master_suppliers', [
+            'nama' => 'Toko Pending Uji',
+            'kontak' => '6281240000099',
+        ]);
+
+        $this->withSession($this->sessionFor($owner))
+            ->get('/spk-suppliers/products?search=Pending')
+            ->assertOk()
+            ->assertSee('Pakan Pending Uji')
+            ->assertSee('Toko Pending Uji');
     }
 
     /**
