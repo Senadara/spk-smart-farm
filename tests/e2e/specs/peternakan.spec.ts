@@ -50,7 +50,7 @@ test.describe('Modul Dashboard Peternakan - E2E Tests', () => {
         }
     });
 
-    test('Positif - DISPLAY KPI metrics cards', async ({ page }) => {
+    test('Positif - Kartu KPI ditampilkan', async ({ page }) => {
         /**
          * Given: Dashboard loaded dengan data
          * When: Check KPI section
@@ -73,7 +73,7 @@ test.describe('Modul Dashboard Peternakan - E2E Tests', () => {
         expect(hasKpiElements).toBeTruthy();
     });
 
-    test('Positif - DISPLAY fuzzy SPK results section', async ({ page }) => {
+    test('Positif - Hasil SPK fuzzy ditampilkan', async ({ page }) => {
         /**
          * Given: Dashboard dengan fuzzy evaluation
          * When: Check SPK results section
@@ -119,7 +119,7 @@ test.describe('Modul Dashboard Peternakan - E2E Tests', () => {
     // KOMODITAS FILTER
     // ═══════════════════════════════════════════════════════════════
 
-    test('Positif - FILTER by komoditas updates dashboard', async ({ page }) => {
+    test('Positif - Filter komoditas perbarui dashboard', async ({ page }) => {
         /**
          * Given: Multiple komoditas available
          * When: Select different komoditas dari dropdown
@@ -149,7 +149,7 @@ test.describe('Modul Dashboard Peternakan - E2E Tests', () => {
     // CHART RANGE FILTER
     // ═══════════════════════════════════════════════════════════════
 
-    test('Positif - SWITCH chart range (30d, 90d, ytd)', async ({ page }) => {
+    test('Positif - Beralih rentang grafik', async ({ page }) => {
         /**
          * Given: Dashboard dengan chart data
          * When: Click chart range filter buttons
@@ -221,7 +221,7 @@ test.describe('Modul Dashboard Peternakan - E2E Tests', () => {
     // EVALUATE ALL ENDPOINT
     // ═══════════════════════════════════════════════════════════════
 
-    test('Positif - EXECUTE evaluate-all fuzzy evaluation', async ({ page }) => {
+    test('Positif - Jalankan evaluasi fuzzy', async ({ page }) => {
         /**
          * Given: Dashboard loaded
          * When: Click "Jalankan Evaluasi" button
@@ -241,7 +241,7 @@ test.describe('Modul Dashboard Peternakan - E2E Tests', () => {
         }
     });
 
-    test('Positif - EVALUATE-ALL updates evaluation timestamp', async ({ page }) => {
+    test('Positif - Evaluate-all perbarui timestamp', async ({ page }) => {
         /**
          * Given: Evaluate-all executed
          * When: Check evaluation time label
@@ -272,7 +272,7 @@ test.describe('Modul Dashboard Peternakan - E2E Tests', () => {
     // CHARTS RENDERING
     // ═══════════════════════════════════════════════════════════════
 
-    test('Positif - CHARTS rendered without JS errors', async ({ page }) => {
+    test('Positif - Grafik tanpa error JS', async ({ page }) => {
         /**
          * Given: Dashboard with chart data
          * When: Check for canvas elements
@@ -301,7 +301,7 @@ test.describe('Modul Dashboard Peternakan - E2E Tests', () => {
     // PRODUCTION LOG DISPLAY
     // ═══════════════════════════════════════════════════════════════
 
-    test('Positif - PRODUCTION LOG section rendered', async ({ page }) => {
+    test('Positif - Section log produksi', async ({ page }) => {
         /**
          * Given: Dashboard dengan production data
          * When: Check production log section
@@ -330,7 +330,7 @@ test.describe('Modul Dashboard Peternakan - E2E Tests', () => {
     // BARN DETAIL PAGE - /peternakan/{id}
     // ═══════════════════════════════════════════════════════════════
 
-    test('Positif - NAVIGATE to barn detail page', async ({ page }) => {
+    test('Positif - Navigasi ke detail kandang', async ({ page }) => {
         /**
          * Given: Dashboard dengan list kandang
          * When: Click on kandang link/card
@@ -352,7 +352,7 @@ test.describe('Modul Dashboard Peternakan - E2E Tests', () => {
         }
     });
 
-    test('Positif - BARN DETAIL page loads dengan sensors data', async ({ page }) => {
+    test('Positif - Detail kandang data sensor', async ({ page }) => {
         /**
          * Given: Valid barn ID
          * When: Navigate to /peternakan/{id}
@@ -382,7 +382,7 @@ test.describe('Modul Dashboard Peternakan - E2E Tests', () => {
         }
     });
 
-    test('Positif - BARN DETAIL shows production log', async ({ page }) => {
+    test('Positif - Detail kandang log produksi', async ({ page }) => {
         /**
          * Given: Barn detail page loaded
          * When: Check production log section
@@ -411,7 +411,7 @@ test.describe('Modul Dashboard Peternakan - E2E Tests', () => {
         }
     });
 
-    test('Positif - BARN DETAIL shows IoT device info', async ({ page }) => {
+    test('Positif - Detail kandang info IoT', async ({ page }) => {
         /**
          * Given: Barn dengan IoT device mapped
          * When: Load detail page
@@ -441,7 +441,7 @@ test.describe('Modul Dashboard Peternakan - E2E Tests', () => {
         }
     });
 
-    test('Positif - BARN DETAIL has back to dashboard link', async ({ page }) => {
+    test('Positif - Link kembali ke dashboard', async ({ page }) => {
         /**
          * Given: Barn detail page
          * When: Look for back/return link

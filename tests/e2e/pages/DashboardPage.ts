@@ -1,20 +1,26 @@
-﻿import { Page, Locator, expect } from '@playwright/test';
+import { Page, Locator, expect } from '@playwright/test';
 
 export class DashboardPage {
     readonly page: Page;
-    readonly welcomeCard: Locator;
-    readonly roleCard: Locator;
-    readonly emailCard: Locator;
-    readonly loginSinceCard: Locator;
-    readonly placeholderCard: Locator;
+    readonly heading: Locator;
+    readonly productivityCards: Locator;
+    readonly trendChart: Locator;
+    readonly peternakanSection: Locator;
+    readonly perkebunanSection: Locator;
+    readonly spkPanel: Locator;
+    readonly stokGudangPanel: Locator;
+    readonly prioritasSection: Locator;
 
     constructor(page: Page) {
         this.page = page;
-        this.welcomeCard = page.locator('text=Selamat Datang');
-        this.roleCard = page.locator('text=Role Anda').locator('..');
-        this.emailCard = page.locator('text=Email').locator('..');
-        this.loginSinceCard = page.locator('text=Login Sejak').locator('..');
-        this.placeholderCard = page.locator('text=Fitur SPK Akan Hadir');
+        this.heading = page.getByText('Produktivitas Farm Hari Ini');
+        this.productivityCards = page.locator('section.grid.grid-cols-2.md\\:grid-cols-3.xl\\:grid-cols-6 article');
+        this.trendChart = page.getByText('Tren Produktivitas 7 Hari');
+        this.peternakanSection = page.getByText('Peternakan').locator('..');
+        this.perkebunanSection = page.getByText('Perkebunan').locator('..');
+        this.spkPanel = page.getByText('Peringatan SPK Hari Ini');
+        this.stokGudangPanel = page.getByText('Stok Gudang');
+        this.prioritasSection = page.getByText('Prioritas');
     }
 
     async goto() {
@@ -22,30 +28,46 @@ export class DashboardPage {
         await expect(this.page).toHaveURL(/.*\/dashboard/);
     }
 
-    async expectWelcomeCardVisible() {
-        await expect(this.welcomeCard).toBeVisible();
+    async expectPageLoaded() {
+        await expect(this.heading.first()).toBeVisible({ timeout: 15000 });
     }
 
-    async expectRoleCardVisible() {
-        await expect(this.roleCard).toBeVisible();
+    async expectProductivityCardsVisible() {
+        const count = await this.productivityCards.count();
+        expect(count).toBeGreaterThanOrEqual(4);
     }
 
-    async expectEmailCardVisible() {
-        await expect(this.emailCard).toBeVisible();
+    async expectTrendChartVisible() {
+        await expect(this.trendChart.first()).toBeVisible({ timeout: 10000 });
     }
 
-    async expectLoginSinceCardVisible() {
-        await expect(this.loginSinceCard).toBeVisible();
+    async expectPeternakanSectionVisible() {
+        await expect(this.peternakanSection.first()).toBeVisible({ timeout: 10000 });
     }
 
-    async expectPlaceholderCardVisible() {
-        await expect(this.placeholderCard).toBeVisible();
+    async expectPerkebunanSectionVisible() {
+        await expect(this.perkebunanSection.first()).toBeVisible({ timeout: 10000 });
     }
 
-    async expectAllCardsVisible() {
-        await expect(this.welcomeCard).toBeVisible();
-        await expect(this.roleCard).toBeVisible();
-        await expect(this.emailCard).toBeVisible();
-        await expect(this.loginSinceCard).toBeVisible();
+    async expectSpkPanelVisible() {
+        await expect(this.spkPanel.first()).toBeVisible({ timeout: 10000 });
+    }
+
+    async expectStokGudangPanelVisible() {
+        await expect(this.stokGudangPanel.first()).toBeVisible({ timeout: 10000 });
+    }
+
+    async expectNoCrash() {
+        const bodyContent = await this.page.locator('body').textContent();
+        expect(bodyContent).not.toMatch(/Fatal render error|undefined/i);
+        expect(bodyContent).not.toMatch(/Error 500/i);
+    }
+
+    async expectAllSectionsVisible() {
+        await this.expectPageLoaded();
+        await this.expectProductivityCardsVisible();
+        await this.expectTrendChartVisible();
+        await expect(this.page.getByText('Populasi').first()).toBeVisible();
+        await expect(this.page.getByText('Blok aktif').first()).toBeVisible();
     }
 }

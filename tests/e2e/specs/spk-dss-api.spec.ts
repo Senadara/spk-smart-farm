@@ -18,29 +18,34 @@ test.describe('Modul SPK DSS API - E2E Tests', () => {
 
      test.setTimeout(60000);
 
-     test.beforeAll(async ({ playwright, browser }) => {
-          // Login via UI first to establish session with valid users.id
-          const page = await browser.newPage();
-          await page.goto('http://localhost:8000/login');
-          await page.fill('input[name="email"]', 'pjawab@email.com');
-          await page.fill('input[name="password"]', 'Password123.');
-          await page.click('button[type="submit"]');
-          await page.waitForURL('**/dashboard', { timeout: 10000 });
+      test.beforeAll(async ({ playwright, browser }) => {
+           // Use a clean browser context (without global storageState inheritance)
+           const cleanContext = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+           const page = await cleanContext.newPage();
+           await page.goto('http://127.0.0.1:8000/login');
+           await page.fill('input[name="email"]', 'pjawab@email.com');
+           await page.fill('input[name="password"]', 'Password123.');
+           await page.click('button[type="submit"]');
+           await page.waitForURL('**/dashboard', { timeout: 15000 });
 
-          // Get session storage state
-          const storageState = await page.context().storageState();
-          await page.close();
+           const csrfToken = await page.evaluate(() => {
+                const meta = document.querySelector('meta[name="csrf-token"]');
+                return meta?.getAttribute('content') || '';
+           });
 
-          // Create API context with session cookies
-          apiContext = await playwright.request.newContext({
-               baseURL: 'http://localhost:8000',
-               storageState,
-               extraHTTPHeaders: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-               },
-          });
-     });
+           const storageState = await cleanContext.storageState();
+           await cleanContext.close();
+
+           apiContext = await playwright.request.newContext({
+                baseURL: 'http://127.0.0.1:8000',
+                storageState,
+                extraHTTPHeaders: {
+                     'Accept': 'application/json',
+                     'Content-Type': 'application/json',
+                     'X-CSRF-TOKEN': csrfToken,
+                },
+           });
+      });
 
      test.afterAll(async () => {
           // Cleanup created parameters (cascade will delete relations)

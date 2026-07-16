@@ -26,10 +26,10 @@ export class SpkPage {
     constructor(page: Page) {
         this.page = page;
 
-        this.dashboardHeading = page.locator('h1').filter({ hasText: /Analisa SPK|Dashboard SPK/i });
+        this.dashboardHeading = page.locator('h1').filter({ hasText: /Pusat Analisis|Analisa SPK|Dashboard SPK/i });
         this.spkFilterForm = page.locator('form#spkFilterForm');
         this.komoditasSelect = page.locator('select[name="komoditas"]');
-        this.lokasiSelect = page.locator('select[name="lokasi"]');
+        this.lokasiSelect = page.locator('select[name="coop_id"]');
         this.spkResultTable = page.locator('table').first();
         this.textDanger = page.locator('.text-red-500, .text-danger, span.error').filter({ hasText: /wajib|required|pilih/i });
 

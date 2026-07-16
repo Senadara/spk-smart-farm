@@ -4,17 +4,17 @@ export class SettingsPage {
     readonly page: Page;
     readonly pageTitle: Locator;
     readonly dataMasterCard: Locator;
-    readonly iotDevicesCard: Locator;
-    readonly iotConfigCard: Locator;
+    readonly iotCard: Locator;
     readonly fuzzyCard: Locator;
+    readonly dssSection: Locator;
 
     constructor(page: Page) {
         this.page = page;
         this.pageTitle = page.locator('text=Pengaturan Sistem');
         this.dataMasterCard = page.locator('a').filter({ hasText: 'Data Master' });
-        this.iotDevicesCard = page.locator('a').filter({ hasText: 'Perangkat IoT' });
-        this.iotConfigCard = page.locator('a').filter({ hasText: 'Konfigurasi IoT' });
-        this.fuzzyCard = page.locator('a').filter({ hasText: 'Fuzzy Mamdani' });
+        this.iotCard = page.locator('#iot-settings');
+        this.fuzzyCard = page.locator('a').filter({ hasText: /Aturan SPK Kandang/i });
+        this.dssSection = page.locator('text=DSS Supplier AHP-SAW');
     }
 
     async goto() {
@@ -28,8 +28,7 @@ export class SettingsPage {
 
     async expectAllCardsVisible() {
         await expect(this.dataMasterCard).toBeVisible();
-        await expect(this.iotDevicesCard).toBeVisible();
-        await expect(this.iotConfigCard).toBeVisible();
+        await expect(this.iotCard).toBeVisible();
     }
 
     async expectFuzzyCardVisible() {
@@ -40,12 +39,8 @@ export class SettingsPage {
         await this.dataMasterCard.click();
     }
 
-    async clickIotDevicesCard() {
-        await this.iotDevicesCard.click();
-    }
-
-    async clickIotConfigCard() {
-        await this.iotConfigCard.click();
+    async clickIotCard() {
+        await this.iotCard.click();
     }
 
     async clickFuzzyCard() {

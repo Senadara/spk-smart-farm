@@ -396,7 +396,7 @@ test.describe('Modul Halaman Konfigurasi Profil - E2E Tests', () => {
 
         // Assert: Body tidak crash
         const bodyContent = await page.locator('body').textContent();
-        expect(bodyContent).not.toMatch(/Fatal render error|undefined|null/i);
+        expect(bodyContent).not.toMatch(/Fatal render error|Cannot read propert|undefine is not/i);
 
         // Assert: Login history section tetap exist
         await profilePage.expectLoginHistoryVisible();

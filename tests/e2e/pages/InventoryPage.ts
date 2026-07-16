@@ -47,7 +47,7 @@ export class InventoryPage {
         this.page = page;
         
         // ─── Page Heading ──────────────────────────────────────
-        this.inventoryHeading = page.locator('h1').filter({ hasText: /Manajemen Inventaris|Inventory/i });
+        this.inventoryHeading = page.locator('h1').filter({ hasText: /Monitoring Stok|Manajemen Inventaris|Inventory/i });
 
         // ─── KPI Cards ─────────────────────────────────────────
         // KPI cards are rendered as x-peternakan.kpi-card components  

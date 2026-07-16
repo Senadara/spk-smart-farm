@@ -20,33 +20,57 @@ test.describe('Modul Supplier CRUD - API E2E Tests', () => {
       test.setTimeout(60000);
 
       test.beforeAll(async ({ playwright, browser }) => {
-           // Login via UI first to establish session
-           const page = await browser.newPage();
-           await page.goto('http://localhost:8000/login');
-           await page.fill('input[name="email"]', 'pjawab@email.com');
-           await page.fill('input[name="password"]', 'Password123.');
-           await page.click('button[type="submit"]');
-           await page.waitForURL('**/dashboard', { timeout: 10000 });
+            // Create a clean context (without global storageState) for independent login
+            const context = await playwright.request.newContext({
+                 baseURL: 'http://127.0.0.1:8000',
+            });
 
-           csrfToken = await page.evaluate(() => {
-                const meta = document.querySelector('meta[name="csrf-token"]');
-                return meta?.getAttribute('content') || '';
-           });
+            // Fetch login page to get CSRF token
+            const loginPage = await context.get('/login');
+            const loginHtml = await loginPage.text();
+            const csrfMatch = loginHtml.match(/<meta name="csrf-token" content="([^"]+)"/);
+            const loginCsrf = csrfMatch ? csrfMatch[1] : '';
+           
+            // Login via API to get session
+            const loginResp = await context.post('/login', {
+                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                 data: new URLSearchParams({
+                      _token: loginCsrf,
+                      email: 'pjawab@email.com',
+                      password: 'Password123.',
+                 }).toString(),
+            });
 
-           // Get session storage state
-           const storageState = await page.context().storageState();
-           await page.close();
+            // Get storage state from the API context
+            // NOTE: APIRequestContext doesn't store cookies like browser pages
+            // We need to use a page instead
 
-           // Create API context with session cookies + CSRF header
-           apiContext = await playwright.request.newContext({
-                baseURL: 'http://localhost:8000',
-                storageState,
-                extraHTTPHeaders: {
-                     'Accept': 'application/json',
-                     'Content-Type': 'application/json',
-                     'X-CSRF-TOKEN': csrfToken,
-                },
-           });
+            // Use a browser page with clean context
+            const cleanContext = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+            const page = await cleanContext.newPage();
+            await page.goto('http://127.0.0.1:8000/login');
+            await page.fill('input[name="email"]', 'pjawab@email.com');
+            await page.fill('input[name="password"]', 'Password123.');
+            await page.click('button[type="submit"]');
+            await page.waitForURL('**/dashboard', { timeout: 15000 });
+
+            csrfToken = await page.evaluate(() => {
+                 const meta = document.querySelector('meta[name="csrf-token"]');
+                 return meta?.getAttribute('content') || '';
+            });
+
+            const storageState = await cleanContext.storageState();
+            await cleanContext.close();
+
+            apiContext = await playwright.request.newContext({
+                 baseURL: 'http://127.0.0.1:8000',
+                 storageState,
+                 extraHTTPHeaders: {
+                      'Accept': 'application/json',
+                      'Content-Type': 'application/json',
+                      'X-CSRF-TOKEN': csrfToken,
+                 },
+            });
 
           // Setup test data: Create test products if needed
           // NOTE: In real scenario, products should be seeded or already exist
@@ -70,7 +94,7 @@ test.describe('Modul Supplier CRUD - API E2E Tests', () => {
      // READ OPERATIONS
      // ═══════════════════════════════════════════════════════════════
 
-     test('Positif - GET all suppliers (index)', async () => {
+     test('Positif - Ambil semua supplier', async () => {
           /**
            * Given: API endpoint /supplier-spk/suppliers
            * When: GET request tanpa parameter
@@ -305,7 +329,7 @@ test.describe('Modul Supplier CRUD - API E2E Tests', () => {
      // READ SINGLE OPERATIONS
      // ═══════════════════════════════════════════════════════════════
 
-     test('Positif - GET single supplier by ID (show)', async () => {
+     test('Positif - Ambil supplier by ID', async () => {
           /**
       * Given: Supplier ID yang valid
       * When: GET ke /supplier-spk/suppliers/{id}
@@ -542,7 +566,7 @@ test.describe('Modul Supplier CRUD - API E2E Tests', () => {
      // DELETE OPERATIONS
      // ═══════════════════════════════════════════════════════════════
 
-     test('Positif - DELETE supplier (204 No Content)', async () => {
+     test('Positif - Hapus supplier', async () => {
           /**
            * Given: Supplier yang akan dihapus
            * When: DELETE ke /supplier-spk/suppliers/{id}

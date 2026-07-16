@@ -67,11 +67,11 @@ export class IotPage {
     constructor(page: Page) {
         this.page = page;
 
-        this.dashboardHeading = page.locator('h1').filter({ hasText: /IoT Dashboard|Overview status/i });
+        this.dashboardHeading = page.locator('h1').filter({ hasText: /Monitoring Sensor|IoT Dashboard/i });
         this.registerDeviceBtn = page.locator('a, button').filter({ hasText: /Register Device/i });
         this.statCards = page.locator('.grid > div');
 
-        this.configHeading = page.locator('h1').filter({ hasText: /Konfigurasi IoT/i });
+        this.configHeading = page.locator('h1').filter({ hasText: /Setup IoT Kandang|Konfigurasi IoT/i });
         this.protocolsTab = page.getByRole('button', { name: 'Protokol' });
         this.connectionsTab = page.getByRole('button', { name: 'Koneksi' });
         this.parametersTab = page.getByRole('button', { name: /Parameter Sensor/i });
@@ -110,7 +110,7 @@ export class IotPage {
         this.commodityParamSubmitBtn = page.locator('button[type="submit"], button').filter({ hasText: /Simpan|Save/i }).first();
         this.addCommodityParamBtn = page.locator('button').filter({ hasText: /Tambah/i });
 
-        this.deviceManagementHeading = page.locator('h1').filter({ hasText: /Device Management/i });
+        this.deviceManagementHeading = page.locator('h1').filter({ hasText: /Setup IoT Kandang|Device Management/i });
         this.addDeviceBtn = page.locator('button').filter({ hasText: /Tambah Device/i });
         this.addMappingBtn = page.locator('button').filter({ hasText: /Tambah Mapping/i });
         this.deviceTable = page.locator('table');
@@ -126,7 +126,7 @@ export class IotPage {
         this.toastSuccess = page.locator('#toastContainer .toast-success');
         this.textDanger = page.locator('.text-red-500, .text-danger, span').filter({ hasText: /wajib|required|kosong/i });
 
-        this.monitoringHeading = page.locator('h1').filter({ hasText: /Monitoring IoT/i });
+        this.monitoringHeading = page.locator('h1').filter({ hasText: /Monitoring Sensor|Monitoring IoT/i });
         this.sensorDataTab = page.locator('button').filter({ hasText: /Data Sensor/i });
         this.deviceLogsTab = page.locator('button').filter({ hasText: /Device Logs/i });
     }
@@ -137,8 +137,9 @@ export class IotPage {
     }
 
     async gotoConfig() {
+        // Nanda: /iot/config now redirects to /iot/devices#advanced-iot-config
         await this.page.goto('/iot/config', { waitUntil: 'commit' }).catch(() => { });
-        await this.expectToBeOnConfigPage();
+        await this.expectToBeOnDevicesPage();
     }
 
     async gotoDevices() {
