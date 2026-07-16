@@ -35,6 +35,64 @@ $notifications = session('user.role') === 'supplier' ? collect() : collect([
     ],
 ]);
 
+if (session('user.role') !== 'supplier') {
+    $iotNotifications = \Illuminate\Support\Facades\Schema::hasTable('iot_device_log')
+        ? \App\Models\IotDeviceLog::with('device')
+            ->whereIn('logType', ['WARNING', 'ERROR'])
+            ->latest('createdAt')
+            ->take(5)
+            ->get()
+            ->toBase()
+            ->map(fn ($log) => [
+                'id' => 'iot-'.$log->id,
+                'title' => 'IoT '.($log->logType === 'ERROR' ? 'Error' : 'Warning'),
+                'message' => ($log->device?->deviceName ?? $log->device?->deviceCode ?? 'Device').' - '.\Illuminate\Support\Str::limit($log->message, 90),
+                'type' => $log->logType === 'ERROR' ? 'danger' : 'warning',
+                'read_at' => null,
+                'created_at' => $log->createdAt?->diffForHumans() ?? '-',
+                'sort_key' => $log->createdAt?->timestamp ?? 0,
+                'url' => route('iot.monitoring'),
+            ])
+        : collect();
+
+    $spkNotifications = \Illuminate\Support\Facades\Schema::hasTable('spk_fuzzy_logs')
+        ? \App\Models\SpkFuzzyLog::query()
+            ->where('createdAt', '>=', now()->subDays(3))
+            ->where(function ($query) {
+                $query->whereIn('status_lingkungan', ['Waspada', 'Buruk'])
+                    ->orWhereIn('status_kesehatan', ['Waspada', 'Buruk'])
+                    ->orWhere('output_value', '<', 70);
+            })
+            ->latest('createdAt')
+            ->take(5)
+            ->get()
+            ->toBase()
+            ->map(fn ($log) => [
+                'id' => 'spk-'.$log->id,
+                'title' => 'SPK Perlu Tindakan',
+                'message' => \Illuminate\Support\Str::limit(
+                    \App\Services\Fuzzy\NarrativeGenerator::sanitizePlainText($log->recommendation)
+                        ?: \App\Services\Fuzzy\NarrativeGenerator::sanitizePlainText($log->narrative)
+                        ?: ($log->diagnosis_kausalitas ?: 'Tinjau hasil SPK terbaru.'),
+                    100
+                ),
+                'type' => ((float) $log->output_value < 55 || $log->status_lingkungan === 'Buruk') ? 'danger' : 'warning',
+                'read_at' => null,
+                'created_at' => $log->createdAt?->diffForHumans() ?? '-',
+                'sort_key' => $log->createdAt?->timestamp ?? 0,
+                'url' => route('spk.dashboard', array_filter(['history_id' => $log->id, 'coop_id' => $log->unit_budidaya_id])),
+            ])
+        : collect();
+
+    $notifications = $iotNotifications
+        ->merge($spkNotifications)
+        ->sortByDesc('sort_key')
+        ->take(8)
+        ->values();
+} else {
+    $notifications = collect();
+}
+
 $icons = [
     'notification1' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0"/>',
     'notification2' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.857 17H5.143A2.143 2.143 0 013 14.857V11a6 6 0 1112 0v3.857A2.143 2.143 0 0114.857 17zM9 20a3 3 0 006 0" />',
@@ -56,12 +114,12 @@ $icons = [
         </button>
 
         {{-- Breadcrumb --}}
-        <nav class="flex items-center gap-2 text-sm">
+        <nav class="flex min-w-0 items-center gap-2 text-sm">
             <a href="{{ session('user.role') === 'supplier' ? route('supplier.dashboard') : route('dashboard') }}"
-                class="text-[var(--color-gray-400)] hover:text-[var(--color-primary)] no-underline transition-colors">Smart
+                class="hidden text-[var(--color-gray-400)] hover:text-[var(--color-primary)] no-underline transition-colors sm:inline">Smart
                 Farm</a>
             <span class="text-[var(--color-gray-300)]">›</span>
-            <span class="text-[var(--color-gray-900)] font-medium">@yield('breadcrumb', 'Dashboard')</span>
+            <span class="truncate text-[var(--color-gray-900)] font-medium">@yield('breadcrumb', 'Dashboard')</span>
         </nav>
     </div>
     <div class="flex items-center gap-3">
@@ -133,8 +191,9 @@ $icons = [
 
                 <div class="max-h-[60vh] overflow-y-auto">
                     @forelse($notifications as $notif)
-                        <div
-                            class="p-4 border-b hover:bg-gray-50 transition-colors {{ !$notif['read_at'] ? 'bg-blue-50/50' : '' }}">
+                        <a href="{{ $notif['url'] ?? route('dashboard') }}"
+                            class="block p-4 border-b hover:bg-gray-50 transition-colors {{ !$notif['read_at'] ? 'bg-blue-50/50' : '' }}"
+                            style="text-decoration:none;">
                             <div class="flex gap-3">
                                 <div class="mt-1 shrink-0">
                                     @if($notif['type'] == 'danger')
@@ -172,7 +231,7 @@ $icons = [
                                     <p class="text-[10px] text-gray-400 mt-1">{{ $notif['created_at'] }}</p>
                                 </div>
                             </div>
-                        </div>
+                        </a>
                     @empty
                         <div class="p-8 text-center text-gray-500">
                             <p class="text-sm">Belum ada notifikasi</p>
@@ -181,7 +240,7 @@ $icons = [
                 </div>
 
                 <div class="p-2 border-t bg-gray-50 text-center">
-                    <a href="#" class="text-xs font-medium text-emerald-600 hover:text-emerald-700">Lihat
+                    <a href="{{ route('dashboard') }}" class="text-xs font-medium text-emerald-600 hover:text-emerald-700">Lihat
                         Semua History</a>
                 </div>
             </div>

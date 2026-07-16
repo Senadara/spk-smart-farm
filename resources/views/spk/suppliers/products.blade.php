@@ -1,183 +1,287 @@
 @extends('layouts.app')
 
-@section('title', 'Perbandingan Produk')
-@section('breadcrumb', 'Supplier > Komparasi Barang')
+@section('title', 'Cari Barang Supplier')
+@section('breadcrumb', 'Supplier > Cari Barang')
 
 @section('content')
-<div class="max-w-7xl mx-auto">
-    <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-900">Perbandingan Produk Supplier</h1>
-            <p class="text-sm text-gray-500 mt-1">Cari harga termurah dan stok terbanyak dari berbagai supplier sekaligus.</p>
-        </div>
-        <a href="{{ route('spk.suppliers.index') }}" class="text-sm font-semibold text-gray-500 bg-white border border-gray-200 px-4 py-2 rounded-xl hover:bg-gray-50 transition">
-            &larr; Kembali ke Katalog
-        </a>
-    </div>
+<div id="supplier-products-page" class="mx-auto max-w-7xl space-y-5" data-csrf="{{ csrf_token() }}" data-remove-url-template="{{ route('spk.suppliers.cart.remove', ['product' => '__PRODUCT_ID__']) }}">
+    @if(session('success'))
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
+    @endif
+    @if(session('error'))
+        <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{ session('error') }}</div>
+    @endif
 
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-        
-        {{-- LEFT SIDEBAR: PRODUCT LIST --}}
-        <div class="md:col-span-4 lg:col-span-3">
-            <div class="bg-white rounded-2xl shadow-sm border border-emerald-50 overflow-hidden sticky top-6">
-                <div class="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-                    <h3 class="text-xs font-bold text-gray-800 uppercase tracking-wider">Katalog Kebutuhan Pokok</h3>
-                </div>
-                
-                {{-- Search Bar Barang --}}
-                <div class="p-3 border-b border-gray-100">
-                    <form action="{{ route('spk.suppliers.products') }}" method="GET">
-                        <div class="relative">
-                            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                            <input type="text" name="search" value="{{ $search ?? '' }}" placeholder="Cari barang..." class="w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-500 focus:bg-white text-xs">
-                        </div>
-                    </form>
-                </div>
-
-                <div class="divide-y divide-gray-50 max-h-[600px] overflow-y-auto">
-                    @forelse($products as $prod)
-                        <a href="{{ route('spk.suppliers.products', ['product_id' => $prod['id'], 'search' => $search ?? '']) }}" class="flex items-center gap-3 p-4 hover:bg-emerald-50 transition {{ ($activeProduct['id'] ?? '') === $prod['id'] ? 'bg-emerald-50/70 border-l-4 border-emerald-500' : 'border-l-4 border-transparent' }}">
-                            <div class="w-10 h-10 rounded-lg bg-white flex items-center justify-center text-xs font-black text-emerald-700 shadow-sm border border-gray-100">
-                                {{ $prod['icon'] }}
-                            </div>
-                            <div>
-                                <h4 class="text-sm font-bold text-gray-900 line-clamp-1">{{ $prod['name'] }}</h4>
-                                <span class="text-[10px] text-gray-500">{{ $prod['category'] }}</span>
-                            </div>
-                        </a>
-                    @empty
-                        <div class="p-6 text-center text-gray-500 text-sm">
-                            Tidak ada produk yang cocok dengan pencarian Anda.
-                        </div>
-                    @endforelse
-                </div>
+    <section class="rounded-lg border border-gray-200 bg-white p-5 md:p-6">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-wider text-emerald-700">Belanja Supplier</p>
+                <h1 class="mt-1 text-2xl font-bold text-gray-900">Cari Barang</h1>
+                <p class="mt-1 text-sm text-gray-500">Cari barang berdasarkan kategori, bandingkan toko, lalu masukkan ke keranjang.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ route('spk.suppliers.index') }}" class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Cari Toko</a>
+                <a href="{{ route('spk.suppliers.orders.index') }}" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700" style="text-decoration:none;">Pesanan Saya</a>
             </div>
         </div>
+    </section>
 
-        {{-- RIGHT SIDEBAR: COMPARISON TABLE --}}
-        <div class="md:col-span-8 lg:col-span-9">
-            @if($activeProduct)
-                <div class="bg-white rounded-2xl shadow-sm border border-emerald-50 p-6 mb-6">
-                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-                        <div class="flex items-center gap-4">
-                            <div class="w-16 h-16 rounded-xl bg-purple-50 text-base font-black text-purple-700 flex items-center justify-center border border-purple-100">
-                                {{ $activeProduct['icon'] }}
+    <x-page-hint title="Cara pesan barang" tone="sky" :open="false">
+        Pilih kategori atau cari nama barang. Barang yang dipilih masuk ke keranjang, lalu checkout akan membuat draft pesanan per toko supplier. Pembayaran tetap dikonfirmasi langsung dengan supplier.
+    </x-page-hint>
+
+    <section class="rounded-lg border border-gray-200 bg-white p-4 md:p-5">
+        <form action="{{ route('spk.suppliers.products') }}" method="GET" class="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
+            <div class="relative">
+                <svg class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input type="text" name="search" value="{{ $search }}" placeholder="Cari pakan, vitamin, vaksin, alat..."
+                    class="w-full rounded-lg border border-gray-300 py-3 pl-9 pr-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+            </div>
+            <select name="category" class="rounded-lg border border-gray-300 px-3 py-3 text-sm">
+                <option value="all">Semua kategori</option>
+                @foreach($categoryOptions as $option)
+                    <option value="{{ $option }}" @selected($category === $option)>{{ $option }}</option>
+                @endforeach
+            </select>
+            <select name="sort" class="rounded-lg border border-gray-300 px-3 py-3 text-sm">
+                <option value="recommended" @selected($filterSort === 'recommended')>Rekomendasi</option>
+                <option value="cheapest" @selected($filterSort === 'cheapest')>Termurah</option>
+                <option value="closest" @selected($filterSort === 'closest')>Terdekat</option>
+            </select>
+            <button class="rounded-lg bg-gray-900 px-5 py-3 text-sm font-bold text-white hover:bg-gray-800">Cari</button>
+        </form>
+
+        <div class="mt-4 flex flex-wrap gap-2">
+            <a href="{{ route('spk.suppliers.products') }}" class="rounded-full px-4 py-2 text-sm font-semibold {{ $category === 'all' ? 'bg-emerald-600 text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50' }}" style="text-decoration:none;">Semua</a>
+            @foreach($categoryOptions->take(8) as $option)
+                <a href="{{ route('spk.suppliers.products', ['category' => $option, 'search' => $search, 'sort' => $filterSort]) }}"
+                    class="rounded-full px-4 py-2 text-sm font-semibold {{ $category === $option ? 'bg-emerald-600 text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50' }}"
+                    style="text-decoration:none;">
+                    {{ $option }}
+                </a>
+            @endforeach
+        </div>
+    </section>
+
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_340px]">
+        <section class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            @forelse($products as $product)
+                <article class="flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                    <div class="h-40 bg-gray-100">
+                        @if($product['image'])
+                            <img src="{{ $product['image'] }}" alt="{{ $product['name'] }}" class="h-full w-full object-cover">
+                        @else
+                            <div class="flex h-full w-full items-center justify-center text-2xl font-black text-gray-300">{{ $product['icon'] }}</div>
+                        @endif
+                    </div>
+                    <div class="flex flex-1 flex-col p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="text-xs font-semibold text-emerald-700">{{ $product['category'] }}</p>
+                                <h2 class="mt-1 line-clamp-2 font-bold text-gray-900">{{ $product['name'] }}</h2>
                             </div>
-                            <div>
-                                <h2 class="text-2xl font-bold text-gray-900">{{ $activeProduct['name'] }}</h2>
-                                <p class="text-sm text-gray-500">Harga dan ketersediaan barang di berbagai supplier.</p>
+                            <span class="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-700">{{ $product['score'] }}</span>
+                        </div>
+
+                        <p class="mt-2 line-clamp-2 text-xs text-gray-500">{{ $product['description'] ?: 'Deskripsi barang belum tersedia.' }}</p>
+                        <p class="mt-4 text-lg font-black text-gray-900">Rp {{ number_format($product['price'], 0, ',', '.') }}</p>
+                        <p class="text-xs text-gray-500">Stok {{ number_format($product['stock']) }} {{ $product['unit'] }}</p>
+
+                        <div class="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
+                            <p class="font-bold text-gray-900">{{ $product['store_name'] }}</p>
+                            <p class="mt-1 line-clamp-1">{{ $product['store_location'] }}</p>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <span class="rounded-full bg-gray-100 px-2 py-1">{{ $product['distance'] }}</span>
+                                <span class="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">{{ $product['delivery'] }}</span>
                             </div>
                         </div>
 
-                        {{-- Filter Tabel --}}
-                        <div class="bg-gray-50 rounded-lg border border-gray-100 p-2 shrink-0">
-                            <form id="filterTableForm" action="{{ route('spk.suppliers.products') }}" method="GET" class="flex flex-wrap items-center gap-2">
-                                <input type="hidden" name="product_id" value="{{ $activeProduct['id'] }}">
-                                @if(!empty($search))
-                                    <input type="hidden" name="search" value="{{ $search }}">
-                                @endif
-                                
-                                <select name="sort" onchange="document.getElementById('filterTableForm').submit()" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-emerald-500 font-medium text-gray-600">
-                                    <option value="saw" {{ ($filterSort ?? 'saw') === 'saw' ? 'selected' : '' }}>Ranking SAW (DSS)</option>
-                                    <option value="cheapest" {{ $filterSort === 'cheapest' ? 'selected' : '' }}>Harga Termurah</option>
-                                    <option value="closest" {{ $filterSort === 'closest' ? 'selected' : '' }}>Jarak Terdekat</option>
-                                </select>
+                        <form method="POST" action="{{ route('spk.suppliers.cart.add') }}" class="mt-4 flex gap-2" data-cart-form>
+                            @csrf
+                            <input type="hidden" name="product_id" value="{{ $product['id'] }}">
+                            <label class="sr-only" for="qty-{{ $product['id'] }}">Jumlah</label>
+                            <input id="qty-{{ $product['id'] }}" name="quantity" type="number" min="1" max="{{ $product['stock'] }}" value="1"
+                                class="w-20 rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                            <button class="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:bg-emerald-300" data-cart-button>Tambah</button>
+                        </form>
 
-                                <select name="stock" onchange="document.getElementById('filterTableForm').submit()" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-emerald-500 font-medium text-gray-600">
-                                    <option value="all" {{ $filterStock === 'all' ? 'selected' : '' }}>Semua Ketersediaan</option>
-                                    <option value="instock" {{ $filterStock === 'instock' ? 'selected' : '' }}>Hanya Tersedia (>0)</option>
-                                </select>
+                        @if($product['supplier_id'])
+                            <a href="{{ route('spk.suppliers.show', $product['supplier_id']) }}" class="mt-2 rounded-lg border border-gray-200 px-3 py-2 text-center text-xs font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Buka Toko</a>
+                        @endif
+                    </div>
+                </article>
+            @empty
+                <div class="rounded-lg border border-dashed border-gray-200 bg-white p-10 text-center md:col-span-2 xl:col-span-3">
+                    <p class="font-bold text-gray-900">Barang tidak ditemukan</p>
+                    <p class="mt-1 text-sm text-gray-500">Coba kata kunci lain atau pilih kategori Semua.</p>
+                </div>
+            @endforelse
+        </section>
+
+        <aside class="h-fit rounded-lg border border-gray-200 bg-white p-5 lg:sticky lg:top-20">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <h2 class="font-bold text-gray-900">Keranjang</h2>
+                    <p id="cart-summary-line" class="text-xs text-gray-500">{{ $cart['total_quantity'] }} barang dari {{ $cart['store_count'] }} toko</p>
+                </div>
+                <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Draft</span>
+            </div>
+            <div id="cart-feedback" class="mt-4 hidden rounded-lg border px-3 py-2 text-xs font-semibold"></div>
+
+            <div id="cart-items" class="mt-4 space-y-3">
+                @forelse($cart['items'] as $item)
+                    <div class="rounded-lg border border-gray-100 px-3 py-2">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="text-sm font-bold text-gray-900">{{ $item['name'] }}</p>
+                                <p class="text-xs text-gray-500">{{ $item['store'] }} - {{ $item['quantity'] }} {{ $item['unit'] }}</p>
+                                <p class="mt-1 text-sm font-semibold text-gray-900">Rp {{ number_format($item['subtotal'], 0, ',', '.') }}</p>
+                            </div>
+                            <form method="POST" action="{{ route('spk.suppliers.cart.remove', $item['id']) }}">
+                                @csrf
+                                @method('DELETE')
+                                <button class="text-xs font-semibold text-red-600" data-remove-cart-item="{{ $item['id'] }}">Hapus</button>
                             </form>
                         </div>
                     </div>
+                @empty
+                    <div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                        Keranjang masih kosong.
+                    </div>
+                @endforelse
+            </div>
 
-                    @if(isset($dssActorResolved) && ! $dssActorResolved)
-                        <div class="mb-4 rounded-xl border border-red-100 bg-red-50 p-4 text-xs text-red-950">
-                            <span class="font-bold">Akun tidak terikat ke pengguna Laravel (`users.id`).</span>
-                            Ranking SAW memerlukan pemetaan ID valid. Pastikan response login menghasilkan <code class="rounded bg-white/80 px-1">users.id</code> yang sama, atau ada baris di tabel <code class="rounded bg-white/80 px-1">users</code> dengan email yang cocok sesi Anda.
-                            <a href="{{ route('spk.suppliers.dss.config') }}" class="font-bold underline block mt-2">Halaman DSS & panduan pemetaan</a>
-                        </div>
-                    @elseif(empty($ahpReady))
-                        <div class="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-100 text-xs text-amber-900">
-                            Ranking SAW belum aktif. <a href="{{ route('spk.suppliers.dss.config') }}" class="font-bold underline">Konfigurasi AHP</a> terlebih dahulu (CR <= 0.1).
-                        </div>
-                    @endif
-
-                    @if(empty($comparison))
-                        <div class="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                            <h3 class="text-sm font-semibold text-gray-600">Belum ada supplier yang menyediakan produk ini.</h3>
-                        </div>
-                    @else
-                        <div class="overflow-hidden border border-gray-200 rounded-xl">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Nama Supplier</th>
-                                        @if(!empty($ahpReady))
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Skor SAW</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Rank</th>
-                                        @endif
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Harga Satuan</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Stok</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Jarak / Kirim</th>
-                                        <th scope="col" class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-100">
-                                    @php 
-                                        $cheapest = collect($comparison)->min('price'); 
-                                        $closest = collect($comparison)->where('distanceKnown', true)->min('distance');
-                                    @endphp
-                                    
-                                    @foreach($comparison as $c)
-                                        @php
-                                            $sawRow = ($sawRankings ?? collect())->firstWhere('supplier_id', $c['supplierId']);
-                                        @endphp
-                                        <tr class="hover:bg-gray-50 transition {{ ($sawRow?->ranking ?? 0) === 1 ? 'bg-emerald-50/40' : '' }}">
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 font-bold">
-                                                {{ $c['supplierName'] }}
-                                                @if(($sawRow?->ranking ?? 0) === 1)
-                                                <span class="ml-1 text-[10px] bg-emerald-500 text-white px-1.5 py-0.5 rounded font-bold">Rekomendasi DSS</span>
-                                                @endif
-                                            </td>
-                                            @if(!empty($ahpReady))
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-purple-700">{{ $sawRow ? number_format($sawRow->final_score, 4) : '-' }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-black {{ ($sawRow?->ranking ?? 0) === 1 ? 'text-emerald-600' : 'text-gray-400' }}">#{{ $sawRow?->ranking ?? '-' }}</td>
-                                            @endif
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-bold">
-                                                Rp {{ number_format($c['price'], 0, ',', '.') }}
-                                                @if($c['price'] == $cheapest)
-                                                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                                        Termurah
-                                                    </span>
-                                                @endif
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                <span class="px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold">{{ number_format($c['stock']) }} unit</span>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap flex flex-col justify-center">
-                                                <div class="text-sm font-semibold text-gray-700 flex items-center gap-1">
-                                                    {{ $c['distanceLabel'] ?? number_format($c['distance'], 1, ',', '.').' km' }}
-                                                    @if($closest !== null && !empty($c['distanceKnown']) && $c['distance'] == $closest)
-                                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">Terdekat</span>
-                                                    @endif
-                                                </div>
-                                                <span class="text-[10px] text-gray-400">{{ $c['delivery'] }}</span>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <a href="{{ route('spk.suppliers.show', $c['supplierId']) }}" class="text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition font-semibold">
-                                                    Buka Toko
-                                                </a>
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    @endif
+            <div class="mt-4 border-t border-gray-100 pt-4">
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-gray-500">Subtotal</span>
+                    <span id="cart-subtotal" class="font-black text-gray-900">Rp {{ number_format($cart['subtotal'], 0, ',', '.') }}</span>
                 </div>
-            @endif
-        </div>
+                <form method="POST" action="{{ route('spk.suppliers.cart.checkout') }}" class="mt-4">
+                    @csrf
+                    <button id="cart-checkout-button" class="w-full rounded-lg bg-gray-900 px-4 py-3 text-sm font-bold text-white hover:bg-gray-800 disabled:bg-gray-300" @disabled($cart['total_quantity'] <= 0)>
+                        Buat Pesanan
+                    </button>
+                </form>
+                <p class="mt-2 text-xs text-gray-500">Pesanan dibuat per toko supplier. Pembayaran dikonfirmasi di luar sistem.</p>
+            </div>
+        </aside>
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const page = document.getElementById('supplier-products-page');
+    if (!page) return;
+
+    const csrf = page.dataset.csrf;
+    const removeUrlTemplate = page.dataset.removeUrlTemplate;
+    const summaryLine = document.getElementById('cart-summary-line');
+    const feedback = document.getElementById('cart-feedback');
+    const cartItems = document.getElementById('cart-items');
+    const cartSubtotal = document.getElementById('cart-subtotal');
+    const checkoutButton = document.getElementById('cart-checkout-button');
+    const money = new Intl.NumberFormat('id-ID');
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+    }[char]));
+
+    const formatMoney = (value) => `Rp ${money.format(Number(value || 0))}`;
+
+    const showFeedback = (message, type = 'success') => {
+        feedback.textContent = message;
+        feedback.className = `mt-4 rounded-lg border px-3 py-2 text-xs font-semibold ${
+            type === 'error'
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+        }`;
+        window.clearTimeout(showFeedback.timer);
+        showFeedback.timer = window.setTimeout(() => feedback.classList.add('hidden'), 2600);
+    };
+
+    const renderCart = (cart) => {
+        summaryLine.textContent = `${cart.total_quantity} barang dari ${cart.store_count} toko`;
+        cartSubtotal.textContent = formatMoney(cart.subtotal);
+        checkoutButton.disabled = Number(cart.total_quantity || 0) <= 0;
+
+        if (!cart.items.length) {
+            cartItems.innerHTML = '<div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">Keranjang masih kosong.</div>';
+            return;
+        }
+
+        cartItems.innerHTML = cart.items.map((item) => `
+            <div class="rounded-lg border border-gray-100 px-3 py-2">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-sm font-bold text-gray-900">${escapeHtml(item.name)}</p>
+                        <p class="text-xs text-gray-500">${escapeHtml(item.store)} - ${escapeHtml(item.quantity)} ${escapeHtml(item.unit)}</p>
+                        <p class="mt-1 text-sm font-semibold text-gray-900">${formatMoney(item.subtotal)}</p>
+                    </div>
+                    <button type="button" class="text-xs font-semibold text-red-600" data-remove-cart-item="${escapeHtml(item.id)}">Hapus</button>
+                </div>
+            </div>
+        `).join('');
+    };
+
+    document.querySelectorAll('[data-cart-form]').forEach((form) => {
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const button = form.querySelector('[data-cart-button]');
+            button.disabled = true;
+            button.textContent = 'Menambah...';
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || 'Barang gagal ditambahkan.');
+                renderCart(data.cart);
+                showFeedback(data.message || 'Barang ditambahkan ke keranjang.');
+            } catch (error) {
+                showFeedback(error.message || 'Barang gagal ditambahkan.', 'error');
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Tambah';
+            }
+        });
+    });
+
+    cartItems.addEventListener('click', async (event) => {
+        const button = event.target.closest('[data-remove-cart-item]');
+        if (!button) return;
+        event.preventDefault();
+        button.disabled = true;
+
+        try {
+            const response = await fetch(removeUrlTemplate.replace('__PRODUCT_ID__', encodeURIComponent(button.dataset.removeCartItem)), {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': csrf,
+                },
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message || 'Barang gagal dihapus.');
+            renderCart(data.cart);
+            showFeedback(data.message || 'Barang dihapus dari keranjang.');
+        } catch (error) {
+            button.disabled = false;
+            showFeedback(error.message || 'Barang gagal dihapus.', 'error');
+        }
+    });
+});
+</script>
+@endpush

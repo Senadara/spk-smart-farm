@@ -20,18 +20,17 @@ class SpkDssDemoSeeder extends Seeder
         }
 
         $parameterIds = DB::table('spk_parameters')
-            ->whereIn('nama_parameter', ['Harga', 'Kualitas', 'Kecepatan Pengiriman', 'Jarak'])
+            ->whereIn('nama_parameter', ['Harga', 'Kualitas', 'Waktu Pengiriman'])
             ->pluck('id', 'nama_parameter');
 
-        if ($parameterIds->count() < 4) {
+        if ($parameterIds->count() < 3) {
             return;
         }
 
         $weights = [
-            'Harga' => 0.30,
-            'Kualitas' => 0.35,
-            'Kecepatan Pengiriman' => 0.20,
-            'Jarak' => 0.15,
+            'Harga' => 0.35,
+            'Kualitas' => 0.40,
+            'Waktu Pengiriman' => 0.25,
         ];
 
         foreach ($userIds as $userId) {

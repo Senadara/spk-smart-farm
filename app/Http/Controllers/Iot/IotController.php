@@ -14,10 +14,27 @@ use App\Models\IotSensorData;
 use App\Models\Komoditas;
 use App\Models\UnitBudidaya;
 use App\Events\IotSensorDataReceived;
+use App\Services\Iot\IotPayloadIngestor;
+use App\Services\Iot\MqttSubscriptionService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class IotController extends Controller
 {
+    private const FIXED_PROTOCOLS = [
+        'API' => [
+            'label' => 'API / Antares',
+            'description' => 'Laravel menarik data dari REST API.',
+            'tone' => 'blue',
+        ],
+        'MQTT' => [
+            'label' => 'MQTT',
+            'description' => 'Laravel subscribe broker MQTT.',
+            'tone' => 'violet',
+        ],
+    ];
+
     // ─── IoT Dashboard ─────────────────────────────────────────────
     public function dashboard()
     {
@@ -29,7 +46,7 @@ class IotController extends Controller
             ['label' => 'Active', 'value' => $devices->where('status', 'active')->count(), 'color' => 'emerald', 'icon' => 'check'],
             ['label' => 'Inactive', 'value' => $devices->where('status', 'inactive')->count(), 'color' => 'gray', 'icon' => 'pause'],
             ['label' => 'Maintenance', 'value' => $devices->where('status', 'maintenance')->count(), 'color' => 'amber', 'icon' => 'wrench'],
-            ['label' => 'Protocols', 'value' => IotProtocol::count(), 'color' => 'purple', 'icon' => 'link'],
+            ['label' => 'Protocols', 'value' => IotProtocol::whereIn('protocolName', array_keys(self::FIXED_PROTOCOLS))->count(), 'color' => 'purple', 'icon' => 'link'],
             ['label' => 'Parameters', 'value' => IotParameter::count(), 'color' => 'rose', 'icon' => 'chart'],
         ];
 
@@ -43,12 +60,21 @@ class IotController extends Controller
     // ─── Device Management ─────────────────────────────────────────
     public function devices()
     {
+        $this->ensureFixedProtocols();
+        $connectionConfigs = IotConnectionConfig::with('protocol')
+            ->whereHas('protocol', fn ($query) => $query->whereIn('protocolName', array_keys(self::FIXED_PROTOCOLS)))
+            ->get();
+
         return view('iot.devices', [
             'devices' => IotDevice::with(['unitBudidaya', 'connectionConfig.protocol'])->get(),
-            'unitBudidaya' => UnitBudidaya::all(),
-            'connectionConfigs' => IotConnectionConfig::with('protocol')->get(),
+            'unitBudidaya' => $this->visibleUnitBudidayaOptions(),
+            'connectionConfigs' => $connectionConfigs,
+            'protocols' => IotProtocol::whereIn('protocolName', array_keys(self::FIXED_PROTOCOLS))->get(),
+            'protocolOptions' => $this->fixedProtocolOptions(),
             'parameters' => IotParameter::all(),
             'mappings' => IotParameterMapping::with(['device', 'parameter'])->get(),
+            'commodityParameters' => CommodityParameter::with(['commodity', 'parameter'])->get(),
+            'commodities' => Komoditas::all(),
         ]);
     }
 
@@ -60,6 +86,8 @@ class IotController extends Controller
             'unitBudidayaId'     => 'required|string|exists:unitBudidaya,id',
             'connectionConfigId' => 'required|string|exists:iot_connection_config,id',
             'pollingInterval'    => 'nullable|integer|min:10|max:86400',
+            'mqttTopic'          => 'nullable|string|max:255',
+            'webhookToken'       => 'nullable|string|max:255',
             'status'             => 'required|in:active,inactive,maintenance',
             'installedAt'        => 'nullable|date',
         ], [
@@ -69,7 +97,7 @@ class IotController extends Controller
             'pollingInterval.min'          => 'Interval polling minimal 10 detik.',
         ]);
 
-        IotDevice::create($validated);
+        IotDevice::create($this->normalizeDevicePayload($validated));
         return back()->with('success', 'Device berhasil didaftarkan.');
     }
 
@@ -81,13 +109,15 @@ class IotController extends Controller
             'unitBudidayaId'     => 'required|string|exists:unitBudidaya,id',
             'connectionConfigId' => 'required|string|exists:iot_connection_config,id',
             'pollingInterval'    => 'nullable|integer|min:10|max:86400',
+            'mqttTopic'          => 'nullable|string|max:255',
+            'webhookToken'       => 'nullable|string|max:255',
             'status'             => 'required|in:active,inactive,maintenance',
             'installedAt'        => 'nullable|date',
         ], [
             'deviceCode.unique' => 'Kode device sudah terdaftar.',
         ]);
 
-        IotDevice::findOrFail($id)->update($validated);
+        IotDevice::findOrFail($id)->update($this->normalizeDevicePayload($validated));
         return back()->with('success', 'Device berhasil diperbarui.');
     }
 
@@ -153,54 +183,30 @@ class IotController extends Controller
     // ─── Configuration (Tabbed) ────────────────────────────────────
     public function config()
     {
-        return view('iot.config', [
-            'protocols'           => IotProtocol::all(),
-            'connectionConfigs'   => IotConnectionConfig::with('protocol')->get(),
-            'parameters'          => IotParameter::all(),
-            'commodityParameters' => CommodityParameter::with(['commodity', 'parameter'])->get(),
-            'commodities'         => Komoditas::all(),
-        ]);
+        return redirect(route('iot.devices').'#advanced-iot-config');
     }
 
     // ─── Protocols ─────────────────────────────────────────────────
 
     public function storeProtocol(Request $request)
     {
-        $validated = $request->validate([
-            'protocolName' => 'required|string|max:50|unique:iot_protocol,protocolName',
-            'description'  => 'nullable|string|max:500',
-        ], [
-            'protocolName.unique' => 'Nama protokol sudah ada.',
+        return back()->withErrors([
+            'protocol' => 'Protokol IoT sudah dipakem: API/Antares dan MQTT.',
         ]);
-
-        IotProtocol::create($validated);
-        return back()->with('success', 'Protokol berhasil ditambahkan.');
     }
 
     public function updateProtocol(Request $request, $id)
     {
-        $validated = $request->validate([
-            'protocolName' => 'required|string|max:50|unique:iot_protocol,protocolName,' . $id,
-            'description'  => 'nullable|string|max:500',
-        ], [
-            'protocolName.unique' => 'Nama protokol sudah ada.',
+        return back()->withErrors([
+            'protocol' => 'Protokol IoT tidak perlu diedit manual. Gunakan salah satu jalur pakem yang tersedia.',
         ]);
-
-        IotProtocol::findOrFail($id)->update($validated);
-        return back()->with('success', 'Protokol berhasil diperbarui.');
     }
 
     public function destroyProtocol($id)
     {
-        $protocol = IotProtocol::findOrFail($id);
-        $connCount = IotConnectionConfig::where('protocolId', $id)->count();
-
-        if ($connCount > 0) {
-            return back()->withErrors(['delete' => "Protokol '{$protocol->protocolName}' masih digunakan oleh {$connCount} konfigurasi koneksi. Hapus koneksi terlebih dahulu."]);
-        }
-
-        $protocol->delete();
-        return back()->with('success', "Protokol '{$protocol->protocolName}' berhasil dihapus.");
+        return back()->withErrors([
+            'protocol' => 'Protokol IoT pakem tidak bisa dihapus karena dipakai sebagai standar alur koneksi device.',
+        ]);
     }
 
     // ─── Connections ───────────────────────────────────────────────
@@ -212,7 +218,14 @@ class IotController extends Controller
             'baseUrl'       => 'nullable|string|max:255',
             'endpointPath'  => 'nullable|string|max:255',
             'mqttBrokerUrl' => 'nullable|string|max:255',
+            'mqttPort'      => 'nullable|integer|min:1|max:65535',
             'mqttTopic'     => 'nullable|string|max:255',
+            'mqttClientId'  => 'nullable|string|max:150',
+            'mqttUsername'  => 'nullable|string|max:150',
+            'mqttPassword'  => 'nullable|string|max:255',
+            'mqttUseTls'    => 'nullable|boolean',
+            'mqttQos'       => 'nullable|integer|min:0|max:2',
+            'mqttKeepAlive' => 'nullable|integer|min:5|max:65535',
             'authType'      => 'nullable|in:none,api_key,bearer,basic',
             'authKey'       => 'nullable|string|max:255',
             'headers'       => 'nullable|string',
@@ -220,10 +233,14 @@ class IotController extends Controller
             'protocolId.exists' => 'Protokol tidak ditemukan.',
         ]);
 
-        // Validasi: harus ada minimal satu endpoint
-        if (empty($validated['baseUrl']) && empty($validated['mqttBrokerUrl'])) {
-            return back()->withErrors(['connection' => 'Harus mengisi minimal Base URL atau MQTT Broker URL.'])->withInput();
-        }
+        $protocol = $this->protocolCode($validated['protocolId']);
+        $validationError = $this->validateConnectionByProtocol($protocol, $validated);
+        if ($validationError) return $validationError;
+
+        $validated['mqttUseTls'] = (bool) $request->boolean('mqttUseTls');
+        $validated['mqttQos'] = (int) ($validated['mqttQos'] ?? 0);
+        $validated['mqttKeepAlive'] = (int) ($validated['mqttKeepAlive'] ?? 60);
+        $validated = $this->normalizeConnectionPayload($protocol, $validated);
 
         // Parse headers JSON jika ada
         if (!empty($validated['headers'])) {
@@ -245,14 +262,34 @@ class IotController extends Controller
             'baseUrl'       => 'nullable|string|max:255',
             'endpointPath'  => 'nullable|string|max:255',
             'mqttBrokerUrl' => 'nullable|string|max:255',
+            'mqttPort'      => 'nullable|integer|min:1|max:65535',
             'mqttTopic'     => 'nullable|string|max:255',
+            'mqttClientId'  => 'nullable|string|max:150',
+            'mqttUsername'  => 'nullable|string|max:150',
+            'mqttPassword'  => 'nullable|string|max:255',
+            'mqttUseTls'    => 'nullable|boolean',
+            'mqttQos'       => 'nullable|integer|min:0|max:2',
+            'mqttKeepAlive' => 'nullable|integer|min:5|max:65535',
             'authType'      => 'nullable|in:none,api_key,bearer,basic',
             'authKey'       => 'nullable|string|max:255',
             'headers'       => 'nullable|string',
         ]);
 
-        if (empty($validated['baseUrl']) && empty($validated['mqttBrokerUrl'])) {
-            return back()->withErrors(['connection' => 'Harus mengisi minimal Base URL atau MQTT Broker URL.'])->withInput();
+        $protocol = $this->protocolCode($validated['protocolId']);
+        $validationError = $this->validateConnectionByProtocol($protocol, $validated);
+        if ($validationError) return $validationError;
+
+        $validated['mqttUseTls'] = (bool) $request->boolean('mqttUseTls');
+        $validated['mqttQos'] = (int) ($validated['mqttQos'] ?? 0);
+        $validated['mqttKeepAlive'] = (int) ($validated['mqttKeepAlive'] ?? 60);
+        $validated = $this->normalizeConnectionPayload($protocol, $validated);
+
+        if ($protocol === 'MQTT' && empty($validated['mqttPassword'])) {
+            unset($validated['mqttPassword']);
+        }
+
+        if ($protocol === 'API' && empty($validated['authKey'])) {
+            unset($validated['authKey']);
         }
 
         if (!empty($validated['headers'])) {
@@ -265,6 +302,26 @@ class IotController extends Controller
 
         IotConnectionConfig::findOrFail($id)->update($validated);
         return back()->with('success', 'Konfigurasi koneksi berhasil diperbarui.');
+    }
+
+    public function testConnection($id, MqttSubscriptionService $mqtt)
+    {
+        $connection = IotConnectionConfig::with('protocol')->findOrFail($id);
+
+        try {
+            $stats = $mqtt->test($connection, 5);
+            $message = "MQTT tersambung ke {$stats['broker']['host']}:{$stats['broker']['port']}. Topic aktif: ".implode(', ', $stats['topics']).'.';
+
+            if (($stats['messages'] ?? 0) > 0) {
+                $message .= " Pesan diterima: {$stats['messages']}, data tersimpan: {$stats['inserted']}.";
+            } else {
+                $message .= ' Belum ada pesan masuk selama window test 5 detik.';
+            }
+
+            return back()->with('success', $message);
+        } catch (\Throwable $error) {
+            return back()->withErrors(['connection' => 'Test MQTT gagal: '.$error->getMessage()]);
+        }
     }
 
     public function destroyConnection($id)
@@ -400,70 +457,239 @@ class IotController extends Controller
     }
 
     // ─── Webhook (PUSH) ────────────────────────────────────────────
-    public function handleWebhook(Request $request, $deviceCode)
+    public function handleWebhook(Request $request, $deviceCode, IotPayloadIngestor $ingestor)
     {
-        $device = collect(IotDevice::with('parameterMappings.parameter')->get())
-            ->firstWhere('deviceCode', $deviceCode);
+        $device = IotDevice::with('parameterMappings.parameter')
+            ->where('deviceCode', $deviceCode)
+            ->first();
 
         if (!$device) {
             return response()->json(['error' => 'Device not found'], 404);
         }
 
-        $payload = $request->all();
-
-        // Sama seperti logic PULL, kita mapping
-        $dataTarget = $payload;
-
-        // Fallback untuk struktur Antares
-        if (isset($payload['m2m:cin']['con'])) {
-            $con = $payload['m2m:cin']['con'];
-            if (is_string($con)) {
-                $decoded = json_decode($con, true);
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    $dataTarget = $decoded;
-                } else {
-                    $cleanCon = trim(str_replace(["'", '"'], "", $con));
-                    $dataTarget = is_numeric($cleanCon) ? (float)$cleanCon : $cleanCon;
-                }
-            } else {
-                $dataTarget = $con;
+        if ($device->webhookToken) {
+            $token = $request->bearerToken() ?: $request->header('X-IoT-Token') ?: $request->query('token');
+            if (! hash_equals((string) $device->webhookToken, (string) $token)) {
+                return response()->json(['error' => 'Invalid webhook token'], 403);
             }
         }
 
-        $insertedCount = 0;
-        foreach ($device->parameterMappings as $mapping) {
-            // Jika response hanyalah scalar nilai
-            $value = is_array($dataTarget) && isset($dataTarget[$mapping->payloadKey])
-                        ? data_get($dataTarget, $mapping->payloadKey)
-                        : (is_array($dataTarget) ? data_get($dataTarget, $mapping->payloadKey) : $dataTarget);
+        $result = $ingestor->ingest($device, $request->all(), 'webhook');
 
-            if ($value !== null) {
-                $sensorModel = IotSensorData::create([
-                    'deviceId' => $device->id,
-                    'parameterId' => $mapping->parameterId,
-                    'value' => (float) $value,
-                    'sensorTimestamp' => now(),
-                ]);
+        return response()->json(['message' => 'Data diterima', 'inserted' => $result['inserted'], 'skipped' => $result['skipped']]);
+    }
 
-                // PUSH Realtime
-                $payloadData = [
-                    'device' => ['deviceCode' => $device->deviceCode, 'deviceName' => $device->deviceName],
-                    'parameter' => ['parameterName' => $mapping->parameter->parameterName ?? $mapping->payloadKey, 'unit' => $mapping->parameter->unit ?? ''],
-                    'value' => (float) $value,
-                    'timestamp' => $sensorModel->sensorTimestamp->format('d M Y H:i:s'),
-                ];
-                broadcast(new IotSensorDataReceived($payloadData));
-
-                $insertedCount++;
-            }
+    private function markDeviceOnline(string $deviceId): void
+    {
+        if (! Schema::hasColumn('iot_device', 'lastSeenAt')) {
+            return;
         }
+
+        $device = IotDevice::find($deviceId);
+        if (! $device) {
+            return;
+        }
+
+        $payload = [
+            'lastSeenAt' => now(),
+            'missedCount' => 0,
+        ];
+
+        if ($device->status !== 'maintenance') {
+            $payload['status'] = 'active';
+        }
+
+        $device->update($payload);
+    }
+
+    private function markDeviceMiss(string $deviceId, string $reason): void
+    {
+        if (! Schema::hasColumn('iot_device', 'missedCount')) {
+            return;
+        }
+
+        $device = IotDevice::find($deviceId);
+        if (! $device || $device->status === 'maintenance') {
+            return;
+        }
+
+        $missedCount = ((int) ($device->missedCount ?? 0)) + 1;
+        $threshold = max(1, (int) ($device->offlineAfterMisses ?? 3));
+
+        $device->update([
+            'missedCount' => $missedCount,
+            'lastMissedAt' => now(),
+            'status' => $missedCount >= $threshold ? 'inactive' : $device->status,
+        ]);
 
         IotDeviceLog::create([
             'deviceId' => $device->id,
-            'logType' => 'INFO',
-            'message' => "Proses Webhook PUSH berhasil. ($insertedCount parameter tercatat)"
+            'logType' => $missedCount >= $threshold ? 'WARNING' : 'INFO',
+            'message' => "{$reason} Miss {$missedCount}/{$threshold}.",
         ]);
+    }
 
-        return response()->json(['message' => 'Data diterima', 'inserted' => $insertedCount]);
+    private function ensureFixedProtocols(): void
+    {
+        foreach (self::FIXED_PROTOCOLS as $code => $meta) {
+            IotProtocol::firstOrCreate(
+                ['protocolName' => $code],
+                ['description' => $meta['description']]
+            );
+        }
+    }
+
+    private function visibleUnitBudidayaOptions()
+    {
+        $query = DB::table('unitBudidaya')
+            ->select('id', 'nama', 'lokasi', 'status', 'isDeleted', 'owner_id')
+            ->orderBy('nama');
+
+        if (Schema::hasColumn('unitBudidaya', 'isDeleted')) {
+            $query->where('isDeleted', 0);
+        }
+
+        if (Schema::hasColumn('unitBudidaya', 'status')) {
+            $query->where('status', 1);
+        }
+
+        if (Schema::hasColumn('unitBudidaya', 'owner_id')) {
+            $user = session('user', []);
+            $ownerId = null;
+
+            if (($user['role'] ?? null) === 'pjawab') {
+                $ownerId = $user['id'] ?? null;
+            } elseif (($user['role'] ?? null) === 'petugas') {
+                $ownerId = $user['owner_id'] ?? null;
+            }
+
+            if ($ownerId) {
+                $query->where(function ($tenantQuery) use ($ownerId) {
+                    $tenantQuery->where('owner_id', $ownerId)
+                        ->orWhereNull('owner_id');
+                });
+            }
+        }
+
+        return $query->get();
+    }
+
+    private function fixedProtocolOptions()
+    {
+        $protocols = IotProtocol::whereIn('protocolName', array_keys(self::FIXED_PROTOCOLS))
+            ->get()
+            ->keyBy('protocolName');
+
+        return collect(self::FIXED_PROTOCOLS)
+            ->map(function (array $meta, string $code) use ($protocols) {
+                return [
+                    'id' => $protocols[$code]->id ?? null,
+                    'code' => $code,
+                    'label' => $meta['label'],
+                    'description' => $meta['description'],
+                    'tone' => $meta['tone'],
+                ];
+            })
+            ->values();
+    }
+
+    private function protocolCode(string $protocolId): string
+    {
+        $name = IotProtocol::where('id', $protocolId)->value('protocolName') ?? '';
+        return $this->normalizeProtocolName($name);
+    }
+
+    private function normalizeProtocolName(?string $name): string
+    {
+        $name = strtoupper(trim((string) $name));
+
+        if (str_contains($name, 'MQTT')) return 'MQTT';
+        if (str_contains($name, 'API') || str_contains($name, 'REST') || str_contains($name, 'ANTARES')) return 'API';
+        if (str_contains($name, 'WEBHOOK') || str_contains($name, 'PUSH')) return 'WEBHOOK';
+
+        return $name;
+    }
+
+    private function connectionProtocolCode(string $connectionConfigId): string
+    {
+        $connection = IotConnectionConfig::with('protocol')->find($connectionConfigId);
+
+        return $this->normalizeProtocolName($connection?->protocol?->protocolName);
+    }
+
+    private function normalizeDevicePayload(array $payload): array
+    {
+        $protocol = $this->connectionProtocolCode($payload['connectionConfigId']);
+
+        if ($protocol !== 'MQTT') {
+            $payload['mqttTopic'] = null;
+        }
+
+        $payload['webhookToken'] = null;
+
+        if ($protocol === 'API' && empty($payload['pollingInterval'])) {
+            $payload['pollingInterval'] = 300;
+        }
+
+        return $payload;
+    }
+
+    private function validateConnectionByProtocol(string $protocol, array $payload)
+    {
+        if ($protocol === 'API' && empty($payload['baseUrl'])) {
+            return back()->withErrors(['connection' => 'Koneksi API/Antares wajib mengisi Base URL.'])->withInput();
+        }
+
+        if ($protocol === 'MQTT' && empty($payload['mqttBrokerUrl'])) {
+            return back()->withErrors(['connection' => 'Koneksi MQTT wajib mengisi MQTT Broker URL.'])->withInput();
+        }
+
+        if (! in_array($protocol, array_keys(self::FIXED_PROTOCOLS), true)) {
+            return back()->withErrors(['connection' => 'Pilih salah satu protokol pakem: API/Antares atau MQTT.'])->withInput();
+        }
+
+        return null;
+    }
+
+    private function normalizeConnectionPayload(string $protocol, array $payload): array
+    {
+        if ($protocol === 'WEBHOOK') {
+            $payload['baseUrl'] = null;
+            $payload['endpointPath'] = null;
+            $payload['mqttBrokerUrl'] = null;
+            $payload['mqttPort'] = null;
+            $payload['mqttTopic'] = null;
+            $payload['mqttClientId'] = null;
+            $payload['mqttUsername'] = null;
+            $payload['mqttPassword'] = null;
+            $payload['mqttUseTls'] = false;
+            $payload['mqttQos'] = 0;
+            $payload['mqttKeepAlive'] = 60;
+            $payload['authType'] = 'none';
+            $payload['authKey'] = null;
+            $payload['headers'] = null;
+        }
+
+        if ($protocol === 'API') {
+            $payload['mqttBrokerUrl'] = null;
+            $payload['mqttPort'] = null;
+            $payload['mqttTopic'] = null;
+            $payload['mqttClientId'] = null;
+            $payload['mqttUsername'] = null;
+            $payload['mqttPassword'] = null;
+            $payload['mqttUseTls'] = false;
+            $payload['mqttQos'] = 0;
+            $payload['mqttKeepAlive'] = 60;
+        }
+
+        if ($protocol === 'MQTT') {
+            $payload['baseUrl'] = null;
+            $payload['endpointPath'] = null;
+            $payload['authType'] = 'none';
+            $payload['authKey'] = null;
+            $payload['headers'] = null;
+        }
+
+        return $payload;
     }
 }

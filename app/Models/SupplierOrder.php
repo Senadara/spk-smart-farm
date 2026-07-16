@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class SupplierOrder extends Model
 {
@@ -50,5 +51,10 @@ class SupplierOrder extends Model
     public function details(): HasMany
     {
         return $this->hasMany(SupplierOrderDetail::class, 'pesananId');
+    }
+
+    public function rating(): HasOne
+    {
+        return $this->hasOne(SupplierOrderRating::class, 'order_id');
     }
 }

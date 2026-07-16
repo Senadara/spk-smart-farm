@@ -61,11 +61,11 @@ class SpkFuzzySet extends Model
 
         if ($this->shape === 'triangle') {
             // Titik-titik: a (kaki kiri), b (puncak), c (kaki kanan)
-            if ($x <= $a || $x >= $c) {
-                return 0.0;
-            }
             if ($x === $b) {
                 return 1.0;
+            }
+            if ($x <= $a || $x >= $c) {
+                return 0.0;
             }
             if ($x < $b) {
                 return ($b - $a) > 0 ? ($x - $a) / ($b - $a) : 0.0;
@@ -77,14 +77,24 @@ class SpkFuzzySet extends Model
         // Trapezoid: a (kaki kiri bawah), b (kaki kiri atas), c (kaki kanan atas), d (kaki kanan bawah)
         if ($d === null) {
             // Fallback ke triangle jika d tidak ada
-            return $this->membership($x);
+            if ($x === $b) {
+                return 1.0;
+            }
+            if ($x <= $a || $x >= $c) {
+                return 0.0;
+            }
+            if ($x < $b) {
+                return ($b - $a) > 0 ? ($x - $a) / ($b - $a) : 0.0;
+            }
+
+            return ($c - $b) > 0 ? ($c - $x) / ($c - $b) : 0.0;
         }
 
-        if ($x <= $a || $x >= $d) {
-            return 0.0;
-        }
         if ($x >= $b && $x <= $c) {
             return 1.0;
+        }
+        if ($x <= $a || $x >= $d) {
+            return 0.0;
         }
         if ($x > $a && $x < $b) {
             return ($b - $a) > 0 ? ($x - $a) / ($b - $a) : 0.0;

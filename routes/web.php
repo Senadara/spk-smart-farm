@@ -56,6 +56,8 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
     // Peternakan
     Route::get('/peternakan', [PeternakanController::class, 'index'])->name('peternakan');
     Route::post('/peternakan/evaluate-all', [PeternakanController::class, 'evaluateAll'])->name('peternakan.evaluate-all');
+    Route::get('/peternakan/{id}/settlement', [PeternakanController::class, 'settlement'])->name('peternakan.settlement');
+    Route::get('/peternakan/{id}/export-productivity', [PeternakanController::class, 'exportProductivity'])->name('peternakan.export-productivity');
     Route::get('/peternakan/{id}', [PeternakanController::class, 'show'])->name('peternakan.show');
 
     // Analisa SPK
@@ -81,6 +83,12 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
         Route::get('/dss/api/rankings/{produkId}', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiRankings'])->name('spk.suppliers.dss.api.rankings');
         Route::get('/dss/api/weights', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiWeights'])->name('spk.suppliers.dss.api.weights');
         Route::get('/dss/api/insights', [\App\Http\Controllers\Spk\SpkSupplierDssController::class, 'apiInsights'])->name('spk.suppliers.dss.api.insights');
+        Route::get('/orders', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'orders'])->name('spk.suppliers.orders.index');
+        Route::patch('/orders/{order}/rating', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'rateOrder'])->name('spk.suppliers.orders.rating');
+        Route::patch('/orders/{order}/cancel', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'cancelOrder'])->name('spk.suppliers.orders.cancel');
+        Route::post('/cart', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'addToCart'])->name('spk.suppliers.cart.add');
+        Route::delete('/cart/{product}', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'removeFromCart'])->name('spk.suppliers.cart.remove');
+        Route::post('/cart/checkout', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'checkoutCart'])->name('spk.suppliers.cart.checkout');
         Route::post('/{id}/orders', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'storeOrder'])->name('spk.suppliers.orders.store')->whereNumber('id');
         Route::get('/{id}', [\App\Http\Controllers\Spk\SupplierRecommendationController::class, 'show'])->name('spk.suppliers.show')->whereNumber('id');
     });
@@ -120,6 +128,7 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
 
         // CRUD Endpoints - Connections
         Route::post('/connections', [IotController::class, 'storeConnection'])->name('iot.connections.store');
+        Route::post('/connections/{id}/test', [IotController::class, 'testConnection'])->name('iot.connections.test');
         Route::put('/connections/{id}', [IotController::class, 'updateConnection'])->name('iot.connections.update');
         Route::delete('/connections/{id}', [IotController::class, 'destroyConnection'])->name('iot.connections.destroy');
 
@@ -142,6 +151,8 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
         Route::post('/items', [InventoryController::class, 'store'])->name('items.store');
         Route::get('/items/{item}', [InventoryController::class, 'show'])->name('items.show');
         Route::post('/items/{item}/adjust', [InventoryController::class, 'adjust'])->name('items.adjust');
+        Route::post('/items/{item}/supplier-links', [InventoryController::class, 'storeSupplierLink'])->name('items.supplier-links.store');
+        Route::post('/items/{item}/restock-order', [InventoryController::class, 'orderRestock'])->name('items.restock-order');
         Route::post('/purchase-order', [InventoryController::class, 'purchaseOrder'])->name('purchase-order');
         Route::get('/analysis', [InventoryController::class, 'analysis'])->name('analysis');
     });
@@ -160,6 +171,8 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
     // Konfigurasi Fuzzy Mamdani
     Route::middleware('role:pjawab')->prefix('settings/fuzzy')->group(function () {
         Route::get('/', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'index'])->name('settings.fuzzy.index');
+        Route::post('/profiles', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'storeProfile'])->name('settings.fuzzy.profiles.store');
+        Route::patch('/profiles/{id}/activate', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'activateProfile'])->name('settings.fuzzy.profiles.activate');
         // CRUD Variables
         Route::post('/variables', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'storeVariable'])->name('settings.fuzzy.variables.store');
         Route::put('/variables/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'updateVariable'])->name('settings.fuzzy.variables.update');
@@ -172,6 +185,10 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
         Route::post('/rules', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'storeRule'])->name('settings.fuzzy.rules.store');
         Route::put('/rules/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'updateRule'])->name('settings.fuzzy.rules.update');
         Route::delete('/rules/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'destroyRule'])->name('settings.fuzzy.rules.destroy');
+        // CRUD Input Sources
+        Route::post('/sources', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'storeSource'])->name('settings.fuzzy.sources.store');
+        Route::put('/sources/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'updateSource'])->name('settings.fuzzy.sources.update');
+        Route::delete('/sources/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'destroySource'])->name('settings.fuzzy.sources.destroy');
         // Reset
         Route::post('/reset', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'resetToDefault'])->name('settings.fuzzy.reset');
     });

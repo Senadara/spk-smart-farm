@@ -7,6 +7,9 @@
     'defaultRange' => '30d',
     'title'    => 'Production Efficiency Trends',
     'subtitle' => 'Comparing HDP vs FCR',
+    'hint' => 'Grafik ini membandingkan HDP dan FCR untuk melihat tren produktivitas dan efisiensi pakan.',
+    'formula' => 'HDP = telur/populasi x 100%; FCR = pakan/egg mass',
+    'source' => 'laporan, panen, harianTernak',
 ])
 
 <div
@@ -112,7 +115,12 @@
 >
     <div class="flex flex-wrap items-center justify-between gap-3 mb-4 shrink-0">
         <div>
-            <h3 class="text-base font-semibold text-gray-800">{{ $title }}</h3>
+            <div class="flex items-center gap-2">
+                <h3 class="text-base font-semibold text-gray-800">{{ $title }}</h3>
+                @if($hint)
+                    <x-metric-hint :title="$title" :body="$hint" :formula="$formula" :source="$source" />
+                @endif
+            </div>
             <p class="text-xs text-gray-400" x-text="subtitle">{{ $subtitle }}</p>
         </div>
         <div class="flex items-center bg-gray-100 rounded-lg p-0.5">

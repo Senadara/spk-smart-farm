@@ -80,7 +80,9 @@
                     </div>
                     <a href="{{ route('supplier.finance') }}" class="text-xs font-semibold text-emerald-700 no-underline">Detail</a>
                 </div>
-                @php($maxSales = max(max($salesChart['values']), 1))
+                @php
+                    $maxSales = max(max($salesChart['values']), 1);
+                @endphp
                 <div class="h-56 flex items-end gap-3 border-b border-gray-200 px-1">
                     @foreach($salesChart['values'] as $index => $value)
                         <div class="flex-1 h-full flex flex-col justify-end items-center gap-2 min-w-0">

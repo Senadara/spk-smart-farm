@@ -12,3 +12,4 @@ tests/
 *.md
 .vscode/
 bootstrap/cache/*
+public/storage

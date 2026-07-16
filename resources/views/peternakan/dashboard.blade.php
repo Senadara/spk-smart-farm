@@ -5,6 +5,49 @@
 @section('content')
     @php
         $statusLabels = ['normal' => 'Aman', 'warning' => 'Perhatian', 'danger' => 'Kritis'];
+        $kpiHints = [
+            'HDP %' => [
+                'body' => 'Hen Day Production, persentase jumlah telur hari ini dibanding populasi ayam aktif.',
+                'formula' => '(total telur hari ini / populasi aktif) x 100%',
+                'source' => 'laporan, panen, unitBudidaya',
+            ],
+            'FCR' => [
+                'body' => 'Feed Conversion Ratio, rasio pakan terhadap egg mass. Semakin kecil biasanya semakin efisien.',
+                'formula' => 'total pakan / total egg mass',
+                'source' => 'harianTernak, panen',
+            ],
+            'Umur Biologis' => [
+                'body' => 'Rata-rata umur flock/kandang aktif dari input mobile. Data lama fallback ke tanggal kandang dibuat.',
+                'formula' => 'rata-rata unitBudidaya.umurMinggu',
+                'source' => 'unitBudidaya.umurMinggu',
+            ],
+            'Feed Intake' => [
+                'body' => 'Estimasi konsumsi pakan per ekor per hari.',
+                'formula' => '(total pakan / populasi aktif) x 1000 gram',
+                'source' => 'harianTernak, unitBudidaya',
+            ],
+            'Egg Mass' => [
+                'body' => 'Berat total telur yang dipanen hari ini dari laporan panen mobile.',
+                'formula' => 'SUM(panen.berat)',
+                'source' => 'panen',
+            ],
+            'Mortality' => [
+                'body' => 'Persentase kematian ayam terhadap populasi pada periode berjalan.',
+                'formula' => '(jumlah kematian / populasi) x 100%',
+                'source' => 'kematian, laporan, unitBudidaya',
+            ],
+            'Mortalitas' => [
+                'body' => 'Persentase kematian ayam terhadap populasi pada periode berjalan.',
+                'formula' => '(jumlah kematian / populasi) x 100%',
+                'source' => 'kematian, laporan, unitBudidaya',
+            ],
+        ];
+        $spkMetricHints = [
+            'Skor rata-rata' => ['body' => 'Rata-rata skor hasil analisis SPK hari ini. Jika belum ada analisis hari ini, nilai dapat kosong.', 'formula' => 'AVG(spk_fuzzy_logs.output_value)', 'source' => 'spk_fuzzy_logs'],
+            'Analisa hari ini' => ['body' => 'Jumlah proses analisis SPK yang tersimpan pada tanggal hari ini.', 'formula' => 'COUNT(log hari ini)', 'source' => 'spk_fuzzy_logs'],
+            'Perlu tindakan' => ['body' => 'Jumlah hasil SPK yang berstatus Waspada/Buruk atau skor rendah dan perlu tindak lanjut.', 'formula' => 'status Waspada/Buruk atau output < 70', 'source' => 'spk_fuzzy_logs'],
+            'Tugas aktif' => ['body' => 'Jumlah tugas tindak lanjut SPK yang masih todo atau in progress.', 'formula' => 'COUNT(status todo/in_progress)', 'source' => 'spk_action_tasks'],
+        ];
     @endphp
 
     <div x-data="{
@@ -40,11 +83,15 @@
                 },
 
                 get activeIndicators() {
+                    const fuzzy = this.fuzzyByBarn[this.activeFuzzyKey] ?? this.fuzzyByBarn['all'] ?? {};
+                    if (Array.isArray(fuzzy.indicators)) return fuzzy.indicators;
                     const prod = this.fuzzyProduktivitasByBarn[this.activeFuzzyKey] ?? this.fuzzyProduktivitasByBarn['all'] ?? {};
                     return prod.indicators ?? @js($produktivitas['indicators']);
                 },
 
                 get activeSpider() {
+                    const fuzzy = this.fuzzyByBarn[this.activeFuzzyKey] ?? this.fuzzyByBarn['all'] ?? {};
+                    if (fuzzy.spider && Array.isArray(fuzzy.spider.labels)) return fuzzy.spider;
                     const prod = this.fuzzyProduktivitasByBarn[this.activeFuzzyKey] ?? this.fuzzyProduktivitasByBarn['all'] ?? {};
                     return prod.spider ?? @js($produktivitas['spider']);
                 },
@@ -199,6 +246,7 @@
                 </p>
             </div>
             <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+                <x-dashboard-hint-toggle />
                 <div class="flex min-w-0 items-center gap-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-500 overflow-hidden pr-3 shadow-sm">
                     <div class="pl-3.5 py-2.5 pointer-events-none">
                         <svg class="w-4.5 h-4.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
@@ -262,6 +310,7 @@
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
                                 <h2 class="text-sm font-bold">{{ $dailyReportStatus['title'] ?? 'Laporan harian belum tersedia' }}</h2>
+                                <x-metric-hint title="Status Laporan Harian" body="Banner ini menunjukkan kelengkapan laporan harian per kandang. Jika sebagian kandang belum mengirim laporan, KPI produksi dan hasil SPK bisa belum sepenuhnya merepresentasikan kondisi farm." formula="kandang terlapor / total kandang aktif" source="laporan, unitBudidaya" />
                                 <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold {{ $dailyTone['pill'] }}">
                                     {{ $dailyReportStatus['reportedCount'] ?? 0 }}/{{ $dailyReportStatus['totalCoops'] ?? 0 }} kandang
                                 </span>
@@ -306,7 +355,17 @@
         {{-- SECTION 1: KPI --}}
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 xl:gap-4">
             @foreach($kpiMetrics as $kpi)
-                <x-peternakan.kpi-card :label="$kpi['label']" :value="$kpi['value']" :trend="$kpi['trend']" />
+                @php
+                    $hint = $kpiHints[$kpi['label']] ?? null;
+                @endphp
+                <x-peternakan.kpi-card
+                    :label="$kpi['label']"
+                    :value="$kpi['value']"
+                    :trend="$kpi['trend']"
+                    :hint="$hint['body'] ?? null"
+                    :formula="$hint['formula'] ?? null"
+                    :source="$hint['source'] ?? null"
+                />
             @endforeach
         </div>
 
@@ -324,7 +383,10 @@
 
             <div class="xl:col-span-2 bg-white border border-gray-100 rounded-xl p-5 xl:p-6 shadow-sm flex flex-col h-full">
                 <div class="flex flex-wrap items-center justify-between gap-2 mb-5">
-                    <h3 class="text-lg font-semibold text-gray-800">Barn Environment</h3>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-lg font-semibold text-gray-800">Barn Environment</h3>
+                        <x-metric-hint title="Barn Environment" body="Panel ini membaca nilai sensor aktif sesuai kandang yang dipilih. Parameter mengikuti batas IoT dan konfigurasi komoditas." formula="latest/average sensor per kandang" source="iot_sensor_data, iot_parameter, unitBudidaya" />
+                    </div>
                     <span class="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Batas IoT komoditas</span>
                 </div>
 
@@ -384,13 +446,174 @@
             </div>
         </div>
 
-        {{-- SECTION 3: FUZZY ENGINE --}}
-        <x-fuzzy-decision-engine
-            :barns="$barnEnvironment['barns']"
-            :indicators="$produktivitas['indicators']"
-            :spkResults="$spkResults"
-            :evaluationTime="$evaluationTime"
-        />
+        {{-- SECTION 3: DAILY SPK SUMMARY --}}
+        @php
+            $spkTone = [
+                'emerald' => ['wrap' => 'border-emerald-200 bg-emerald-50', 'text' => 'text-emerald-700', 'badge' => 'bg-emerald-100 text-emerald-700'],
+                'amber' => ['wrap' => 'border-amber-200 bg-amber-50', 'text' => 'text-amber-700', 'badge' => 'bg-amber-100 text-amber-700'],
+                'red' => ['wrap' => 'border-red-200 bg-red-50', 'text' => 'text-red-700', 'badge' => 'bg-red-100 text-red-700'],
+                'gray' => ['wrap' => 'border-gray-200 bg-gray-50', 'text' => 'text-gray-700', 'badge' => 'bg-gray-100 text-gray-700'],
+            ][$spkDailySummary['tone'] ?? 'gray'];
+        @endphp
+        <section class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm xl:p-6">
+            <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="text-lg font-semibold text-gray-800">Ringkasan SPK Hari Ini</h3>
+                        <x-metric-hint title="Ringkasan SPK Hari Ini" body="Ringkasan ini mengambil hasil analisis fuzzy hari ini, peringatan SPK, dan tugas aktif yang belum selesai." formula="log SPK hari ini + task aktif" source="spk_fuzzy_logs, spk_action_tasks" />
+                        <span class="rounded-full px-3 py-1 text-xs font-bold {{ $spkTone['badge'] }}">{{ $spkDailySummary['status'] }}</span>
+                    </div>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Dashboard peternakan menampilkan kondisi umum farm. Informasi detail per kandang tetap dibuka dari halaman detail kandang.
+                    </p>
+                    <p class="mt-2 text-xs font-semibold {{ $spkTone['text'] }}">
+                        Update terakhir: {{ $spkDailySummary['last_update'] ?? 'Belum ada update SPK' }}
+                        @if(!empty($spkDailySummary['last_update_human']))
+                            <span class="font-normal text-gray-400">({{ $spkDailySummary['last_update_human'] }})</span>
+                        @endif
+                    </p>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                    <a href="{{ $spkDailySummary['spk_url'] }}" class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700" style="text-decoration:none;">
+                        Buka Analisa SPK
+                    </a>
+                    <a href="{{ $spkDailySummary['tasks_url'] }}" class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">
+                        Lihat Penugasan
+                    </a>
+                </div>
+            </div>
+
+            <div class="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+                <div class="rounded-lg border border-gray-100 bg-gray-50/60 p-4">
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                            <p class="text-sm font-bold text-gray-800">Diagram Produktivitas</p>
+                            <p class="text-xs text-gray-500">Radar HDP, feed, umur biologis, dan mortalitas.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <x-metric-hint title="Diagram Produktivitas" body="Radar menormalisasi beberapa indikator produktivitas ke skala 0-100 agar mudah dibandingkan." formula="normalisasi HDP, feed, umur, mortalitas" source="laporan, panen, harianTernak, kematian" />
+                            <span class="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-500">SPK</span>
+                        </div>
+                    </div>
+                    <div class="h-64">
+                        <canvas x-ref="spiderCanvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="rounded-lg border border-gray-100 p-4">
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                            <p class="text-sm font-bold text-gray-800">Indikator Produktivitas</p>
+                            <p class="text-xs text-gray-500">Ringkasan parameter yang mempengaruhi keputusan SPK.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <x-metric-hint title="Indikator Produktivitas" body="Daftar indikator ini dinamis mengikuti variabel aktif pada konfigurasi SPK. Jika variabel baru ditambah, card akan ikut bertambah." formula="variabel aktif pada profil fuzzy" source="spk_fuzzy_variables, spk_fuzzy_input_sources" />
+                            <span class="text-xs text-gray-400" x-text="(activeIndicators?.length ?? 0) + ' indikator'"></span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <template x-for="indicator in activeIndicators" :key="indicator.label">
+                            <div class="rounded-lg border border-gray-100 bg-white px-3 py-3">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <p class="truncate text-xs font-semibold text-gray-500" x-text="indicator.label"></p>
+                                        <p class="mt-1 text-base font-black text-gray-900" x-text="indicator.value ?? '-'"></p>
+                                    </div>
+                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                                        :class="{
+                                            'bg-emerald-50 text-emerald-700': indicator.color === 'emerald',
+                                            'bg-sky-50 text-sky-700': indicator.color === 'blue',
+                                            'bg-amber-50 text-amber-700': indicator.color === 'amber',
+                                            'bg-red-50 text-red-700': indicator.color === 'red',
+                                            'bg-gray-100 text-gray-600': !['emerald', 'blue', 'amber', 'red'].includes(indicator.color),
+                                        }"
+                                        x-text="indicator.score !== undefined ? indicator.score : '-'"></span>
+                                </div>
+                                <p class="mt-2 text-xs text-gray-500" x-text="indicator.detail ?? '-'"></p>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div x-show="!activeIndicators || activeIndicators.length === 0" class="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                        Belum ada indikator produktivitas aktif.
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                @foreach([
+                    ['label' => 'Skor rata-rata', 'value' => $spkDailySummary['score'] !== null ? $spkDailySummary['score'].'/100' : '-', 'class' => 'text-gray-900'],
+                    ['label' => 'Analisa hari ini', 'value' => $spkDailySummary['analyses_today'], 'class' => 'text-gray-900'],
+                    ['label' => 'Perlu tindakan', 'value' => $spkDailySummary['needs_action_count'], 'class' => $spkDailySummary['needs_action_count'] > 0 ? 'text-red-600' : 'text-gray-900'],
+                    ['label' => 'Tugas aktif', 'value' => $spkDailySummary['active_tasks'], 'class' => $spkDailySummary['active_tasks'] > 0 ? 'text-amber-600' : 'text-gray-900'],
+                ] as $metric)
+                    @php
+                        $hint = $spkMetricHints[$metric['label']];
+                    @endphp
+                    <div class="rounded-lg border border-gray-100 px-4 py-3">
+                        <div class="flex items-center gap-1">
+                            <p class="text-xs font-semibold text-gray-400">{{ $metric['label'] }}</p>
+                            <x-metric-hint :title="$metric['label']" :body="$hint['body']" :formula="$hint['formula']" :source="$hint['source']" />
+                        </div>
+                        <p class="mt-1 text-xl font-black {{ $metric['class'] }}">{{ $metric['value'] }}</p>
+                    </div>
+                @endforeach
+            </div>
+
+            @if(!empty($spkDailySummary['hints']))
+                <details class="mt-5 rounded-lg border {{ $spkTone['wrap'] }} px-4 py-3" open>
+                    <summary class="cursor-pointer text-sm font-bold {{ $spkTone['text'] }}">Hint kesiapan SPK</summary>
+                    <ul class="mt-3 space-y-2 text-sm text-gray-700">
+                        @foreach($spkDailySummary['hints'] as $hint)
+                            <li class="flex gap-2">
+                                <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-current {{ $spkTone['text'] }}"></span>
+                                <span>{{ $hint }}</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                </details>
+            @endif
+
+            <div class="mt-5">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                    <h4 class="text-sm font-bold text-gray-800">Tindakan yang Disarankan</h4>
+                    <div class="flex items-center gap-2">
+                        <x-metric-hint title="Tindakan yang Disarankan" body="Kandidat tindakan berasal dari hasil SPK yang perlu ditindaklanjuti dan dapat dilanjutkan menjadi penugasan." source="spk_fuzzy_logs, spk_action_tasks" />
+                        <span class="text-xs text-gray-400">{{ count($spkDailySummary['action_candidates']) }} kandidat</span>
+                    </div>
+                </div>
+
+                @if(empty($spkDailySummary['action_candidates']))
+                    <div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                        Tidak ada hasil SPK yang membutuhkan penugasan saat ini.
+                    </div>
+                @else
+                    <div class="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                        @foreach($spkDailySummary['action_candidates'] as $candidate)
+                            <article class="rounded-lg border border-gray-200 p-4">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700">{{ $candidate['priority'] }}</span>
+                                            <span class="text-xs text-gray-400">{{ $candidate['barn'] }} - {{ $candidate['time'] }}</span>
+                                        </div>
+                                        <h5 class="mt-2 font-bold text-gray-900">{{ $candidate['title'] }}</h5>
+                                        <p class="mt-1 text-sm text-gray-500">{{ $candidate['description'] }}</p>
+                                    </div>
+                                    <span class="shrink-0 rounded-lg bg-gray-50 px-3 py-2 text-sm font-black text-gray-800">{{ $candidate['score'] }}</span>
+                                </div>
+                                <div class="mt-4 flex flex-wrap gap-2">
+                                    <a href="{{ $candidate['spk_url'] }}" class="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Detail SPK</a>
+                                    <a href="{{ $candidate['task_url'] }}" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800" style="text-decoration:none;">Buat Penugasan</a>
+                                </div>
+                            </article>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        </section>
 
         {{-- SECTION 4: DAFTAR KANDANG --}}
         <div class="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
@@ -399,7 +622,10 @@
                     <h3 class="text-lg font-semibold text-gray-800">Daftar Kandang (Unit Budidaya)</h3>
                     <p class="text-sm text-gray-500 mt-1">Komoditas: <span class="font-medium text-gray-700">{{ $activeKomoditasNama }}</span> - klik kartu untuk membuka halaman detail</p>
                 </div>
-                <span class="text-xs font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">{{ count($listKandang) }} kandang</span>
+                <div class="flex items-center gap-2">
+                    <x-metric-hint title="Daftar Kandang" body="Setiap kartu kandang menampilkan status lingkungan dan HDP hari ini sebagai pintu masuk ke detail kandang." formula="status terburuk sensor + HDP hari ini" source="iot_sensor_data, panen, unitBudidaya" />
+                    <span class="text-xs font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">{{ count($listKandang) }} kandang</span>
+                </div>
             </div>
             <div class="p-6 space-y-3.5">
                 @forelse($listKandang as $kandang)
@@ -449,12 +675,15 @@
 
         {{-- SECTION 5: DAILY PRODUCTION LOG --}}
         <div class="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-            <div class="flex items-center justify-between p-6 border-b border-gray-50">
-                <h3 class="text-lg font-semibold text-gray-800">Daily Production Log</h3>
+            <div class="flex flex-col gap-3 border-b border-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                <div class="flex items-center gap-2">
+                    <h3 class="text-lg font-semibold text-gray-800">Daily Production Log</h3>
+                    <x-metric-hint title="Daily Production Log" body="Log ini menampilkan laporan panen dan kematian terbaru. Rejects hanya menghitung telur rusak/reject dari rincian grade, sedangkan mortalitas ditampilkan terpisah." source="laporan, panen, panenRincianGrade, kematian, unitBudidaya" />
+                </div>
                 <div class="flex items-center gap-3">
-                    <div class="relative">
+                    <div class="relative w-full sm:w-auto">
                         <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                        <input x-model="searchLog" type="text" placeholder="Cari log..." class="pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 w-56">
+                        <input x-model="searchLog" type="text" placeholder="Cari log..." class="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-4 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 sm:w-56">
                     </div>
                 </div>
             </div>
@@ -462,36 +691,38 @@
                 <table class="w-full text-sm text-left">
                     <thead class="bg-gray-50/90">
                         <tr>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Date</th>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Barn</th>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Flock Age</th>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Birds</th>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Eggs Collected</th>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Rejects</th>
-                            <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Date</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Barn</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Flock Age</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Birds</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Eggs Collected</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Rejects</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Mortalitas</th>
+                            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-6 sm:py-4">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-50">
                         @foreach($productionLog as $log)
                             @php
-                                $logStatus = ['Optimal' => 'text-emerald-600 bg-emerald-50', 'Attention' => 'text-amber-600 bg-amber-50', 'Critical' => 'text-red-600 bg-red-50'];
+                                $logStatus = ['Optimal' => 'text-emerald-600 bg-emerald-50', 'Check' => 'text-sky-600 bg-sky-50', 'Attention' => 'text-amber-600 bg-amber-50', 'Critical' => 'text-red-600 bg-red-50'];
                                 $statusClass = $logStatus[$log['status']] ?? 'text-gray-600 bg-gray-50';
                                 $searchHay = strtolower(($log['date'] ?? '') . ($log['barn'] ?? '') . ($log['status'] ?? ''));
                             @endphp
                             <tr class="hover:bg-gray-50/70 transition-colors" x-show="!searchLog || @js($searchHay).includes(searchLog.toLowerCase())">
-                                <td class="px-6 py-4 text-gray-600 font-medium">{{ $log['date'] }}</td>
-                                <td class="px-6 py-4 font-semibold text-blue-600">{{ $log['barn'] }}</td>
-                                <td class="px-6 py-4 text-gray-600">{{ $log['flock_age'] }}</td>
-                                <td class="px-6 py-4 text-gray-800 font-semibold">{{ $log['birds'] }}</td>
-                                <td class="px-6 py-4 text-gray-800 font-semibold">{{ $log['eggs'] }}</td>
-                                <td class="px-6 py-4 text-gray-600">{{ $log['rejects'] }}</td>
-                                <td class="px-6 py-4"><span class="px-3 py-1.5 text-xs font-semibold rounded-full {{ $statusClass }}">{{ $log['status'] }}</span></td>
+                                <td class="px-4 py-3 text-gray-600 font-medium sm:px-6 sm:py-4">{{ $log['date'] }}</td>
+                                <td class="px-4 py-3 font-semibold text-blue-600 sm:px-6 sm:py-4">{{ $log['barn'] }}</td>
+                                <td class="px-4 py-3 text-gray-600 sm:px-6 sm:py-4">{{ $log['flock_age'] }}</td>
+                                <td class="px-4 py-3 text-gray-800 font-semibold sm:px-6 sm:py-4">{{ $log['birds'] }}</td>
+                                <td class="px-4 py-3 text-gray-800 font-semibold sm:px-6 sm:py-4">{{ $log['eggs'] }}</td>
+                                <td class="px-4 py-3 text-gray-600 sm:px-6 sm:py-4">{{ $log['rejects'] }}</td>
+                                <td class="px-4 py-3 text-gray-600 sm:px-6 sm:py-4">{{ $log['mortality'] ?? '-' }}</td>
+                                <td class="px-4 py-3 sm:px-6 sm:py-4"><span class="px-2.5 py-1 text-xs font-semibold rounded-full sm:px-3 sm:py-1.5 {{ $statusClass }}">{{ $log['status'] }}</span></td>
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
             </div>
-            <div class="flex items-center justify-between px-6 py-4 border-t border-gray-50">
+            <div class="flex items-center justify-between border-t border-gray-50 px-4 py-3 sm:px-6 sm:py-4">
                 <p class="text-sm text-gray-500">Menampilkan {{ count($productionLog) }} entri terakhir</p>
             </div>
         </div>

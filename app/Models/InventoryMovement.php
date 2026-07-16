@@ -17,6 +17,10 @@ class InventoryMovement extends Model
         'unit_budidaya_id',
         'user_id',
         'note',
+        'source_table',
+        'source_id',
+        'created_at',
+        'updated_at',
     ];
 
     protected $casts = [

@@ -6,6 +6,7 @@ use App\Models\IotDevice;
 use App\Models\IotDeviceLog;
 use App\Models\IotSensorData;
 use App\Events\IotSensorDataReceived;
+use App\Services\Iot\IotPayloadIngestor;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -108,16 +109,7 @@ class PollIotDeviceJob implements ShouldQueue
 
     private function processPayload($device, $payload)
     {
-        $dataTarget = $this->extractData($payload);
-
-        foreach ($device->parameterMappings as $mapping) {
-            // Jika response hanyalah scalar nilai
-            $value = is_array($dataTarget) && isset($dataTarget[$mapping->payloadKey]) 
-                        ? data_get($dataTarget, $mapping->payloadKey) 
-                        : (is_array($dataTarget) ? data_get($dataTarget, $mapping->payloadKey) : $dataTarget);
-
-            $this->storeAndBroadcast($device, $mapping, $value);
-        }
+        app(IotPayloadIngestor::class)->ingest($device, $payload, 'api-poll');
     }
 
     private function extractData($payload)
@@ -136,34 +128,7 @@ class PollIotDeviceJob implements ShouldQueue
 
     private function storeAndBroadcast($device, $mapping, $value)
     {
-        if ($value !== null && is_numeric($value)) {
-
-            $sensor = IotSensorData::create([
-                'deviceId' => $device->id,
-                'parameterId' => $mapping->parameterId,
-                'value' => (float) $value,
-                'sensorTimestamp' => now(),
-            ]);
-
-            $payload = [
-                'device' => [
-                    'deviceCode' => $device->deviceCode,
-                    'deviceName' => $device->deviceName
-                ],
-                'parameter' => [
-                    'parameterName' => $mapping->parameter->parameterName ?? $mapping->payloadKey,
-                    'unit' => $mapping->parameter->unit ?? ''
-                ],
-                'value' => (float) $value,
-                'timestamp' => $sensor->sensorTimestamp->format('d M Y H:i:s'),
-            ];
-
-            try {
-                broadcast(new IotSensorDataReceived($payload));
-            } catch (\Exception $e) {
-                Log::warning("Broadcast gagal: " . $e->getMessage());
-            }
-        }
+        app(IotPayloadIngestor::class)->ingestMappingValue($device, $mapping, $value, 'api-poll-fragment');
     }
 
     private function logError($device, $message)

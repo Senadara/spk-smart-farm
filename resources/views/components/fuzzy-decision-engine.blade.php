@@ -75,7 +75,8 @@
                         </div>
                         <span class="text-base font-semibold text-gray-800">Environment Logic</span>
                     </div>
-                    <span class="px-2 py-1 text-xs font-bold bg-emerald-100 text-emerald-700 rounded-lg">IoT Real-time</span>
+                    <span class="px-2 py-1 text-xs font-bold bg-emerald-100 text-emerald-700 rounded-lg"
+                        x-text="(fuzzySensors?.lingkungan?.length || 0) + ' Parameter'">0 Parameter</span>
                 </div>
 
                 <div class="space-y-4 mb-6">
@@ -102,6 +103,9 @@
                             </div>
                         </div>
                     </template>
+                    <p x-show="!(fuzzySensors?.lingkungan?.length)" class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500">
+                        Belum ada parameter lingkungan aktif.
+                    </p>
                 </div>
             </div>
 
@@ -147,20 +151,21 @@
                         </div>
                         <span class="text-base font-semibold text-gray-800">Productivity Logic</span>
                     </div>
-                    <span class="px-2 py-1 text-xs font-bold bg-blue-100 text-blue-700 rounded-lg">4 Parameter SPK</span>
+                    <span class="px-2 py-1 text-xs font-bold bg-blue-100 text-blue-700 rounded-lg"
+                        x-text="(activeIndicators?.length || 0) + ' Parameter SPK'">0 Parameter SPK</span>
                 </div>
 
                 <p class="text-xs text-gray-500 mb-4 leading-relaxed">
-                    HDP, umur biologis, konsumsi pakan, dan mortalitas. Skor radar 0-100, semakin luas berarti semakin baik.
+                    Parameter produktivitas dan kesehatan dari profil SPK aktif.
                 </p>
 
-                <div class="rounded-xl border border-blue-100 bg-gradient-to-b from-blue-50/60 to-white p-4 mb-5 shadow-sm">
+                <div x-show="(activeSpider?.labels?.length || 0) > 0" class="rounded-xl border border-blue-100 bg-gradient-to-b from-blue-50/60 to-white p-4 mb-5 shadow-sm">
                     <div class="w-full max-w-[300px] aspect-square mx-auto">
                         <canvas x-ref="spiderCanvas"></canvas>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3 mb-6">
+                <div x-show="activeIndicators?.length" class="grid grid-cols-2 gap-3 mb-6">
                     <template x-for="(item, idx) in activeIndicators" :key="idx">
                         <div class="rounded-xl border border-gray-100 bg-gray-50/80 px-3.5 py-3">
                             <div class="flex items-center justify-between gap-2 mb-1.5">
@@ -172,6 +177,9 @@
                         </div>
                     </template>
                 </div>
+                <p x-show="!(activeIndicators?.length)" class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500">
+                    Belum ada parameter produktivitas aktif.
+                </p>
             </div>
 
             <div class="mt-auto border-t border-gray-100 pt-5">

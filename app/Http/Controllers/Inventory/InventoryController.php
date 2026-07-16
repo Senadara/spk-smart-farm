@@ -5,16 +5,25 @@ namespace App\Http\Controllers\Inventory;
 use App\Http\Controllers\Controller;
 use App\Models\InventoryItem;
 use App\Models\InventoryMovement;
-use App\Models\MasterSupplier;
+use App\Models\InventorySupplierProductLink;
+use App\Models\SupplierProduct;
+use App\Services\Inventory\MobileInventorySyncService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class InventoryController extends Controller
 {
+    public function __construct(private MobileInventorySyncService $mobileInventorySync) {}
+
     public function index()
     {
-        $items = InventoryItem::with('supplier')
+        $this->mobileInventorySync->sync();
+
+        $items = InventoryItem::with([
+            'supplier',
+            'preferredSupplierProductLink.product.store',
+        ])
             ->where('is_active', true)
             ->orderBy('category')
             ->orderBy('name')
@@ -32,7 +41,6 @@ class InventoryController extends Controller
             ->where('isDeleted', 0)
             ->orderBy('nama')
             ->get(['id', 'nama']);
-        $supplierOptions = MasterSupplier::orderBy('nama')->get(['id', 'nama']);
 
         return view('inventory.dashboard', compact(
             'kpi',
@@ -41,57 +49,13 @@ class InventoryController extends Controller
             'charts',
             'movementLog',
             'categoryOptions',
-            'barnOptions',
-            'supplierOptions'
+            'barnOptions'
         ));
     }
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'sku' => 'nullable|string|max:50|unique:inventory_items,sku',
-            'name' => 'required|string|max:255',
-            'category' => 'required|string|max:80',
-            'stock' => 'required|numeric|min:0',
-            'unit' => 'required|string|max:30',
-            'daily_usage' => 'nullable|numeric|min:0',
-            'minimum_stock' => 'nullable|numeric|min:0',
-            'reorder_point' => 'nullable|numeric|min:0',
-            'lead_time_days' => 'nullable|integer|min:0|max:365',
-            'supplier_id' => 'nullable|exists:master_suppliers,id',
-            'unit_budidaya_id' => 'nullable|string|max:36',
-            'notes' => 'nullable|string',
-            'photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
-        ]);
-
-        $photoPath = $request->hasFile('photo')
-            ? $request->file('photo')->store('inventory-items', 'public')
-            : null;
-
-        $sku = $validated['sku'] ?? null;
-
-        $item = InventoryItem::create([
-            'sku' => $sku ?: $this->nextSku(),
-            'name' => $validated['name'],
-            'category' => $validated['category'],
-            'stock' => $validated['stock'],
-            'unit' => $validated['unit'],
-            'daily_usage' => $validated['daily_usage'] ?? 0,
-            'minimum_stock' => $validated['minimum_stock'] ?? 0,
-            'reorder_point' => $validated['reorder_point'] ?? ($validated['minimum_stock'] ?? 0),
-            'lead_time_days' => $validated['lead_time_days'] ?? 1,
-            'supplier_id' => $validated['supplier_id'] ?? null,
-            'unit_budidaya_id' => $validated['unit_budidaya_id'] ?? null,
-            'notes' => $validated['notes'] ?? null,
-            'photo_path' => $photoPath,
-            'last_restock_at' => ((float) $validated['stock']) > 0 ? now() : null,
-        ]);
-
-        if ($item->stock > 0) {
-            $this->recordMovement($item, 'inflow', $item->stock, 0, $item->stock, 'Stok awal saat item dibuat.');
-        }
-
-        return redirect()->route('inventory')->with('success', 'Item inventaris berhasil ditambahkan.');
+        abort(403, 'Input inventaris utama dilakukan dari aplikasi mobile/API Node.js. Laravel hanya membaca stok dan membantu restock supplier.');
     }
 
     public function show(InventoryItem $item)
@@ -111,44 +75,82 @@ class InventoryController extends Controller
 
     public function adjust(Request $request, InventoryItem $item)
     {
+        abort(403, 'Perubahan stok utama dilakukan dari aplikasi mobile/API Node.js. Laravel hanya membaca stok dan membantu restock supplier.');
+    }
+
+    public function storeSupplierLink(Request $request, InventoryItem $item): RedirectResponse
+    {
         $validated = $request->validate([
-            'type' => 'required|in:inflow,outflow,adjustment',
-            'quantity' => 'required|numeric|min:0',
-            'note' => 'nullable|string|max:500',
+            'supplier_product_id' => 'required|string|exists:produk,id',
+            'conversion_qty' => 'required|numeric|min:0.0001',
+            'conversion_unit' => 'nullable|string|max:30',
+            'notes' => 'nullable|string|max:500',
         ]);
 
-        $stockBefore = (float) $item->stock;
-        $inputQty = (float) $validated['quantity'];
-        $type = $validated['type'];
+        SupplierProduct::query()
+            ->where('id', $validated['supplier_product_id'])
+            ->where('isDeleted', false)
+            ->firstOrFail();
 
-        $stockAfter = match ($type) {
-            'inflow' => $stockBefore + $inputQty,
-            'outflow' => max(0, $stockBefore - $inputQty),
-            'adjustment' => $inputQty,
-        };
-        $delta = $stockAfter - $stockBefore;
+        InventorySupplierProductLink::query()
+            ->where('inventory_item_id', $item->id)
+            ->update(['is_preferred' => false]);
 
-        $item->stock = $stockAfter;
-        if ($type === 'inflow' && $inputQty > 0) {
-            $item->last_restock_at = now();
-        }
-        $item->save();
-
-        $this->recordMovement(
-            $item,
-            $type,
-            $type === 'inflow' ? $inputQty : $delta,
-            $stockBefore,
-            $stockAfter,
-            $validated['note'] ?? null
+        InventorySupplierProductLink::query()->updateOrCreate(
+            [
+                'inventory_item_id' => $item->id,
+                'supplier_product_id' => $validated['supplier_product_id'],
+            ],
+            [
+                'conversion_qty' => (float) $validated['conversion_qty'],
+                'conversion_unit' => $validated['conversion_unit'] ?: $item->unit,
+                'is_preferred' => true,
+                'notes' => $validated['notes'] ?? null,
+            ]
         );
 
-        return redirect()->route('inventory')->with('success', 'Stok inventaris berhasil diperbarui.');
+        return redirect()
+            ->route('inventory')
+            ->with('success', 'Barang inventaris berhasil dihubungkan ke produk supplier.');
+    }
+
+    public function orderRestock(Request $request, InventoryItem $item): RedirectResponse
+    {
+        $link = $item->preferredSupplierProductLink()
+            ->with('product.store')
+            ->first();
+
+        if (! $link || ! $link->product || $link->product->isDeleted) {
+            return redirect()
+                ->route('spk.suppliers.products', ['search' => $item->name])
+                ->with('error', 'Item belum terhubung ke produk supplier. Pilih produk yang sesuai terlebih dahulu.');
+        }
+
+        $product = $link->product;
+        if ((int) $product->stok <= 0) {
+            return redirect()
+                ->route('spk.suppliers.products', ['search' => $product->nama])
+                ->with('error', 'Produk supplier yang terhubung sedang kosong. Pilih produk supplier lain.');
+        }
+
+        $quantity = min($this->recommendedSupplierQuantity($item, $link), (int) $product->stok);
+        $cart = $request->session()->get('supplier_cart', []);
+        $cart[$product->id] = min((int) ($cart[$product->id] ?? 0) + $quantity, (int) $product->stok);
+        $request->session()->put('supplier_cart', $cart);
+
+        return redirect()
+            ->route('spk.suppliers.products', ['search' => $product->nama])
+            ->with('success', "{$product->nama} ditambahkan ke keranjang restock sebanyak {$quantity} {$product->satuan}.");
     }
 
     public function purchaseOrder()
     {
-        $items = InventoryItem::with('supplier')
+        $this->mobileInventorySync->sync();
+
+        $items = InventoryItem::with([
+            'supplier',
+            'preferredSupplierProductLink.product.store',
+        ])
             ->where('is_active', true)
             ->get()
             ->map(fn (InventoryItem $item) => $this->formatItem($item, $this->barnMap()))
@@ -159,15 +161,17 @@ class InventoryController extends Controller
             ->map(function (array $item) {
                 $target = max((float) $item['reorder_point'], (float) $item['minimum_stock'] * 2, (float) $item['daily_usage'] * max(7, (int) $item['lead_time']));
                 $qty = max(1, ceil($target - (float) $item['stock']));
+                $linked = $item['linked_product'] ?? null;
 
                 return [
                     'sku' => $item['id'],
                     'name' => $item['name'],
-                    'supplier' => $item['supplier'] ?: 'Supplier belum dipilih',
-                    'qty' => $qty,
-                    'unit' => $item['unit'],
+                    'supplier' => $linked['store'] ?? 'Belum terhubung ke produk supplier',
+                    'qty' => $linked['recommended_quantity'] ?? $qty,
+                    'unit' => $linked['product_unit'] ?? $item['unit'],
                     'priority' => $item['priority'],
                     'days_left' => $item['days_left_label'],
+                    'can_order' => (bool) $linked,
                 ];
             });
 
@@ -177,12 +181,14 @@ class InventoryController extends Controller
             'items' => $items,
             'message' => $items->isEmpty()
                 ? 'Tidak ada item yang membutuhkan restock saat ini.'
-                : 'Draft PO dibuat dari item berstatus critical/warning.',
+                : 'Draft PO dibuat dari item critical/warning. Item tanpa mapping perlu dihubungkan ke produk supplier terlebih dahulu.',
         ]);
     }
 
     public function analysis()
     {
+        $this->mobileInventorySync->sync();
+
         $items = InventoryItem::where('is_active', true)->get()
             ->map(fn (InventoryItem $item) => $this->formatItem($item, $this->barnMap()));
 
@@ -230,6 +236,11 @@ class InventoryController extends Controller
                 'supplier' => $item['supplier'] ?: 'Belum dipilih',
                 'price' => '-',
                 'lead_time' => $item['lead_time'],
+                'linked_product' => $item['linked_product'],
+                'supplier_candidates' => $item['supplier_candidates'],
+                'order_url' => route('inventory.items.restock-order', $item['raw_id']),
+                'link_url' => route('inventory.items.supplier-links.store', $item['raw_id']),
+                'needs_mapping' => empty($item['linked_product']),
             ];
         })->all();
     }
@@ -252,10 +263,12 @@ class InventoryController extends Controller
         }
 
         if (array_sum($feed) <= 0) {
-            $feed = $items->where('category', 'Pakan')->pluck('daily_usage')->map(fn ($value) => round((float) $value, 1))->pad(7, 0)->take(7)->values()->all();
+            $estimatedFeed = round((float) $items->where('category', 'Pakan')->sum('daily_usage'), 1);
+            $feed = array_fill(0, count($dateKeys), $estimatedFeed);
         }
         if (array_sum($vitamin) <= 0) {
-            $vitamin = $items->where('category', 'Vitamin')->pluck('daily_usage')->map(fn ($value) => round((float) $value, 1))->pad(7, 0)->take(7)->values()->all();
+            $estimatedVitamin = round((float) $items->where('category', 'Vitamin')->sum('daily_usage'), 1);
+            $vitamin = array_fill(0, count($dateKeys), $estimatedVitamin);
         }
 
         $byBarn = $items->groupBy(fn ($item) => $barnMap[$item->unit_budidaya_id] ?? 'Umum');
@@ -296,6 +309,8 @@ class InventoryController extends Controller
         };
         $restockScore = $this->restockScore($item, $daysLeft, $status);
 
+        $linkedProduct = $this->formatLinkedProduct($item);
+
         return [
             'raw_id' => $item->id,
             'id' => $item->sku,
@@ -316,6 +331,8 @@ class InventoryController extends Controller
             'restock_score' => $restockScore,
             'last_restock' => $item->last_restock_at?->format('d M Y') ?? '-',
             'supplier' => $item->supplier?->nama,
+            'linked_product' => $linkedProduct,
+            'supplier_candidates' => $linkedProduct ? [] : $this->supplierCandidatesFor($item),
             'barn' => $barnMap[$item->unit_budidaya_id] ?? 'Umum',
             'unit_budidaya_id' => $item->unit_budidaya_id,
             'notes' => $item->notes,
@@ -362,38 +379,108 @@ class InventoryController extends Controller
         return round($statusWeight + $daysWeight + $leadWeight, 3);
     }
 
-    private function recordMovement(InventoryItem $item, string $type, float $quantity, float $before, float $after, ?string $note): void
+    private function formatLinkedProduct(InventoryItem $item): ?array
     {
-        InventoryMovement::create([
-            'inventory_item_id' => $item->id,
-            'type' => $type,
-            'quantity' => $quantity,
-            'stock_before' => $before,
-            'stock_after' => $after,
-            'unit' => $item->unit,
-            'unit_budidaya_id' => $item->unit_budidaya_id,
-            'user_id' => $this->currentUserId(),
-            'note' => $note,
-        ]);
+        $link = $item->preferredSupplierProductLink;
+        $product = $link?->product;
+
+        if (! $link || ! $product || $product->isDeleted) {
+            return null;
+        }
+
+        return [
+            'id' => $product->id,
+            'name' => $product->nama,
+            'store' => $product->store?->nama ?? 'Toko supplier',
+            'price' => (int) $product->harga,
+            'stock' => (int) $product->stok,
+            'product_unit' => $product->satuan,
+            'conversion_qty' => (float) $link->conversion_qty,
+            'conversion_unit' => $link->conversion_unit ?: $item->unit,
+            'recommended_quantity' => $this->recommendedSupplierQuantity($item, $link),
+            'recommended_label' => $this->recommendedSupplierQuantity($item, $link).' '.$product->satuan,
+        ];
     }
 
-    private function nextSku(): string
+    private function supplierCandidatesFor(InventoryItem $item): array
     {
-        do {
-            $sku = 'INV-'.now()->format('ymd').'-'.Str::upper(Str::random(4));
-        } while (InventoryItem::where('sku', $sku)->exists());
+        $terms = collect(preg_split('/\s+/', strtolower($item->name.' '.$item->category)))
+            ->map(fn ($term) => trim($term))
+            ->filter(fn ($term) => strlen($term) >= 3)
+            ->take(5)
+            ->values();
 
-        return $sku;
+        $query = SupplierProduct::query()
+            ->with('store')
+            ->where('isDeleted', false)
+            ->where('stok', '>', 0)
+            ->whereHas('store', fn ($store) => $store->where('isDeleted', false));
+
+        $query->where(function ($inner) use ($item, $terms) {
+            $inner->where('kategori', 'like', '%'.$item->category.'%');
+
+            foreach ($terms as $term) {
+                $inner->orWhere('nama', 'like', '%'.$term.'%')
+                    ->orWhere('deskripsi', 'like', '%'.$term.'%')
+                    ->orWhere('kategori', 'like', '%'.$term.'%');
+            }
+        });
+
+        return $query
+            ->orderByDesc('stok')
+            ->limit(4)
+            ->get()
+            ->map(fn (SupplierProduct $product) => [
+                'id' => $product->id,
+                'name' => $product->nama,
+                'store' => $product->store?->nama ?? 'Toko supplier',
+                'stock' => (int) $product->stok,
+                'unit' => $product->satuan,
+                'price' => (int) $product->harga,
+                'category' => $product->kategori ?: 'Umum',
+                'default_conversion' => $this->guessConversionQty($item, $product),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function recommendedSupplierQuantity(InventoryItem $item, InventorySupplierProductLink $link): int
+    {
+        $targetStock = max(
+            (float) $item->reorder_point,
+            (float) $item->minimum_stock * 2,
+            (float) $item->daily_usage * max(7, (int) $item->lead_time_days)
+        );
+
+        $neededInventoryQty = max(0.0, $targetStock - (float) $item->stock);
+        if ($neededInventoryQty <= 0) {
+            $neededInventoryQty = max((float) $item->minimum_stock, (float) $item->daily_usage, 1.0);
+        }
+
+        return max(1, (int) ceil($neededInventoryQty / max((float) $link->conversion_qty, 0.0001)));
+    }
+
+    private function guessConversionQty(InventoryItem $item, SupplierProduct $product): float
+    {
+        if (strcasecmp($item->unit, $product->satuan) === 0) {
+            return 1.0;
+        }
+
+        $text = strtolower($product->nama.' '.$product->deskripsi.' '.$product->satuan);
+        if (preg_match('/(\d+(?:[.,]\d+)?)\s*(kg|kilogram)/', $text, $match)) {
+            return (float) str_replace(',', '.', $match[1]);
+        }
+
+        if (preg_match('/(\d+(?:[.,]\d+)?)\s*(liter|ltr|l)\b/', $text, $match)) {
+            return (float) str_replace(',', '.', $match[1]);
+        }
+
+        return 1.0;
     }
 
     private function barnMap(): array
     {
         return DB::table('unitBudidaya')->pluck('nama', 'id')->toArray();
-    }
-
-    private function currentUserId(): ?string
-    {
-        return data_get(session('user'), 'id') ?? session('user_id');
     }
 
     private function numberLabel(float $value): string

@@ -4,96 +4,47 @@
 @section('breadcrumb', 'Pengaturan')
 
 @section('content')
-<div class="max-w-6xl mx-auto space-y-6">
-    <div class="mb-6">
-        <h1 class="text-2xl font-bold text-gray-900">Pengaturan Sistem</h1>
-        <p class="text-sm text-gray-500 mt-1">Kelola konfigurasi dasar peternakan, daftar perangkat, dan aturan IoT.</p>
+<div class="mx-auto max-w-6xl space-y-5">
+    <div>
+        <p class="text-xs font-bold uppercase tracking-wider text-emerald-700">Pengaturan</p>
+        <h1 class="mt-1 text-2xl font-bold text-gray-900">Pengaturan Sistem</h1>
+        <p class="mt-1 text-sm text-gray-500">Gunakan halaman ini untuk mengatur data dasar, IoT, aturan SPK, dan supplier DSS.</p>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <x-page-hint title="Alur pengaturan yang disarankan" tone="sky" :open="false">
+        Mulai dari Data Master, lalu atur IoT, setelah itu sesuaikan aturan SPK. Pengaturan supplier DSS dipakai saat farm ingin membandingkan supplier dan membuat rekomendasi pembelian.
+    </x-page-hint>
 
-        {{-- Parameter Master --}}
-        <a href="{{ route('data-master.index') }}" class="group block bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all">
-            <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                </svg>
-            </div>
-            <h3 class="text-lg font-bold text-gray-900 group-hover:text-emerald-700 transition-colors">Data Master</h3>
-            <p class="text-xs text-gray-500 mt-2 leading-relaxed">
-                Kelola daftar kandang, zona wilayah, jenis pakan, jadwal vaksin, dan parameter baku lainnya.
-            </p>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <a href="{{ route('data-master.index') }}" class="rounded-lg border border-gray-200 bg-white p-5 hover:bg-gray-50" style="text-decoration:none;">
+            <p class="text-sm font-bold text-gray-900">Data Master</p>
+            <p class="mt-1 text-sm text-gray-500">Kelola komoditas, kandang, jenis budidaya, dan data dasar yang dipakai semua modul.</p>
+            <p class="mt-3 text-xs font-semibold text-emerald-700">Buka Data Master</p>
         </a>
 
-        {{-- IoT Devices --}}
-        <a href="{{ route('iot.devices') }}" class="group block bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all">
-            <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-emerald-100 transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                </svg>
-            </div>
-            <h3 class="text-lg font-bold text-gray-900 group-hover:text-emerald-700 transition-colors">Perangkat IoT</h3>
-            <p class="text-xs text-gray-500 mt-2 leading-relaxed">
-                Pendaftaran node sensor, microcontroller, alat ukur pakan, dan actuator kipas di tiap kandang.
-            </p>
+        <a id="iot-settings" href="{{ route('iot.devices') }}" class="rounded-lg border border-gray-200 bg-white p-5 hover:bg-gray-50" style="text-decoration:none;">
+            <p class="text-sm font-bold text-gray-900">IoT</p>
+            <p class="mt-1 text-sm text-gray-500">Mulai dari setup terpadu: koneksi, device per kandang, mapping payload, parameter sensor, threshold, lalu monitoring.</p>
+            <p class="mt-3 text-xs font-semibold text-emerald-700">Buka Setup IoT</p>
         </a>
 
-        {{-- IoT Configuration --}}
-        <a href="{{ route('iot.config') }}" class="group block bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all">
-            <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-purple-100 transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-            </div>
-            <h3 class="text-lg font-bold text-gray-900 group-hover:text-emerald-700 transition-colors">Konfigurasi IoT</h3>
-            <p class="text-xs text-gray-500 mt-2 leading-relaxed">
-                Tentukan batas threshold sensor (suhu/amonia), frekuensi pengiriman data, dan aturan aktuasi udara.
-            </p>
-        </a>
-
-        {{-- Konfigurasi Fuzzy Mamdani --}}
         @if(session('user') && isset(session('user')['role']) && session('user')['role'] === 'pjawab')
-        <a href="{{ route('settings.fuzzy.index') }}" class="group block bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all">
-            <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-amber-100 transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-            </div>
-            <h3 class="text-lg font-bold text-gray-900 group-hover:text-emerald-700 transition-colors">Fuzzy Mamdani</h3>
-            <p class="text-xs text-gray-500 mt-2 leading-relaxed">
-                Kelola variabel, membership function, dan aturan inferensi fuzzy untuk analisis kondisi kandang.
-            </p>
-        </a>
+            <a href="{{ route('settings.fuzzy.index') }}" class="rounded-lg border border-gray-200 bg-white p-5 hover:bg-gray-50" style="text-decoration:none;">
+                <p class="text-sm font-bold text-gray-900">Aturan SPK Kandang</p>
+                <p class="mt-1 text-sm text-gray-500">Kelola profil, variabel, himpunan fuzzy, sumber input, dan rule Mamdani.</p>
+                <p class="mt-3 text-xs font-semibold text-emerald-700">Buka Aturan SPK</p>
+            </a>
         @endif
 
-        {{-- DSS Supplier · AHP + SAW — layout lebar dua aksi utama --}}
-        <div class="md:col-span-2 lg:col-span-3 relative overflow-hidden rounded-2xl border border-indigo-800/70 bg-gradient-to-br from-indigo-950 via-emerald-950 to-slate-950 p-6 sm:p-8 shadow-xl shadow-black/25">
-            <div class="relative z-10 grid gap-8 lg:grid-cols-12 lg:items-center">
-                <div class="lg:col-span-7 space-y-2">
-                    <span class="inline-flex items-center rounded-full bg-emerald-500/20 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-300 ring-1 ring-emerald-400/35">Hybrid · Rekomendasi supplier</span>
-                    <h3 class="text-2xl font-black text-white leading-tight">AHP bobot · SAW peringkat</h3>
-                    <p class="text-sm leading-relaxed text-indigo-100/90 max-w-xl">
-                        <strong>Konfigurasi strategis</strong>: perbandingan berpasangan + validasi CR.<br class="hidden sm:block">
-                        <strong>Operasional harian</strong>: normalisasi &amp; skor gabungan supplier per barang dipilih.
-                    </p>
-                </div>
-                <div class="lg:col-span-5 flex flex-col sm:flex-row lg:flex-col gap-3 lg:items-stretch lg:justify-end">
-                    <a href="{{ route('spk.suppliers.dss.config') }}" class="inline-flex flex-1 items-center justify-center rounded-xl bg-emerald-400 px-5 py-4 text-sm font-black text-emerald-950 shadow-lg hover:bg-emerald-300 transition text-center shrink-0">
-                        Atur bobot · AHP
-                    </a>
-                    <div class="flex flex-1 flex-col gap-2 sm:flex-row lg:flex-row">
-                        <a href="{{ route('spk.suppliers.dss.dashboard') }}" class="inline-flex flex-1 items-center justify-center rounded-xl bg-white/12 px-4 py-3.5 text-sm font-bold text-white ring-1 ring-white/25 hover:bg-white/18 transition text-center">
-                            Dashboard SAW
-                        </a>
-                        <a href="{{ route('spk.suppliers.products') }}" class="inline-flex flex-1 items-center justify-center rounded-xl border border-white/20 bg-transparent px-4 py-3.5 text-sm font-semibold text-indigo-100 hover:bg-white/5 transition text-center">
-                            Komparasi produk
-                        </a>
-                    </div>
-                </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-5">
+            <p class="text-sm font-bold text-gray-900">DSS Supplier AHP-SAW</p>
+            <p class="mt-1 text-sm text-gray-500">Atur bobot AHP, cek ranking SAW, dan bandingkan supplier untuk kebutuhan restock.</p>
+            <div class="mt-4 flex flex-wrap gap-2">
+                <a href="{{ route('spk.suppliers.dss.config') }}" class="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700" style="text-decoration:none;">Atur Bobot</a>
+                <a href="{{ route('spk.suppliers.dss.dashboard') }}" class="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Ranking SAW</a>
+                <a href="{{ route('spk.suppliers.products') }}" class="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Cari Barang</a>
             </div>
         </div>
-
     </div>
 </div>
 @endsection

@@ -24,14 +24,31 @@ class IotConnectionConfig extends Model
         'baseUrl',
         'endpointPath',
         'mqttBrokerUrl',
+        'mqttPort',
         'mqttTopic',
+        'mqttClientId',
+        'mqttUsername',
+        'mqttPassword',
+        'mqttUseTls',
+        'mqttQos',
+        'mqttKeepAlive',
         'authType',
         'authKey',
         'headers',
     ];
 
+    protected $hidden = [
+        'authKey',
+        'mqttPassword',
+    ];
+
     protected $casts = [
         'headers' => 'array',
+        'mqttPort' => 'integer',
+        'mqttUseTls' => 'boolean',
+        'mqttQos' => 'integer',
+        'mqttKeepAlive' => 'integer',
+        'mqttPassword' => 'encrypted',
     ];
 
     public function protocol()

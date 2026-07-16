@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\SpkActionReport;
 use App\Models\SpkActionTask;
 use App\Models\SpkFuzzyLog;
+use App\Services\Fuzzy\NarrativeGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -355,7 +356,10 @@ class SpkTaskController extends Controller
                 $score = is_numeric($spk->output_value) ? round((float) $spk->output_value, 1) : null;
                 $reason = $this->reasonForSpk($spk, $score);
                 $title = 'Tindak lanjut SPK - '.$barnName;
-                $description = trim(($spk->recommendation ?: $spk->narrative ?: 'Tindak lanjuti hasil analisa SPK.')."\n\nKonteks: ".$reason);
+                $spkText = NarrativeGenerator::sanitizePlainText($spk->recommendation)
+                    ?: NarrativeGenerator::sanitizePlainText($spk->narrative)
+                    ?: 'Tindak lanjuti hasil analisa SPK.';
+                $description = trim($spkText."\n\nKonteks: ".$reason);
                 $dueDate = now()->addDays(match ($priority) {
                     'urgent' => 0,
                     'high' => 1,
@@ -385,7 +389,12 @@ class SpkTaskController extends Controller
                     'priorityClass' => $this->priorityClass($priority),
                     'assignee' => $assignee?->name ?? 'Belum ada petugas',
                     'due_date' => $dueDate,
-                    'recommendation' => Str::limit($spk->recommendation ?: $spk->narrative ?: 'Tindak lanjuti hasil SPK.', 110),
+                    'recommendation' => Str::limit(
+                        NarrativeGenerator::sanitizePlainText($spk->recommendation)
+                            ?: NarrativeGenerator::sanitizePlainText($spk->narrative)
+                            ?: 'Tindak lanjuti hasil SPK.',
+                        110
+                    ),
                     'url' => route('spk.tasks.index', array_filter($params, fn ($value) => filled($value))),
                 ];
             });

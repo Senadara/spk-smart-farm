@@ -1,15 +1,70 @@
 {{-- ═══ MODAL: Add Variable ═══ --}}
+<div x-show="modal === 'addProfile'" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="fixed inset-0 bg-black/40" @click="modal = null"></div>
+    <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-xl p-6 z-10" @click.stop>
+        <h3 class="text-lg font-bold text-gray-900 mb-4">Tambah Profile Fuzzy</h3>
+        <form action="{{ route('settings.fuzzy.profiles.store') }}" method="POST">
+            @csrf
+            <div class="space-y-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nama Profile *</label>
+                        <input type="text" name="name" required placeholder="Ayam Broiler - v1" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Versi *</label>
+                        <input type="text" name="version" required value="v1" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Komoditas</label>
+                        <select name="commodity_id" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            <option value="">Tanpa komoditas</option>
+                            @foreach($commodities as $commodity)
+                                <option value="{{ $commodity->id }}">{{ $commodity->nama }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Status *</label>
+                        <select name="status" required class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            <option value="draft">Draft</option>
+                            <option value="review">Review Pakar</option>
+                            <option value="active">Active</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Reviewer</label>
+                    <input type="text" name="reviewed_by" placeholder="Nama pakar / reviewer" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
+                    <textarea name="notes" rows="3" placeholder="Catatan batasan parameter, sumber pakar, atau alasan versi." class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all"></textarea>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-4">
+                <button type="button" @click="modal = null" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">Batal</button>
+                <button type="submit" class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">Simpan Profile</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div x-show="modal === 'addVariable'" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
     <div class="fixed inset-0 bg-black/40" @click="modal = null"></div>
     <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 z-10" @click.stop>
         <h3 class="text-lg font-bold text-gray-900 mb-4">Tambah Variabel</h3>
         <form action="{{ route('settings.fuzzy.variables.store') }}" method="POST">
             @csrf
+            <input type="hidden" name="profile_id" value="{{ $activeProfileId }}">
             <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Nama *</label>
-                        <input type="text" name="name" required pattern="[a-z_]+" title="Hanya huruf kecil dan underscore (contoh: suhu, status_lingkungan)" placeholder="e.g. suhu" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                        <input type="text" name="name" required pattern="[a-z_]+" title="Hanya huruf kecil dan underscore (contoh: suhu, status_lingkungan)" placeholder="contoh: suhu" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                         <p class="text-[11px] text-gray-400 mt-1">Huruf kecil & underscore saja</p>
                     </div>
                     <div>
@@ -21,7 +76,7 @@
                         </select>
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Tipe *</label>
                         <select name="type" required class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
@@ -31,7 +86,7 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-                        <input type="text" name="unit" placeholder="°C, %, ppm" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                        <input type="text" name="unit" placeholder="C, %, ppm" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                 </div>
                 <div>
@@ -54,8 +109,9 @@
         <h3 class="text-lg font-bold text-gray-900 mb-4">Edit Variabel</h3>
         <form :action="`{{ url('/settings/fuzzy/variables') }}/${editVar.id}`" method="POST">
             @csrf @method('PUT')
+            <input type="hidden" name="profile_id" value="{{ $activeProfileId }}">
             <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Nama *</label>
                         <input type="text" name="name" x-model="editVar.name" required pattern="[a-z_]+" title="Hanya huruf kecil dan underscore" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
@@ -70,7 +126,7 @@
                         </select>
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Tipe *</label>
                         <select name="type" x-model="editVar.type" required class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
@@ -100,15 +156,16 @@
 <div x-show="modal === 'addSet'" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
     <div class="fixed inset-0 bg-black/40" @click="modal = null"></div>
     <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 z-10" @click.stop>
-        <h3 class="text-lg font-bold text-gray-900 mb-4">Tambah Membership Function</h3>
+        <h3 class="text-lg font-bold text-gray-900 mb-1">Tambah Himpunan Fuzzy</h3>
+        <p class="mb-4 text-sm text-gray-500">Tentukan nama set dan titik bentuk kurva membership untuk variabel terpilih.</p>
         <form action="{{ route('settings.fuzzy.sets.store') }}" method="POST" x-data="{ addShape: 'triangle' }" onsubmit="return validateSetForm(this)">
             @csrf
             <input type="hidden" name="variable_id" x-model="editSet.variable_id">
             <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Nama Set *</label>
-                        <input type="text" name="name" required placeholder="e.g. Tinggi" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                        <input type="text" name="name" required placeholder="contoh: Tinggi" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Shape *</label>
@@ -118,13 +175,13 @@
                         </select>
                     </div>
                 </div>
-                <div class="grid grid-cols-4 gap-3">
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
                     <div><label class="block text-xs font-medium text-gray-500 mb-1">a (kaki kiri) *</label><input type="number" step="any" name="a" required class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-center focus:outline-none focus:border-[var(--color-primary)] transition-all"></div>
                     <div><label class="block text-xs font-medium text-gray-500 mb-1" x-text="addShape === 'triangle' ? 'b (puncak) *' : 'b (plateau kiri) *'">b *</label><input type="number" step="any" name="b" required class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-center focus:outline-none focus:border-[var(--color-primary)] transition-all"></div>
                     <div><label class="block text-xs font-medium text-gray-500 mb-1" x-text="addShape === 'triangle' ? 'c (kaki kanan) *' : 'c (plateau kanan) *'">c *</label><input type="number" step="any" name="c" required class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-center focus:outline-none focus:border-[var(--color-primary)] transition-all"></div>
                     <div><label class="block text-xs font-medium text-gray-500 mb-1" :class="addShape === 'trapezoid' ? 'text-red-500' : ''">d (kaki kanan) <span x-show="addShape === 'trapezoid'">*</span></label><input type="number" step="any" name="d" :required="addShape === 'trapezoid'" class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-center focus:outline-none focus:border-[var(--color-primary)] transition-all" placeholder="-"></div>
                 </div>
-                <div class="bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700">💡 Syarat: a ≤ b ≤ c (≤ d untuk trapezoid). Nilai harus berurutan dari kiri ke kanan.</div>
+                <div class="bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700">Tips: gunakan urutan a <= b <= c (<= d untuk trapezoid). Nilai harus berurutan dari kiri ke kanan.</div>
             </div>
             <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-4">
                 <button type="button" @click="modal = null" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">Batal</button>
@@ -138,12 +195,13 @@
 <div x-show="modal === 'editSet'" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
     <div class="fixed inset-0 bg-black/40" @click="modal = null"></div>
     <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 z-10" @click.stop>
-        <h3 class="text-lg font-bold text-gray-900 mb-4">Edit Membership Function</h3>
+        <h3 class="text-lg font-bold text-gray-900 mb-1">Edit Himpunan Fuzzy</h3>
+        <p class="mb-4 text-sm text-gray-500">Perubahan titik kurva akan mempengaruhi hasil inferensi rule yang memakai set ini.</p>
         <form :action="`{{ url('/settings/fuzzy/sets') }}/${editSet.id}`" method="POST" onsubmit="return validateSetForm(this)">
             @csrf @method('PUT')
             <input type="hidden" name="variable_id" x-model="editSet.variable_id">
             <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Nama *</label>
                         <input type="text" name="name" x-model="editSet.name" required class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
@@ -156,7 +214,7 @@
                         </select>
                     </div>
                 </div>
-                <div class="grid grid-cols-4 gap-3">
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
                     <div><label class="block text-xs font-medium text-gray-500 mb-1">a</label><input type="number" step="any" name="a" x-model="editSet.a" required class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-center focus:outline-none focus:border-[var(--color-primary)] transition-all"></div>
                     <div><label class="block text-xs font-medium text-gray-500 mb-1">b</label><input type="number" step="any" name="b" x-model="editSet.b" required class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-center focus:outline-none focus:border-[var(--color-primary)] transition-all"></div>
                     <div><label class="block text-xs font-medium text-gray-500 mb-1">c</label><input type="number" step="any" name="c" x-model="editSet.c" required class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-center focus:outline-none focus:border-[var(--color-primary)] transition-all"></div>
@@ -175,11 +233,13 @@
 <div x-show="modal === 'addRule'" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
     <div class="fixed inset-0 bg-black/40" @click="modal = null"></div>
     <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 z-10 max-h-[90vh] overflow-y-auto" @click.stop>
-        <h3 class="text-lg font-bold text-gray-900 mb-4">Tambah Rule</h3>
+        <h3 class="text-lg font-bold text-gray-900 mb-1">Tambah Rule IF-THEN</h3>
+        <p class="mb-4 text-sm text-gray-500">Pilih engine, tentukan kondisi IF, lalu pilih output THEN yang dihasilkan.</p>
         <form action="{{ route('settings.fuzzy.rules.store') }}" method="POST">
             @csrf
+            <input type="hidden" name="profile_id" value="{{ $activeProfileId }}">
             <div class="space-y-4">
-                <div class="grid grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Group *</label>
                         <select name="group" required class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
@@ -202,7 +262,7 @@
                             @foreach($variables->where('type', 'output') as $outVar)
                                 <optgroup label="{{ $outVar->name }}">
                                     @foreach($outVar->sets as $s)
-                                        <option value="{{ $s->id }}">{{ $outVar->name }} → {{ $s->name }}</option>
+                                        <option value="{{ $s->id }}">{{ $outVar->name }} -> {{ $s->name }}</option>
                                     @endforeach
                                 </optgroup>
                             @endforeach
@@ -216,11 +276,11 @@
                 {{-- Dynamic conditions --}}
                 <div>
                     <div class="flex justify-between items-center mb-2">
-                        <label class="text-sm font-medium text-gray-700">Kondisi (IF) <span class="text-xs text-gray-400 font-normal">— min. 2 kondisi</span></label>
+                        <label class="text-sm font-medium text-gray-700">Kondisi (IF) <span class="text-xs text-gray-400 font-normal">- min. 2 kondisi</span></label>
                         <button type="button" @click="addCondition()" class="text-xs text-[var(--color-primary)] hover:underline cursor-pointer bg-transparent border-none font-medium">+ Tambah Kondisi</button>
                     </div>
                     <template x-for="(cond, idx) in ruleConditions" :key="idx">
-                        <div class="flex gap-3 mb-2 items-end">
+                        <div class="grid grid-cols-1 gap-2 mb-2 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-end">
                             <div class="flex-1">
                                 <select :name="`conditions[${idx}][variable_id]`" x-model="cond.variable_id" required class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
                                     <option value="">Variabel</option>
@@ -257,11 +317,12 @@
 <div x-show="modal === 'editRule'" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
     <div class="fixed inset-0 bg-black/40" @click="modal = null"></div>
     <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 z-10 max-h-[90vh] overflow-y-auto" @click.stop>
-        <h3 class="text-lg font-bold text-gray-900 mb-4">Edit Rule</h3>
+        <h3 class="text-lg font-bold text-gray-900 mb-1">Edit Rule IF-THEN</h3>
+        <p class="mb-4 text-sm text-gray-500">Pastikan kondisi dan output berasal dari profil fuzzy yang sama.</p>
         <form :action="`{{ url('/settings/fuzzy/rules') }}/${editRule.id}`" method="POST">
             @csrf @method('PUT')
             <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Operator *</label>
                         <select name="operator" x-model="editRule.operator" required class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
@@ -275,7 +336,7 @@
                             @foreach($variables->where('type', 'output') as $outVar)
                                 <optgroup label="{{ $outVar->name }}">
                                     @foreach($outVar->sets as $s)
-                                        <option value="{{ $s->id }}">{{ $outVar->name }} → {{ $s->name }}</option>
+                                        <option value="{{ $s->id }}">{{ $outVar->name }} -> {{ $s->name }}</option>
                                     @endforeach
                                 </optgroup>
                             @endforeach
@@ -292,7 +353,7 @@
                         <button type="button" @click="addCondition()" class="text-xs text-[var(--color-primary)] hover:underline cursor-pointer bg-transparent border-none font-medium">+ Tambah</button>
                     </div>
                     <template x-for="(cond, idx) in ruleConditions" :key="idx">
-                        <div class="flex gap-3 mb-2 items-end">
+                        <div class="grid grid-cols-1 gap-2 mb-2 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-end">
                             <div class="flex-1">
                                 <select :name="`conditions[${idx}][variable_id]`" x-model="cond.variable_id" required class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white">
                                     <option value="">Variabel</option>
@@ -333,14 +394,14 @@ function validateSetForm(form) {
     const d = form.d.value ? parseFloat(form.d.value) : null;
     const shape = form.shape.value;
     const errors = [];
-    if (a > b) errors.push('a harus ≤ b');
-    if (b > c) errors.push('b harus ≤ c');
+    if (a > b) errors.push('a harus <= b');
+    if (b > c) errors.push('b harus <= c');
     if (shape === 'trapezoid') {
         if (d === null) { errors.push('d wajib diisi untuk trapezoid'); }
-        else if (c > d) { errors.push('c harus ≤ d'); }
+        else if (c > d) { errors.push('c harus <= d'); }
     }
     if (errors.length > 0) {
-        alert('Validasi parameter gagal:\n\n• ' + errors.join('\n• '));
+        alert('Validasi parameter gagal:\n\n- ' + errors.join('\n- '));
         return false;
     }
     return true;

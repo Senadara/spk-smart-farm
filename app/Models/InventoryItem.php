@@ -5,11 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class InventoryItem extends Model
 {
     protected $fillable = [
         'sku',
+        'mobile_inventaris_id',
         'name',
         'category',
         'stock',
@@ -23,6 +25,7 @@ class InventoryItem extends Model
         'photo_path',
         'notes',
         'last_restock_at',
+        'synced_from_mobile_at',
         'is_active',
     ];
 
@@ -33,6 +36,7 @@ class InventoryItem extends Model
         'reorder_point' => 'float',
         'lead_time_days' => 'integer',
         'last_restock_at' => 'datetime',
+        'synced_from_mobile_at' => 'datetime',
         'is_active' => 'boolean',
     ];
 
@@ -44,5 +48,16 @@ class InventoryItem extends Model
     public function movements(): HasMany
     {
         return $this->hasMany(InventoryMovement::class, 'inventory_item_id');
+    }
+
+    public function supplierProductLinks(): HasMany
+    {
+        return $this->hasMany(InventorySupplierProductLink::class, 'inventory_item_id');
+    }
+
+    public function preferredSupplierProductLink(): HasOne
+    {
+        return $this->hasOne(InventorySupplierProductLink::class, 'inventory_item_id')
+            ->where('is_preferred', true);
     }
 }

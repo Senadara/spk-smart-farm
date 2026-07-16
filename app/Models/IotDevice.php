@@ -25,12 +25,24 @@ class IotDevice extends Model
         'deviceCode',
         'deviceName',
         'pollingInterval',
+        'mqttTopic',
+        'webhookToken',
         'status',
         'installedAt',
+        'lastSeenAt',
+        'lastMissedAt',
+        'missedCount',
+        'offlineAfterMisses',
+        'offlineAfterMinutes',
     ];
 
     protected $casts = [
         'installedAt' => 'datetime',
+        'lastSeenAt' => 'datetime',
+        'lastMissedAt' => 'datetime',
+        'missedCount' => 'integer',
+        'offlineAfterMisses' => 'integer',
+        'offlineAfterMinutes' => 'integer',
     ];
 
     public function unitBudidaya()

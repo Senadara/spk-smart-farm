@@ -27,6 +27,7 @@ class SupplierStore extends Model
         'longitude',
         'logoToko',
         'deskripsi',
+        'kategori',
         'isDeleted',
         'tokoStatus',
         'TypeToko',

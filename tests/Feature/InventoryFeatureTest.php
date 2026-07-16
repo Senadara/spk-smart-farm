@@ -3,9 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\InventoryItem;
+use App\Models\InventorySupplierProductLink;
+use App\Models\SupplierProduct;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class InventoryFeatureTest extends TestCase
@@ -19,8 +19,9 @@ class InventoryFeatureTest extends TestCase
         $this->withSession($this->userSession())
             ->get('/inventory')
             ->assertOk()
-            ->assertSee('Manajemen Inventaris')
-            ->assertSee('Tambah Inventaris');
+            ->assertSee('Monitoring Stok')
+            ->assertSee('Cari Barang Supplier')
+            ->assertDontSee('Tambah Inventaris');
 
         $this->withSession($this->userSession())
             ->getJson("/inventory/items/{$item->id}")
@@ -58,11 +59,9 @@ class InventoryFeatureTest extends TestCase
             ]);
     }
 
-    public function test_inventory_item_can_be_created_with_photo_and_adjusted(): void
+    public function test_inventory_write_endpoints_are_not_web_primary_flow(): void
     {
-        Storage::fake('public');
-
-        $response = $this->withSession($this->userSession())
+        $this->withSession($this->userSession())
             ->post('/inventory/items', [
                 'sku' => 'TEST-INV-UPLOAD',
                 'name' => 'Item Uji Upload',
@@ -73,18 +72,10 @@ class InventoryFeatureTest extends TestCase
                 'minimum_stock' => 3,
                 'reorder_point' => 5,
                 'lead_time_days' => 2,
-                'photo' => UploadedFile::fake()->createWithContent(
-                    'item.png',
-                    base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=')
-                ),
-            ]);
+            ])
+            ->assertForbidden();
 
-        $response->assertRedirect(route('inventory'));
-
-        $item = InventoryItem::where('sku', 'TEST-INV-UPLOAD')->firstOrFail();
-        Storage::disk('public')->assertExists($item->photo_path);
-        $this->assertSame(10.0, $item->stock);
-        $this->assertSame(10.0, $item->movements()->latest()->first()->quantity);
+        $item = InventoryItem::query()->firstOrFail();
 
         $this->withSession($this->userSession())
             ->post("/inventory/items/{$item->id}/adjust", [
@@ -92,17 +83,35 @@ class InventoryFeatureTest extends TestCase
                 'quantity' => 99,
                 'note' => 'Uji stok keluar melebihi saldo.',
             ])
-            ->assertRedirect(route('inventory'));
+            ->assertForbidden();
+    }
 
-        $item->refresh();
-        $movement = $item->movements()
-            ->where('type', 'outflow')
-            ->latest('id')
+    public function test_inventory_item_can_be_linked_to_supplier_product_and_ordered(): void
+    {
+        $item = InventoryItem::query()->firstOrFail();
+        $product = SupplierProduct::query()
+            ->where('isDeleted', false)
+            ->where('stok', '>', 0)
             ->firstOrFail();
 
-        $this->assertSame(0.0, $item->stock);
-        $this->assertSame(-10.0, $movement->quantity);
-        $this->assertSame(0.0, $movement->stock_after);
+        $this->withSession($this->userSession())
+            ->post(route('inventory.items.supplier-links.store', $item), [
+                'supplier_product_id' => $product->id,
+                'conversion_qty' => 50,
+                'conversion_unit' => $item->unit,
+            ])
+            ->assertRedirect(route('inventory'));
+
+        $this->assertTrue(InventorySupplierProductLink::query()
+            ->where('inventory_item_id', $item->id)
+            ->where('supplier_product_id', $product->id)
+            ->where('is_preferred', true)
+            ->exists());
+
+        $this->withSession($this->userSession())
+            ->post(route('inventory.items.restock-order', $item))
+            ->assertRedirect(route('spk.suppliers.products', ['search' => $product->nama]))
+            ->assertSessionHas('supplier_cart');
     }
 
     private function userSession(): array

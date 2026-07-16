@@ -25,6 +25,12 @@ class SpkFuzzyRule extends Model
         'output_set_id',
         'group',
         'diagnosis',
+        'recommendation',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
     ];
 
     /**

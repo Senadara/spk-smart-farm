@@ -112,7 +112,7 @@ class MamdaniEngine
 
         foreach ($inputVars as $var) {
             $varName = $var->name;
-            $x       = (float) ($inputs[$varName] ?? 0.0);
+            $x       = $this->normalizeInputValue($var, (float) ($inputs[$varName] ?? 0.0));
             $result[$varName] = [];
 
             foreach ($var->sets as $set) {
@@ -126,6 +126,34 @@ class MamdaniEngine
     // ──────────────────────────────────────────────────────────────────
     // STEP 2 — EVALUASI RULE
     // ──────────────────────────────────────────────────────────────────
+
+    private function normalizeInputValue($var, float $value): float
+    {
+        if ($var->sets->isEmpty()) {
+            return $value;
+        }
+
+        $min = null;
+        $max = null;
+
+        foreach ($var->sets as $set) {
+            foreach ([$set->a, $set->b, $set->c, $set->d] as $point) {
+                if ($point === null) {
+                    continue;
+                }
+
+                $point = (float) $point;
+                $min = $min === null ? $point : min($min, $point);
+                $max = $max === null ? $point : max($max, $point);
+            }
+        }
+
+        if ($min === null || $max === null || $min >= $max) {
+            return $value;
+        }
+
+        return max($min, min($max, $value));
+    }
 
     /**
      * Evaluasi semua rule. Kembalikan:
@@ -275,11 +303,18 @@ class MamdaniEngine
         $rules = $this->loadRules('kausalitas', $profileId);
 
         foreach ($rules as $rule) {
-            $condLabels = array_column($rule['conditions'], 'set_name');
+            $hasLingk = false;
+            $hasKesehatan = false;
 
-            // Rule cocok jika kondisi mengandung kedua label yang dicari
-            $hasLingk    = in_array($lingkLabel, $condLabels, true);
-            $hasKesehatan = in_array($kesehatanLabel, $condLabels, true);
+            foreach ($rule['conditions'] as $cond) {
+                if (($cond['variable_name'] ?? null) === 'label_lingkungan' && ($cond['set_name'] ?? null) === $lingkLabel) {
+                    $hasLingk = true;
+                }
+
+                if (($cond['variable_name'] ?? null) === 'label_kesehatan' && ($cond['set_name'] ?? null) === $kesehatanLabel) {
+                    $hasKesehatan = true;
+                }
+            }
 
             if ($hasLingk && $hasKesehatan) {
                 return [
@@ -368,6 +403,8 @@ class MamdaniEngine
             foreach (['lingkungan', 'kesehatan', 'kausalitas'] as $group) {
                 Cache::forget("fuzzy_vars_{$pid}_{$group}");
                 Cache::forget("fuzzy_rules_{$pid}_{$group}");
+                Cache::forget("fuzzy_vars_{$group}");
+                Cache::forget("fuzzy_rules_{$group}");
             }
         }
     }
