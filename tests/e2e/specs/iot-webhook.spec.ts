@@ -13,10 +13,6 @@ test.describe('Modul IoT Webhook API Integration - E2E QA', () => {
         page.setDefaultNavigationTimeout(120000);
         page.setDefaultTimeout(120000);
 
-        // Blocker statis Vite
-        await page.route('**/:5173/**', route => route.abort());
-        await page.route(/.*:5173.*/, route => route.abort());
-
         iotPage = new IotPage(page);
         context = page.context();
     });

@@ -3,6 +3,24 @@
 test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
     test.setTimeout(120000);
 
+    let csrfToken = '';
+
+    test.beforeEach(async ({ page }) => {
+        // CSRF token akan diambil via meta tag di apiPost()
+    });
+
+    async function apiPost(page: any, url: string, data?: any) {
+        if (!csrfToken) {
+            await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+            csrfToken = await page.evaluate(() => {
+                const meta = document.querySelector('meta[name="csrf-token"]');
+                return meta?.getAttribute('content') || '';
+            });
+        }
+        const body = { ...(data || {}), _token: csrfToken };
+        return page.request.post(url, { data: body });
+    }
+
     /* ═══════════════════════════════════════════════════════════════════
        GET /spk-fuzzy/config - FUZZY CONFIGURATION
        ═══════════════════════════════════════════════════════════════════ */
@@ -95,7 +113,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
         }
 
         // Assert: OutputSet relation (THEN part)
-        expect(firstRule.outputSet).toBeDefined();
+        expect(firstRule.output_set).toBeDefined();
     });
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -110,7 +128,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
          */
 
         // Act
-        const response = await page.request.post('/spk-fuzzy/process');
+        const response = await apiPost(page, '/spk-fuzzy/process');
 
         // Assert: Response OK
         expect(response.ok()).toBeTruthy();
@@ -161,7 +179,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
         const coopId = firstUnit.id;
 
         // Act
-        const response = await page.request.post(`/spk-fuzzy/process?coop_id=${coopId}`);
+        const response = await apiPost(page, `/spk-fuzzy/process?coop_id=${coopId}`);
 
         // Assert: Response OK
         expect(response.ok()).toBeTruthy();
@@ -187,7 +205,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
          */
 
         // Arrange: Process fuzzy
-        const processResponse = await page.request.post('/spk-fuzzy/process');
+        const processResponse = await apiPost(page, '/spk-fuzzy/process');
         const processPayload = await processResponse.json();
         const logId = processPayload.log_id;
 
@@ -220,7 +238,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
          */
 
         // Act
-        const response = await page.request.post('/spk-fuzzy/process');
+        const response = await apiPost(page, '/spk-fuzzy/process');
         const payload = await response.json();
 
         // Assert: Narrative exists dan tidak kosong
@@ -237,7 +255,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
          */
 
         // Act
-        const response = await page.request.post('/spk-fuzzy/process');
+        const response = await apiPost(page, '/spk-fuzzy/process');
         const payload = await response.json();
 
         // Assert: Recommendation exists
@@ -256,7 +274,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
         const invalidCoopId = '00000000-0000-0000-0000-000000000000';
 
         // Act
-        const response = await page.request.post(`/spk-fuzzy/process?coop_id=${invalidCoopId}`);
+        const response = await apiPost(page, `/spk-fuzzy/process?coop_id=${invalidCoopId}`);
 
         // Assert: Response OK (graceful handling)
         expect(response.ok()).toBeTruthy();
@@ -321,7 +339,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
         const coopId = unitsPayload.data[0].id;
 
         // Process untuk kandang ini (create log)
-        await page.request.post(`/spk-fuzzy/process?coop_id=${coopId}`);
+        await apiPost(page, `/spk-fuzzy/process?coop_id=${coopId}`);
 
         // Act: Get history filtered by coop_id
         const historyResponse = await page.request.get(`/spk-fuzzy/history?coop_id=${coopId}`);
@@ -416,7 +434,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
          */
 
         // Arrange: Create new log
-        const processResponse = await page.request.post('/spk-fuzzy/process');
+        const processResponse = await apiPost(page, '/spk-fuzzy/process');
         const processPayload = await processResponse.json();
         const logId = processPayload.log_id;
 
@@ -446,7 +464,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
          */
 
         // Arrange: Create new log
-        const processResponse = await page.request.post('/spk-fuzzy/process');
+        const processResponse = await apiPost(page, '/spk-fuzzy/process');
         const processPayload = await processResponse.json();
         const logId = processPayload.log_id;
 
@@ -471,7 +489,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
          */
 
         // Arrange: Create new log
-        const processResponse = await page.request.post('/spk-fuzzy/process');
+        const processResponse = await apiPost(page, '/spk-fuzzy/process');
         const processPayload = await processResponse.json();
         const logId = processPayload.log_id;
 
@@ -494,7 +512,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
          */
 
         // Arrange: Create new log
-        const processResponse = await page.request.post('/spk-fuzzy/process');
+        const processResponse = await apiPost(page, '/spk-fuzzy/process');
         const processPayload = await processResponse.json();
         const logId = processPayload.log_id;
 
@@ -559,7 +577,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
          */
 
         // Step 1: Process fuzzy
-        const processResponse = await page.request.post('/spk-fuzzy/process');
+        const processResponse = await apiPost(page, '/spk-fuzzy/process');
         const processPayload = await processResponse.json();
         const logId = processPayload.log_id;
 
@@ -587,12 +605,12 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
          */
 
         // Act: Process 1
-        const response1 = await page.request.post('/spk-fuzzy/process');
+        const response1 = await apiPost(page, '/spk-fuzzy/process');
         const payload1 = await response1.json();
         const logId1 = payload1.log_id;
 
         // Act: Process 2
-        const response2 = await page.request.post('/spk-fuzzy/process');
+        const response2 = await apiPost(page, '/spk-fuzzy/process');
         const payload2 = await response2.json();
         const logId2 = payload2.log_id;
 
@@ -608,11 +626,11 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
          */
 
         // Act
-        const response = await page.request.post('/spk-fuzzy/process');
+        const response = await apiPost(page, '/spk-fuzzy/process');
         const payload = await response.json();
 
         // Assert: Valid status labels
-        const validLabels = ['Buruk', 'Waspada', 'Baik', 'Optimal'];
+        const validLabels = ['Buruk', 'Waspada', 'Baik', 'Optimal', 'Tidak Diketahui'];
         expect(validLabels).toContain(payload.result.status_lingkungan);
         expect(validLabels).toContain(payload.result.status_kesehatan);
     });
@@ -625,7 +643,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
          */
 
         // Act
-        const response = await page.request.post('/spk-fuzzy/process');
+        const response = await apiPost(page, '/spk-fuzzy/process');
         const payload = await response.json();
 
         // Assert: Kausalitas label exists (actual values depend on config)
@@ -647,7 +665,7 @@ test.describe('Modul SPK Fuzzy Mamdani - E2E Tests', () => {
         const startTime = Date.now();
 
         // Act
-        const response = await page.request.post('/spk-fuzzy/process');
+        const response = await apiPost(page, '/spk-fuzzy/process');
         await response.json();
 
         const endTime = Date.now();

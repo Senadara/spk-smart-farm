@@ -37,46 +37,12 @@ class AHPService
         $matrix = $this->buildComparisonMatrix($userId, $parameters);
 
         // 1. Column sums
-        $colSums = array_fill(0, $n, 0);
-        for ($i = 0; $i < $n; $i++) {
-            for ($j = 0; $j < $n; $j++) {
-                $colSums[$j] += $matrix[$i][$j];
-            }
-        }
-
-        // 2. Normalize matrix & find Eigen Vector (weights)
-        $weights = array_fill(0, $n, 0);
-        for ($i = 0; $i < $n; $i++) {
-            $rowSum = 0;
-            for ($j = 0; $j < $n; $j++) {
-                // Handle division by zero just in case
-                $normalized = $colSums[$j] > 0 ? $matrix[$i][$j] / $colSums[$j] : 0;
-                $rowSum += $normalized;
-            }
-            $weights[$i] = $rowSum / $n;
-        }
-
-        // 3. Consistency Index (CI) and Ratio (CR)
-        $wsv = array_fill(0, $n, 0);
-        for ($i = 0; $i < $n; $i++) {
-            for ($j = 0; $j < $n; $j++) {
-                $wsv[$i] += $matrix[$i][$j] * $weights[$j];
-            }
-        }
-
-        $lamdaMax = 0;
-        for ($i = 0; $i < $n; $i++) {
-            if ($weights[$i] > 0) {
-                $lamdaMax += $wsv[$i] / $weights[$i];
-            }
-        }
-        $lamdaMax = $lamdaMax / $n;
-
-        $ci = ($lamdaMax - $n) / ($n - 1);
-        $ri = $this->riTable[$n] ?? 1.49;
-
-        $cr = $ri == 0 ? 0 : $ci / $ri;
-        $isValid = $cr <= 0.1;
+       $result   = $this->computeWeights($matrix);
+$weights  = $result['weights'];
+$ci       = $result['ci'];
+$cr       = $result['cr'];
+$lamdaMax = $result['lambda_max'];
+$isValid  = $result['is_valid'];
 
         // 4. Save weights to DB
         $weightsSnapshot = [];
@@ -114,6 +80,60 @@ class AHPService
             'n' => $n,
         ];
     }
+
+    public function computeWeights(array $matrix): array
+{
+    $n = count($matrix);
+
+    // 1. Column sums
+    $colSums = array_fill(0, $n, 0);
+    for ($i = 0; $i < $n; $i++) {
+        for ($j = 0; $j < $n; $j++) {
+            $colSums[$j] += $matrix[$i][$j];
+        }
+    }
+
+    // 2. Normalize matrix & find Eigen Vector (weights)
+    $weights = array_fill(0, $n, 0);
+    for ($i = 0; $i < $n; $i++) {
+        $rowSum = 0;
+        for ($j = 0; $j < $n; $j++) {
+            $normalized = $colSums[$j] > 0 ? $matrix[$i][$j] / $colSums[$j] : 0;
+            $rowSum += $normalized;
+        }
+        $weights[$i] = $rowSum / $n;
+    }
+
+    // 3. Consistency Index (CI) and Ratio (CR)
+    $wsv = array_fill(0, $n, 0);
+    for ($i = 0; $i < $n; $i++) {
+        for ($j = 0; $j < $n; $j++) {
+            $wsv[$i] += $matrix[$i][$j] * $weights[$j];
+        }
+    }
+
+    $lamdaMax = 0;
+    for ($i = 0; $i < $n; $i++) {
+        if ($weights[$i] > 0) {
+            $lamdaMax += $wsv[$i] / $weights[$i];
+        }
+    }
+    $lamdaMax = $lamdaMax / $n;
+
+    $ci = ($lamdaMax - $n) / ($n - 1);
+    $ri = $this->riTable[$n] ?? 1.49;
+    $cr = $ri == 0 ? 0 : $ci / $ri;
+    $isValid = $cr <= 0.1;
+
+    return [
+        'weights'    => $weights,
+        'lambda_max' => $lamdaMax,
+        'ci'         => $ci,
+        'cr'         => $cr,
+        'is_valid'   => $isValid,
+        'n'          => $n,
+    ];
+}
 
     private function buildComparisonMatrix($userId, $parameters)
     {

@@ -17,16 +17,12 @@ test.describe('Modul Supplier Recommendations UI - E2E Tests', () => {
 
      test.setTimeout(60000);
 
-     test.beforeEach(async ({ page }) => {
-          // Block external assets
-          await page.route('**/:5173/**', route => route.abort());
-          await page.route(/.*:5173.*/, route => route.abort());
+      test.beforeEach(async ({ page }) => {
+           authPage = new AuthPage(page);
 
-          authPage = new AuthPage(page);
-
-          // Login as pjawab (authenticated user)
-          await authPage.loginAndWaitForDashboard('pjawab@email.com', 'Password123.');
-     });
+           // Login as pjawab (authenticated user)
+           await authPage.loginAndWaitForDashboard('pjawab@email.com', 'Password123.');
+      });
 
      // ═══════════════════════════════════════════════════════════════
      // SUPPLIER INDEX (Katalog) - /spk-suppliers

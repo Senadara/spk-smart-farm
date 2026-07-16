@@ -50,27 +50,24 @@ export class InventoryPage {
         this.inventoryHeading = page.locator('h1').filter({ hasText: /Manajemen Inventaris|Inventory/i });
 
         // ─── KPI Cards ─────────────────────────────────────────
-        // KPI cards are rendered as x-peternakan.kpi-card components in a grid
-        this.kpiCards = page.locator('[class*="grid"][class*="grid-cols"]').first().locator('[class*="border"][class*="rounded"]').filter({ hasText: /Total|Low|Critical|Days/i });
-        // Get first grid container which has the KPI cards (grid grid-cols-2 lg:grid-cols-4)
+        // KPI cards are rendered as x-peternakan.kpi-card components  
         const kpiGridContainer = page.locator('div.grid[class*="grid-cols"]').first();
-        this.totalInventoryCard = kpiGridContainer.locator('div').filter({ hasText: /Total Inventory Items/ }).first();
-        this.lowStockCard = kpiGridContainer.locator('div').filter({ hasText: /Low Stock Items/ }).first();
+        this.totalInventoryCard = kpiGridContainer.locator('div').filter({ hasText: /Total Item/ }).first();
+        this.lowStockCard = kpiGridContainer.locator('div').filter({ hasText: /Low Stock/ }).first();
         this.criticalStockCard = kpiGridContainer.locator('div').filter({ hasText: /Critical Stock/ }).first();
-        this.avgDaysRemainingCard = kpiGridContainer.locator('div').filter({ hasText: /Avg\. Days Remaining/ }).first();
+        this.avgDaysRemainingCard = kpiGridContainer.locator('div').filter({ hasText: /Avg\. Sisa Hari/i }).first();
+        this.kpiCards = kpiGridContainer.locator('[class*="border"][class*="rounded"]');
 
         // ─── Restock Recommendations (AHP-SAW Card) ────────────
-        // This is NOT a table - it's a card-based layout with "Smart Restock AI" heading
-        this.restockHeading = page.locator('h3').filter({ hasText: /Smart Restock AI/i });
-        // The restock container is a specific card div with emerald-100 border
-        this.restockContainer = page.locator('div[class*="lg:col-span-1"][class*="border-emerald-100"][class*="rounded-xl"]').first();
-        // Restock items are shown as cards in a scrollable container with class "custom-scrollbar"
-        this.restockCardItems = this.restockContainer.locator('[class*="border"][class*="rounded-lg"][class*="p-3"]').filter({ hasText: /Priority|Critical|Warning|Safe/i });
+        this.restockHeading = page.locator('h3').filter({ hasText: /Smart Restock/i });
+        // The restock panel is inside a border-emerald div with "SPK" badge
+        this.restockContainer = page.locator('.border-emerald-100').or(page.locator('[class*="border-emerald"]')).first();
+        // Restock cards with priority badges
+        this.restockCardItems = this.restockContainer.locator('[class*="rounded"]').filter({ hasText: /Critical|Warning|Safe/i });
 
         // ─── Inventory Detail Table ────────────────────────────
-        // Table heading: "Detail Inventaris"
-        this.inventoryTableHeading = page.locator('h3').filter({ hasText: /Detail Inventaris/i });
-        this.inventoryTable = page.locator('table').filter({ hasText: /Item & Kategori|Stok|Est\. Habis|Status/i });
+        this.inventoryTableHeading = page.locator('h3').filter({ hasText: /Inventaris/i }).first();
+        this.inventoryTable = page.locator('table').filter({ hasText: /Status/i }).first();
         // Rows are in tbody with class "divide-y divide-gray-50"
         this.inventoryRows = this.inventoryTable.locator('tbody.divide-y > tr:visible');
 

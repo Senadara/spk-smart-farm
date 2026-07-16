@@ -8,9 +8,6 @@ test.describe('Modul SPK Analysis Dashboard - E2E Tests', () => {
 
     test.beforeEach(async ({ page }) => {
         // Arrange
-        await page.route('**/:5173/**', route => route.abort());
-        await page.route(/.*:5173.*/, route => route.abort());
-
         spkPage = new SpkPage(page);
     });
 

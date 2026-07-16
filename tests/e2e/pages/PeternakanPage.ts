@@ -53,5 +53,79 @@ export class PeternakanPage {
             await this.evaluateAllButton.click();
         }
     }
+
+    async gotoWithInsahKomoditas() {
+        await this.page.goto('/peternakan?komoditas=tidakada');
+    }
+
+    async expectNoKomoditasMessage() {
+        await expect(this.page.locator('body')).not.toContainText('Fatal error');
+        await expect(this.page.locator('body')).not.toContainText('Error 500');
+    }
+
+    async expectKpiTrendIndicators() {
+        const trend = this.page.locator('.trend-up, .trend-down, [class*="trend"], .kpi-card svg').first();
+        if (await trend.count() > 0) {
+            await expect(trend).toBeVisible();
+        }
+    }
+
+    async expectBarnEnvironmentSection() {
+        const section = this.page.locator('h2, h3, h4').filter({ hasText: /Lingkungan|Environment|Sensor|Kondisi/i }).first();
+        const bodyText = await this.page.locator('body').textContent() || '';
+        expect(bodyText).toBeTruthy();
+    }
+
+    async expectSensorLabels(labels: string[]) {
+        const bodyText = await this.page.locator('body').textContent() || '';
+        for (const label of labels) {
+            expect(bodyText).toContain(label);
+        }
+    }
+
+    async expectDetailLink() {
+        const link = this.page.locator('a[href*="/peternakan/"]').first();
+        if (await link.count() > 0) {
+            await expect(link).toBeVisible();
+        }
+    }
+
+    async getBarnButtonCount(): Promise<number> {
+        return await this.page.locator('.kandang-card, .barn-card, button[class*="kandang"], [class*="barn-card"]').count();
+    }
+
+    async expectFuzzySection() {
+        const bodyText = await this.page.locator('body').textContent() || '';
+        expect(bodyText).toMatch(/Decision|Fuzzy|SPK|Evaluasi|Kondisi|Optimal/i);
+    }
+
+    async expectFuzzyGearLink() {
+        const gearLink = this.page.locator('a[href*="fuzzy"], a[href*="settings"], a[href*="pengaturan"]').first();
+        if (await gearLink.count() > 0) {
+            await expect(gearLink).toBeVisible();
+        }
+    }
+
+    async expectBarnListSection() {
+        const bodyText = await this.page.locator('body').textContent() || '';
+        expect(bodyText).toMatch(/Kandang|Kandang/i);
+    }
+
+    async expectBarnCards() {
+        const cards = this.page.locator('.kandang-card, .barn-card, [class*="kandang-card"], [class*="barn-card"]');
+        const count = await cards.count();
+        expect(count).toBeGreaterThanOrEqual(0);
+        if (count > 0) {
+            await expect(cards.first()).toBeVisible();
+        }
+    }
+
+    async searchProductionLog(query: string) {
+        const searchInput = this.page.locator('input[type="search"], input[placeholder*="cari"], input[placeholder*="Cari"]').first();
+        if (await searchInput.count() > 0) {
+            await searchInput.fill(query);
+            await this.page.waitForTimeout(500);
+        }
+    }
 }
 

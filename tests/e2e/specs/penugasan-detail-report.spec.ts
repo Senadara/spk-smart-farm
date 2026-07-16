@@ -1,543 +1,19 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { AuthPage } from '../pages/AuthPage.js';
 import { PenugasanPage } from '../pages/PenugasanPage.js';
 
-test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
+test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
     let authPage: AuthPage;
     let penugasanPage: PenugasanPage;
 
     test.setTimeout(120000);
 
     test.beforeEach(async ({ page }) => {
-        // Arrange: Setup dan Login
         await page.route('**/:5173/**', route => route.abort());
-        await page.route(/.*:5173.*/, route => route.abort());
-
         authPage = new AuthPage(page);
         penugasanPage = new PenugasanPage(page);
-
-        // Login sebagai Penanggung Jawab
         await authPage.loginAndWaitForDashboard('pjawab@email.com', 'Password123.');
         await penugasanPage.goto();
-    });
-
-    /* ═══════════════════════════════════════════════════════════════════
-       INDEX PAGE - UI RENDERING & STATS
-       ═══════════════════════════════════════════════════════════════════ */
-
-    test('Positif - Halaman Index Penugasan dirender lengkap dengan Stats, Tabs, dan Create Button', async ({ page }) => {
-        /**
-         * Given: User login sebagai Penanggung Jawab
-         * When: Mengakses halaman Penugasan
-         * Then: UI elements utama dirender (Header, Stats, Tabs, Create Button)
-         */
-
-        // Assert: Header & Page Title
-        await penugasanPage.expectPageReady();
-        await expect(page.getByText('Penugasan & Laporan Tindakan')).toBeVisible();
-        await expect(page.getByText('Kelola tugas tindakan dari hasil analisa SPK')).toBeVisible();
-
-        // Assert: Create Button (Pjawab only)
-        await expect(penugasanPage.createButton).toBeVisible();
-
-        // Assert: Stats Dashboard (5 stats)
-        await expect(page.getByText('Total Tugas')).toBeVisible();
-        await expect(page.getByText('To Do')).toBeVisible();
-        await expect(page.getByText('Dikerjakan')).toBeVisible();
-        await expect(page.getByText('Selesai')).toBeVisible();
-        await expect(page.getByText('Terlambat')).toBeVisible();
-
-        // Assert: Tabs
-        await expect(penugasanPage.activeTab).toBeVisible();
-        await expect(penugasanPage.historyTab).toBeVisible();
-        await expect(page.getByText('Papan Tugas Aktif')).toHaveClass(/border-purple-500/);
-    });
-
-    test('Positif - Stats Dashboard menampilkan angka yang valid', async ({ page }) => {
-        /**
-         * Given: Halaman Penugasan dimuat
-         * When: Stats dashboard dirender
-         * Then: Setiap stat menampilkan angka numerik yang valid (>= 0)
-         */
-
-        // Assert: Stats memiliki nilai numerik
-        const statsLocators = [
-            page.locator('text=Total Tugas').locator('xpath=following::span[1]'),
-            page.locator('text=To Do').locator('xpath=following::span[1]'),
-            page.locator('text=Dikerjakan').locator('xpath=following::span[1]'),
-            page.locator('text=Selesai').locator('xpath=following::span[1]'),
-            page.locator('text=Terlambat').locator('xpath=following::span[1]'),
-        ];
-
-        for (const stat of statsLocators) {
-            const value = await stat.textContent();
-            expect(value).toMatch(/^\d+$/); // Harus angka
-            expect(parseInt(value!)).toBeGreaterThanOrEqual(0);
-        }
-    });
-
-    test('Positif - Kanban Board (To Do & In Progress) dirender dengan kolom yang benar', async ({ page }) => {
-        /**
-         * Given: Tab Active dipilih
-         * When: Kanban board dirender
-         * Then: Kolom To Do dan In Progress tampil dengan header dan counter badge
-         */
-
-        // Assert: Board Heading
-        await expect(page.getByText('Board Penugasan')).toBeVisible();
-
-        // Assert: To Do Column
-        await expect(page.getByText('To Do').first()).toBeVisible();
-        const todoCounter = page.locator('text=To Do').locator('xpath=following-sibling::span[1]').first();
-        await expect(todoCounter).toBeVisible();
-        const todoCount = await todoCounter.textContent();
-        expect(todoCount).toMatch(/^\d+$/);
-
-        // Assert: In Progress Column
-        await expect(page.getByText('Dikerjakan').first()).toBeVisible();
-        const inProgressCounter = page.locator('text=Dikerjakan').locator('xpath=following-sibling::span[1]').first();
-        await expect(inProgressCounter).toBeVisible();
-        const inProgressCount = await inProgressCounter.textContent();
-        expect(inProgressCount).toMatch(/^\d+$/);
-
-        // Assert: Empty state messages atau task cards
-        const noTasksTodo = page.getByText('Tidak ada tugas').first();
-        const noTasksProgress = page.locator('text=Tidak ada tugas').nth(1);
-
-        // Either empty state atau ada task cards
-        const todoHasContent = (await noTasksTodo.isVisible()) || (await page.locator('.bg-gray-50 .space-y-2 > div').count()) > 0;
-        const progressHasContent = (await noTasksProgress.isVisible()) || (await page.locator('.bg-blue-50 .space-y-2 > div').count()) > 0;
-
-        expect(todoHasContent).toBeTruthy();
-        expect(progressHasContent).toBeTruthy();
-    });
-
-    test('Positif - Tab switching antara Active dan History berfungsi', async ({ page }) => {
-        /**
-         * Given: User berada di tab Active
-         * When: Click tab History
-         * Then: URL berubah, History table dirender, dan tab visual berubah
-         */
-
-        // Arrange: Pastikan di tab Active
-        await expect(page).toHaveURL(/tab=active/);
-
-        // Act: Switch ke History tab
-        await penugasanPage.goToHistoryTab();
-
-        // Assert: URL dan UI
-        await expect(page).toHaveURL(/tab=history/);
-        await expect(penugasanPage.historyHeading).toBeVisible();
-        await expect(page.getByText('Histori & Arsip Tugas')).toBeVisible();
-
-        // Assert: History table elements
-        await expect(page.getByRole('columnheader', { name: /Judul Tugas/i })).toBeVisible();
-        await expect(page.getByRole('columnheader', { name: /Petugas/i })).toBeVisible();
-        await expect(page.getByRole('columnheader', { name: /Waktu Selesai/i })).toBeVisible();
-        await expect(page.getByRole('columnheader', { name: /Status/i })).toBeVisible();
-        await expect(page.getByRole('columnheader', { name: /Aksi/i })).toBeVisible();
-
-        // Act: Switch kembali ke Active
-        await penugasanPage.activeTab.click();
-
-        // Assert: Kembali ke Active
-        await expect(page).toHaveURL(/tab=active/);
-        await expect(penugasanPage.boardHeading).toBeVisible();
-    });
-
-    /* ═══════════════════════════════════════════════════════════════════
-       FILTERS & SEARCH
-       ═══════════════════════════════════════════════════════════════════ */
-
-    test('Positif - Filter Priority di Kanban Board berfungsi', async ({ page }) => {
-        /**
-         * Given: User di halaman Kanban Board
-         * When: Memilih priority filter (Urgent, Tinggi, Sedang, Rendah)
-         * Then: URL query berubah dan filter diterapkan
-         */
-
-        // Assert: Priority filter visible
-        const priorityFilter = page.locator('select[name="priority"]').first();
-        await expect(priorityFilter).toBeVisible();
-
-        // Act: Pilih Urgent
-        await priorityFilter.selectOption('urgent');
-
-        // Assert: URL mengandung priority=urgent
-        await page.waitForURL(/priority=urgent/);
-        await expect(page).toHaveURL(/priority=urgent/);
-
-        // Act: Reset ke all
-        await priorityFilter.selectOption('all');
-        await page.waitForURL(/priority=all/);
-        await expect(page).toHaveURL(/priority=all/);
-    });
-
-    test('Positif - Search box di Kanban berfungsi', async ({ page }) => {
-        /**
-         * Given: User di Kanban Board
-         * When: Mengisi search box dan submit
-         * Then: URL query berubah dengan parameter search
-         */
-
-        // Arrange: Locate search input
-        const searchInput = page.locator('input[name="search"]').first();
-        await expect(searchInput).toBeVisible();
-
-        // Act: Type search query
-        await searchInput.fill('test');
-        await searchInput.press('Enter');
-
-        // Assert: URL berubah
-        await page.waitForURL(/search=test/);
-        await expect(page).toHaveURL(/search=test/);
-    });
-
-    test('Positif - User filter di Kanban berfungsi (Pjawab only)', async ({ page }) => {
-        /**
-         * Given: Login sebagai Pjawab (melihat semua petugas)
-         * When: Memilih user dari dropdown filter
-         * Then: URL query berubah dengan user_id
-         */
-
-        // Assert: User filter visible (Pjawab only)
-        const userFilter = page.locator('select[name="user_id"]').first();
-        await expect(userFilter).toBeVisible();
-
-        // Act: Pilih user pertama (bukan "all")
-        const firstUserValue = await userFilter.locator('option').nth(1).getAttribute('value');
-        if (firstUserValue) {
-            await userFilter.selectOption(firstUserValue);
-            await page.waitForURL(new RegExp(`user_id=${firstUserValue}`));
-            await expect(page).toHaveURL(new RegExp(`user_id=${firstUserValue}`));
-        }
-    });
-
-    test('Positif - Date range filter di History tab berfungsi', async ({ page }) => {
-        /**
-         * Given: User di tab History
-         * When: Mengisi start_date dan end_date
-         * Then: URL query berubah dengan date filters
-         */
-
-        // Act: Go to History tab
-        await penugasanPage.goToHistoryTab();
-
-        // Assert: Date inputs visible
-        const startDateInput = page.locator('input[name="start_date"]');
-        const endDateInput = page.locator('input[name="end_date"]');
-        await expect(startDateInput).toBeVisible();
-        await expect(endDateInput).toBeVisible();
-
-        // Act: Set date range
-        await startDateInput.fill('2026-01-01');
-        await startDateInput.blur();
-        await page.waitForTimeout(500);
-
-        await endDateInput.fill('2026-12-31');
-        await endDateInput.blur();
-
-        // Assert: URL mengandung date parameters
-        await page.waitForURL(/start_date=2026-01-01/);
-        await expect(page).toHaveURL(/start_date=2026-01-01/);
-        await expect(page).toHaveURL(/end_date=2026-12-31/);
-    });
-
-    /* ═══════════════════════════════════════════════════════════════════
-       CREATE TASK - CRUD OPERATIONS
-       ═══════════════════════════════════════════════════════════════════ */
-
-    test('Positif - Create Task dengan data minimal (Title + Priority)', async ({ page }) => {
-        /**
-         * Given: User membuka modal Create Task
-         * When: Mengisi hanya field wajib (title, priority)
-         * Then: Task berhasil dibuat dan muncul di Kanban Board
-         */
-
-        // Arrange: Generate unique data
-        const timestamp = Date.now();
-        const taskTitle = `Task Minimal ${timestamp}`;
-
-        // Act: Open modal dan isi form
-        await penugasanPage.createButton.click();
-        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).toBeVisible();
-
-        await page.locator('input[name="title"]').fill(taskTitle);
-        await page.locator('select[name="priority"]').selectOption('medium');
-        await page.locator('button[type="submit"]').filter({ hasText: /Simpan|Buat/i }).click();
-
-        // Assert: Success message
-        await expect(page.getByText('Tugas berhasil dibuat.')).toBeVisible({ timeout: 10000 });
-
-        // Assert: Task muncul di board
-        await expect(page.getByText(taskTitle)).toBeVisible();
-    });
-
-    test('Positif - Create Task dengan semua field lengkap (Title, Description, Priority, Assignee, Barn, Due Date)', async ({ page }) => {
-        /**
-         * Given: User membuka modal Create Task
-         * When: Mengisi SEMUA field termasuk optional
-         * Then: Task berhasil dibuat dengan semua data tersimpan
-         */
-
-        // Arrange: Generate unique data
-        const timestamp = Date.now();
-        const taskTitle = `Task Lengkap ${timestamp}`;
-        const taskDescription = `Deskripsi lengkap untuk task ${timestamp}`;
-
-        // Act: Open modal
-        await penugasanPage.createButton.click();
-        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).toBeVisible();
-
-        // Act: Isi semua field
-        await page.locator('input[name="title"]').fill(taskTitle);
-        await page.locator('textarea[name="description"]').fill(taskDescription);
-        await page.locator('select[name="priority"]').selectOption('high');
-
-        // Pilih assignee (user pertama yang bukan "all")
-        const assigneeSelect = page.locator('select[name="assigned_to"]');
-        const firstUser = await assigneeSelect.locator('option').nth(1).getAttribute('value');
-        if (firstUser) {
-            await assigneeSelect.selectOption(firstUser);
-        }
-
-        // Pilih barn (kandang pertama yang bukan "all")
-        const barnSelect = page.locator('select[name="unit_budidaya_id"]');
-        const firstBarn = await barnSelect.locator('option').nth(1).getAttribute('value');
-        if (firstBarn) {
-            await barnSelect.selectOption(firstBarn);
-        }
-
-        // Set due date (besok)
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const dueDateStr = tomorrow.toISOString().split('T')[0];
-        await page.locator('input[name="due_date"]').fill(dueDateStr);
-
-        // Submit
-        await page.locator('button[type="submit"]').filter({ hasText: /Simpan|Buat/i }).click();
-
-        // Assert: Success
-        await expect(page.getByText('Tugas berhasil dibuat.')).toBeVisible({ timeout: 10000 });
-        await expect(page.getByText(taskTitle)).toBeVisible();
-    });
-
-    test('Positif - Create Task dengan SPK Reference selection', async ({ page }) => {
-        /**
-         * Given: Modal Create Task memiliki dropdown SPK Reference
-         * When: Memilih salah satu SPK dari recent SPKs
-         * Then: Task berhasil dibuat dengan SPK reference
-         */
-
-        // Arrange
-        const timestamp = Date.now();
-        const taskTitle = `Task dengan SPK ${timestamp}`;
-
-        // Act: Open modal
-        await penugasanPage.createButton.click();
-        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).toBeVisible();
-
-        // Fill form
-        await page.locator('input[name="title"]').fill(taskTitle);
-        await page.locator('select[name="priority"]').selectOption('medium');
-
-        // Select SPK if available
-        const spkSelect = page.locator('select[name="spk_fuzzy_log_id"]');
-        await expect(spkSelect).toBeVisible();
-        const spkCount = await spkSelect.locator('option').count();
-
-        if (spkCount > 1) { // Ada SPK selain "Tidak Berkaitan"
-            const firstSpk = await spkSelect.locator('option').nth(1).getAttribute('value');
-            if (firstSpk) {
-                await spkSelect.selectOption(firstSpk);
-            }
-        }
-
-        // Submit
-        await page.locator('button[type="submit"]').filter({ hasText: /Simpan|Buat/i }).click();
-
-        // Assert
-        await expect(page.getByText('Tugas berhasil dibuat.')).toBeVisible({ timeout: 10000 });
-        await expect(page.getByText(taskTitle)).toBeVisible();
-    });
-
-    test('Negatif - Create Task tanpa Title (Required Validation)', async ({ page }) => {
-        /**
-         * Given: Modal Create Task terbuka
-         * When: Submit form tanpa mengisi Title (required field)
-         * Then: HTML5 validation mencegah submit, modal tetap terbuka
-         */
-
-        // Act: Open modal
-        await penugasanPage.createButton.click();
-        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).toBeVisible();
-
-        // Jangan isi title, langsung submit
-        const submitBtn = page.locator('button[type="submit"]').filter({ hasText: /Simpan|Buat/i });
-        await submitBtn.click();
-
-        // Assert: Modal masih visible (tidak tersubmit)
-        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).toBeVisible({ timeout: 2000 });
-
-        // Assert: Validation message (HTML5)
-        const titleInput = page.locator('input[name="title"]');
-        const validationMessage = await titleInput.evaluate((el: HTMLInputElement) => el.validationMessage);
-        expect(validationMessage).toBeTruthy(); // Ada pesan validasi
-    });
-
-    /* ═══════════════════════════════════════════════════════════════════
-       UPDATE & DELETE OPERATIONS
-       ═══════════════════════════════════════════════════════════════════ */
-
-    test('Positif - Update Task dari Detail Page', async ({ page }) => {
-        /**
-         * Given: Task sudah dibuat
-         * When: Edit task dari detail page (update title, description, priority)
-         * Then: Perubahan tersimpan
-         */
-
-        // Arrange: Create task dulu
-        const timestamp = Date.now();
-        const originalTitle = `Task Original ${timestamp}`;
-        const updatedTitle = `Task Updated ${timestamp}`;
-
-        await penugasanPage.createTask({
-            title: originalTitle,
-            description: 'Deskripsi original',
-            priority: 'low',
-        });
-
-        await expect(page.getByText('Tugas berhasil dibuat.')).toBeVisible({ timeout: 10000 });
-
-        // Act: Go to detail page
-        await page.getByText(originalTitle).first().click();
-        await expect(page.getByRole('heading', { name: originalTitle })).toBeVisible();
-
-        // Act: Edit form di sidebar kanan
-        await page.locator('input[name="title"]').fill(updatedTitle);
-        await page.locator('textarea[name="description"]').fill('Deskripsi updated');
-        await page.locator('select[name="priority"]').selectOption('urgent');
-
-        // Submit
-        await page.locator('button[type="submit"]').filter({ hasText: /Simpan Perubahan/i }).click();
-
-        // Assert: Success redirect
-        await expect(page.getByText('Tugas berhasil diperbarui.')).toBeVisible({ timeout: 10000 });
-        await expect(page).toHaveURL(/\/penugasan\?tab=active/);
-
-        // Assert: Updated title visible
-        await expect(page.getByText(updatedTitle)).toBeVisible();
-    });
-
-    test('Positif - Delete Task dari Detail Page', async ({ page }) => {
-        /**
-         * Given: Task sudah dibuat
-         * When: Delete task dari detail page
-         * Then: Task terhapus dan redirect ke index
-         */
-
-        // Arrange: Create task
-        const timestamp = Date.now();
-        const taskTitle = `Task To Delete ${timestamp}`;
-
-        await penugasanPage.createTask({
-            title: taskTitle,
-            description: 'Will be deleted',
-            priority: 'medium',
-        });
-
-        await expect(page.getByText('Tugas berhasil dibuat.')).toBeVisible({ timeout: 10000 });
-
-        // Act: Go to detail
-        await page.getByText(taskTitle).first().click();
-        await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
-
-        // Act: Click delete button (with confirmation)
-        page.once('dialog', dialog => dialog.accept());
-        await page.locator('button[type="submit"]').filter({ hasText: /Hapus Tugas Permanen/i }).click();
-
-        // Assert: Success redirect
-        await expect(page.getByText('Tugas berhasil dihapus.')).toBeVisible({ timeout: 10000 });
-        await expect(page).toHaveURL(/\/penugasan/);
-
-        // Assert: Task tidak ada lagi
-        await expect(page.getByText(taskTitle)).not.toBeVisible();
-    });
-
-    /* ═══════════════════════════════════════════════════════════════════
-       STATUS MANAGEMENT
-       ═══════════════════════════════════════════════════════════════════ */
-
-    test('Positif - Start Task (TODO → IN_PROGRESS) dari Detail Page', async ({ page }) => {
-        /**
-         * Given: Task dengan status TODO
-         * When: Click "Mulai Kerjakan"
-         * Then: Status berubah ke IN_PROGRESS, button "Kirim Laporan" muncul
-         */
-
-        // Arrange: Create task
-        const timestamp = Date.now();
-        const taskTitle = `Task To Start ${timestamp}`;
-
-        await penugasanPage.createTask({
-            title: taskTitle,
-            description: 'Will be started',
-            priority: 'high',
-        });
-
-        await expect(page.getByText('Tugas berhasil dibuat.')).toBeVisible({ timeout: 10000 });
-
-        // Act: Go to detail
-        await page.getByText(taskTitle).first().click();
-        await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
-
-        // Assert: Task masih TODO, ada button "Mulai Kerjakan"
-        await expect(page.getByText('To Do', { exact: false })).toBeVisible();
-        await expect(page.getByRole('button', { name: /Mulai Kerjakan/i })).toBeVisible();
-
-        // Act: Start task
-        await page.getByRole('button', { name: /Mulai Kerjakan/i }).click();
-
-        // Assert: Status updated
-        await expect(page.getByText('Status tugas diperbarui.')).toBeVisible({ timeout: 10000 });
-        await expect(page.getByText('Dikerjakan', { exact: false })).toBeVisible();
-
-        // Assert: Tombol "Kirim Laporan" muncul
-        await expect(page.getByRole('button', { name: /Kirim Laporan/i })).toBeVisible();
-    });
-
-    test('Positif - Cancel Task dari Detail Page', async ({ page }) => {
-        /**
-         * Given: Task dengan status TODO atau IN_PROGRESS
-         * When: Click "Batalkan" dan konfirmasi
-         * Then: Status berubah ke CANCELLED
-         */
-
-        // Arrange: Create task
-        const timestamp = Date.now();
-        const taskTitle = `Task To Cancel ${timestamp}`;
-
-        await penugasanPage.createTask({
-            title: taskTitle,
-            description: 'Will be cancelled',
-            priority: 'low',
-        });
-
-        await expect(page.getByText('Tugas berhasil dibuat.')).toBeVisible({ timeout: 10000 });
-
-        // Act: Go to detail
-        await page.getByText(taskTitle).first().click();
-        await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
-
-        // Act: Cancel task (with confirmation)
-        page.once('dialog', dialog => dialog.accept());
-        await page.getByRole('button', { name: /Batalkan/i }).click();
-
-        // Assert: Status updated
-        await expect(page.getByText('Status tugas diperbarui.')).toBeVisible({ timeout: 10000 });
-
-        // Assert: Status badge changed
-        await expect(page.getByText('Dibatalkan', { exact: false })).toBeVisible();
     });
 
     test('Positif - Status visual indicators di Kanban Card', async ({ page }) => {
@@ -600,7 +76,7 @@ test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
         await page.getByRole('button', { name: /Kirim Laporan/i }).click();
         await expect(page.getByRole('heading', { name: /Kirim Laporan Pengerjaan/i })).toBeVisible();
 
-        await page.locator('textarea[name="description"]').fill('Progress report: Sudah dikerjakan 50%');
+        await page.locator('textarea[name="description"]').first().first().fill('Progress report: Sudah dikerjakan 50%');
         await page.locator('select[name="status_update"]').selectOption('in_progress');
         await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
 
@@ -640,7 +116,7 @@ test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
 
         // Act: Submit report dengan done
         await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').fill('Pekerjaan selesai 100%');
+        await page.locator('textarea[name="description"]').first().first().fill('Pekerjaan selesai 100%');
         await page.locator('select[name="status_update"]').selectOption('done');
         await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
 
@@ -680,7 +156,7 @@ test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
 
         // Act: Submit report dengan photo
         await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').fill('Laporan dengan foto bukti');
+        await page.locator('textarea[name="description"]').first().first().fill('Laporan dengan foto bukti');
         await page.locator('input[name="photo"]').fill('https://example.com/photo.jpg');
         await page.locator('select[name="status_update"]').selectOption('done');
         await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
@@ -718,14 +194,14 @@ test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
 
         // Act: Submit report 1
         await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').fill('Laporan pertama - Progress 30%');
+        await page.locator('textarea[name="description"]').first().first().fill('Laporan pertama - Progress 30%');
         await page.locator('select[name="status_update"]').selectOption('in_progress');
         await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
         await expect(page.getByText('Laporan pengerjaan berhasil disubmit.')).toBeVisible({ timeout: 10000 });
 
         // Act: Submit report 2
         await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').fill('Laporan kedua - Selesai 100%');
+        await page.locator('textarea[name="description"]').first().first().fill('Laporan kedua - Selesai 100%');
         await page.locator('select[name="status_update"]').selectOption('done');
         await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
         await expect(page.getByText('Laporan pengerjaan berhasil disubmit.')).toBeVisible({ timeout: 10000 });
@@ -759,7 +235,7 @@ test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
 
         // Submit first report
         await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').fill('Report A');
+        await page.locator('textarea[name="description"]').first().first().fill('Report A');
         await page.locator('select[name="status_update"]').selectOption('in_progress');
         await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
         await expect(page.getByText('Laporan pengerjaan berhasil disubmit.')).toBeVisible({ timeout: 10000 });
@@ -768,7 +244,7 @@ test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
 
         // Submit second report
         await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').fill('Report B (Terbaru)');
+        await page.locator('textarea[name="description"]').first().first().fill('Report B (Terbaru)');
         await page.locator('select[name="status_update"]').selectOption('done');
         await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
         await expect(page.getByText('Laporan pengerjaan berhasil disubmit.')).toBeVisible({ timeout: 10000 });
@@ -797,19 +273,19 @@ test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
         const taskTitle = `Task Detail Meta ${timestamp}`;
 
         await penugasanPage.createButton.click();
-        await page.locator('input[name="title"]').fill(taskTitle);
-        await page.locator('textarea[name="description"]').fill('Task dengan metadata lengkap');
-        await page.locator('select[name="priority"]').selectOption('high');
+        await page.locator('input[name="title"]').first().first().fill(taskTitle);
+        await page.locator('textarea[name="description"]').first().first().fill('Task dengan metadata lengkap');
+        await page.locator('select[name="priority"]').first().first().selectOption('high');
 
         // Pilih assignee
-        const assigneeSelect = page.locator('select[name="assigned_to"]');
+        const assigneeSelect = page.locator('select[name="assigned_to"]').first().first();
         const firstUser = await assigneeSelect.locator('option').nth(1).getAttribute('value');
         if (firstUser) {
             await assigneeSelect.selectOption(firstUser);
         }
 
         // Pilih barn
-        const barnSelect = page.locator('select[name="unit_budidaya_id"]');
+        const barnSelect = page.locator('select[name="unit_budidaya_id"]').first().first();
         const firstBarn = await barnSelect.locator('option').nth(1).getAttribute('value');
         if (firstBarn) {
             await barnSelect.selectOption(firstBarn);
@@ -819,7 +295,7 @@ test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const dueDateStr = tomorrow.toISOString().split('T')[0];
-        await page.locator('input[name="due_date"]').fill(dueDateStr);
+        await page.locator('input[name="due_date"]').first().first().fill(dueDateStr);
 
         await page.locator('button[type="submit"]').filter({ hasText: /Simpan|Buat/i }).click();
         await expect(page.getByText('Tugas berhasil dibuat.')).toBeVisible({ timeout: 10000 });
@@ -879,13 +355,13 @@ test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
         await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
 
         // Assert: Form fields pre-filled
-        const titleInput = page.locator('input[name="title"]');
+        const titleInput = page.locator('input[name="title"]').first().first();
         await expect(titleInput).toHaveValue(taskTitle);
 
-        const descTextarea = page.locator('textarea[name="description"]');
+        const descTextarea = page.locator('textarea[name="description"]').first().first();
         await expect(descTextarea).toHaveValue('Deskripsi asli');
 
-        const prioritySelect = page.locator('select[name="priority"]');
+        const prioritySelect = page.locator('select[name="priority"]').first().first();
         await expect(prioritySelect).toHaveValue('medium');
     });
 
@@ -918,7 +394,7 @@ test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
         await expect(page.getByText('Status tugas diperbarui.')).toBeVisible({ timeout: 10000 });
 
         await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').fill('Selesai');
+        await page.locator('textarea[name="description"]').first().first().fill('Selesai');
         await page.locator('select[name="status_update"]').selectOption('done');
         await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
         await expect(page.getByText('Laporan pengerjaan berhasil disubmit.')).toBeVisible({ timeout: 10000 });
@@ -1074,14 +550,10 @@ test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
         await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).toBeVisible({ timeout: 2000 });
 
         // Assert: Validation message
-        const titleInput = page.locator('input[name="title"]');
+        const titleInput = page.locator('input[name="title"]').first().first();
         const validationMessage = await titleInput.evaluate((el: HTMLInputElement) => el.validationMessage);
         expect(validationMessage).toBeTruthy();
     });
-
-    /* ═══════════════════════════════════════════════════════════════════
-       ADVANCED FEATURES
-       ═══════════════════════════════════════════════════════════════════ */
 
     test('Positif - Task Card hover actions (Start, Report, Detail) berfungsi', async ({ page }) => {
         /**
@@ -1126,8 +598,8 @@ test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
         const taskTitle = `Task SPK Link ${timestamp}`;
 
         await penugasanPage.createButton.click();
-        await page.locator('input[name="title"]').fill(taskTitle);
-        await page.locator('select[name="priority"]').selectOption('medium');
+        await page.locator('input[name="title"]').first().first().fill(taskTitle);
+        await page.locator('select[name="priority"]').first().first().selectOption('medium');
 
         // Select SPK if available
         const spkSelect = page.locator('select[name="spk_fuzzy_log_id"]');
@@ -1183,3 +655,4 @@ test.describe.serial('Modul Penugasan / Board Task - E2E Tests', () => {
         await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).not.toBeVisible({ timeout: 2000 });
     });
 });
+

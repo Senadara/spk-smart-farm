@@ -7,10 +7,6 @@ test.describe('Modul Halaman Pengaturan (Setting) - E2E QA', () => {
 
     test.beforeEach(async ({ page }) => {
         // Arrange
-        // Blocker statis
-        await page.route('**/:5173/**', route => route.abort());
-        await page.route(/.*:5173.*/, route => route.abort());
-
         settingsPage = new SettingsPage(page);
 
         // Act

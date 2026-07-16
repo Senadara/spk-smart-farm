@@ -11,9 +11,6 @@ test.describe('Modul Data Master Operasional - E2E Tests', () => {
         page.setDefaultNavigationTimeout(120000);
         page.setDefaultTimeout(120000);
 
-        await page.route('**/:5173/**', route => route.abort());
-        await page.route(/.*:5173.*/, route => route.abort());
-
         dataMasterPage = new DataMasterPage(page);
         await dataMasterPage.goto();
     });
@@ -48,7 +45,7 @@ test.describe('Modul Data Master Operasional - E2E Tests', () => {
 
         // Assert: Description text
         await expect(page.locator('text=read-only')).toBeVisible();
-        await expect(page.locator('text=RFC')).toBeVisible();
+        await expect(page.locator('text=RFC').first()).toBeVisible();
     });
 
     test('Positif - Info banner (amber) menampilkan read-only warning dengan icon', async ({ page }) => {
@@ -63,7 +60,7 @@ test.describe('Modul Data Master Operasional - E2E Tests', () => {
         await expect(banner).toBeVisible();
 
         // Assert: Banner mentions Mobile RFC
-        await expect(page.locator('text=Mobile RFC')).toBeVisible();
+        await expect(page.locator('text=Mobile RFC').first()).toBeVisible();
 
         // Assert: Icon exists
         const icon = banner.locator('svg').first();

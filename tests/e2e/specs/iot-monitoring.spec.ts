@@ -7,9 +7,6 @@ test.describe('Modul IoT Monitoring - Filter & Data Display E2E', () => {
      test.setTimeout(90000);
 
      test.beforeEach(async ({ page }) => {
-          await page.route('**/:5173/**', route => route.abort());
-          await page.route(/.*:5173.*/, route => route.abort());
-
           iotPage = new IotPage(page);
      });
 

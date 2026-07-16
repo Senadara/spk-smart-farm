@@ -61,10 +61,21 @@ class CalculateHdp
                 ->sum('panen.jumlah');
         }
 
-        if ($populasi <= 0) {
-            return 0.0;
-        }
+       // SEBELUM
+if ($populasi <= 0) {
+    return 0.0;
+}
 
-        return round(($totalTelur / $populasi) * 100, 2);
+return round(($totalTelur / $populasi) * 100, 2);
+
+// SESUDAH
+return $this->persenHdp($totalTelur, $populasi);
     }
+    public function persenHdp(float $totalTelur, float $populasi): float
+{
+    if ($populasi <= 0) {
+        return 0.0;
+    }
+    return round(($totalTelur / $populasi) * 100, 2);
+}
 }

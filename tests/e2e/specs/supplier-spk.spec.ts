@@ -14,9 +14,6 @@ test.describe('Modul Supplier SPK (AHP-SAW DSS) - E2E UI Workflow Tests', () => 
 
     test.beforeEach(async ({ page }) => {
         // Arrange
-        await page.route('**/:5173/**', route => route.abort());
-        await page.route(/.*:5173.*/, route => route.abort());
-
         authPage = new AuthPage(page);
         settingsPage = new SettingsPage(page);
         supplierSpkPage = new SupplierSpkPage(page);
@@ -157,7 +154,7 @@ test.describe('Modul Supplier SPK (AHP-SAW DSS) - E2E UI Workflow Tests', () => 
 
         if (hasLatestConfig > 0) {
             // If latest config exists, verify it shows CR
-            const crText = page.locator('text=CR');
+            const crText = page.locator('text=CR').first();
             await expect(crText).toBeVisible();
         }
 
@@ -186,10 +183,10 @@ test.describe('Modul Supplier SPK (AHP-SAW DSS) - E2E UI Workflow Tests', () => 
             // Form displayed (enough parameters)
             await expect(form).toBeVisible();
 
-            // Assert: Has comparison buttons (may have green/orange buttons)
-            const buttonGroups = page.locator('button[type="button"]');
-            const buttonCount = await buttonGroups.count();
-            expect(buttonCount).toBeGreaterThan(0);
+            // Assert: Has comparison radio buttons (hidden input[type=radio] with visible label spans)
+            const radioInputs = page.locator('input[type="radio"][name^="pair_"]');
+            const radioCount = await radioInputs.count();
+            expect(radioCount).toBeGreaterThan(0);
         } else {
             // Not enough criteria - should show warning message
             const warning = page.locator('text=Belum cukup kriteria');
@@ -215,15 +212,14 @@ test.describe('Modul Supplier SPK (AHP-SAW DSS) - E2E UI Workflow Tests', () => 
             return;
         }
 
-        // Act: Click first comparison button
-        const firstButton = form.locator('button[type="button"]').first();
-        const buttonExists = await firstButton.count();
+        // Act: Click first comparison label (radio is sr-only, click via visible label)
+        const firstLabel = form.locator('label').filter({ has: page.locator('input[type="radio"]') }).first();
+        const labelExists = await firstLabel.count();
 
-        if (buttonExists > 0) {
-            await firstButton.click();
+        if (labelExists > 0) {
+            await firstLabel.click();
 
-            // Assert: Button clicked (no crash)
-            // Visual state change may be via class toggle (implementation dependent)
+            // Assert: Clicked (no crash)
             expect(true).toBe(true); // Click succeeded
         }
     });
@@ -276,8 +272,8 @@ test.describe('Modul Supplier SPK (AHP-SAW DSS) - E2E UI Workflow Tests', () => 
         await page.waitForTimeout(2000);
 
         // Assert: Success message (may appear)
-        const successMessage = page.locator('[class*="emerald"], text=berhasil, text=valid');
-        const hasSuccess = await successMessage.count();
+        const successContainer = page.locator('.bg-emerald-50, .border-emerald-200');
+        const hasSuccess = await successContainer.count();
 
         // Test passes either way (message may or may not appear depending on CR)
         expect(hasSuccess).toBeGreaterThanOrEqual(0);
@@ -508,7 +504,7 @@ test.describe('Modul Supplier SPK (AHP-SAW DSS) - E2E UI Workflow Tests', () => 
         await page.goto('/spk-suppliers/dss/config', { waitUntil: 'domcontentloaded' });
 
         // Act: Click back to settings
-        await page.getByRole('link', { name: /Pengaturan/i }).click();
+        await page.getByRole('link', { name: /← Pengaturan|Pengaturan/i }).last().click();
 
         // Assert: Back to settings
         await expect(page).toHaveURL(/.*settings/);

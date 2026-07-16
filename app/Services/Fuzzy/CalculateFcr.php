@@ -76,10 +76,21 @@ class CalculateFcr
                 ->value('totalMass');
         }
 
-        if ($eggMass <= 0) {
-            return 0.0;
-        }
+       // SEBELUM
+if ($eggMass <= 0) {
+    return 0.0;
+}
 
-        return round($pakan / $eggMass, 3);
+return round($pakan / $eggMass, 3);
+
+// SESUDAH
+return $this->rasioFcr($pakan, $eggMass);
     }
+    public function rasioFcr(float $pakanKg, float $eggMassKg): float
+{
+    if ($eggMassKg <= 0) {
+        return 0.0;
+    }
+    return round($pakanKg / $eggMassKg, 3);
+}
 }

@@ -25,9 +25,6 @@ test.describe('Modul IoT Device Management - CRUD Operations E2E', () => {
      test.setTimeout(90000);
 
      test.beforeEach(async ({ page }) => {
-          await page.route('**/:5173/**', route => route.abort());
-          await page.route(/.*:5173.*/, route => route.abort());
-
           iotPage = new IotPage(page);
      });
 
@@ -45,7 +42,10 @@ test.describe('Modul IoT Device Management - CRUD Operations E2E', () => {
           // Arrange
           const { connectionLabel } = await setupDevicePrerequisites(iotPage);
           await iotPage.gotoDevices();
+          await iotPage.addDeviceBtn.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(750);
           await iotPage.addDeviceBtn.click();
+          await page.waitForTimeout(1500);
           await expect(iotPage.deviceCodeInput.first()).toBeVisible({ timeout: 10000 });
 
           const deviceCode = `E2E-DEVICE-${Date.now()}`;
@@ -88,7 +88,10 @@ test.describe('Modul IoT Device Management - CRUD Operations E2E', () => {
           const deviceCode = `DUPLIKAT-DEVICE-${Date.now()}`;
 
           // Buat device pertama
+          await iotPage.addDeviceBtn.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(750);
           await iotPage.addDeviceBtn.click();
+          await page.waitForTimeout(1500);
           await expect(iotPage.deviceCodeInput.first()).toBeVisible({ timeout: 10000 });
           await iotPage.deviceCodeInput.first().fill(deviceCode);
           await iotPage.deviceNameInput.first().fill('Device Pertama');
@@ -99,7 +102,10 @@ test.describe('Modul IoT Device Management - CRUD Operations E2E', () => {
           await expect(iotPage.toastSuccess).toBeVisible({ timeout: 10000 });
 
           // Act - Coba buat device kedua dengan kode sama
+          await iotPage.addDeviceBtn.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(750);
           await iotPage.addDeviceBtn.click();
+          await page.waitForTimeout(1500);
           await expect(iotPage.deviceCodeInput.first()).toBeVisible({ timeout: 10000 });
           await iotPage.deviceCodeInput.first().fill(deviceCode);
           await iotPage.deviceNameInput.first().fill('Device Duplikat');
@@ -126,7 +132,10 @@ test.describe('Modul IoT Device Management - CRUD Operations E2E', () => {
           // Arrange
           const { connectionLabel } = await setupDevicePrerequisites(iotPage);
           await iotPage.gotoDevices();
+          await iotPage.addDeviceBtn.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(750);
           await iotPage.addDeviceBtn.click();
+          await page.waitForTimeout(1500);
           await expect(iotPage.deviceCodeInput.first()).toBeVisible({ timeout: 10000 });
 
           // Act - Isi semua field kecuali deviceCode
@@ -156,7 +165,10 @@ test.describe('Modul IoT Device Management - CRUD Operations E2E', () => {
           const deviceCode = `EDIT-DEVICE-${Date.now()}`;
           const originalName = 'Nama Awal Device';
 
+          await iotPage.addDeviceBtn.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(750);
           await iotPage.addDeviceBtn.click();
+          await page.waitForTimeout(1500);
           await expect(iotPage.deviceCodeInput.first()).toBeVisible({ timeout: 10000 });
           await iotPage.deviceCodeInput.first().fill(deviceCode);
           await iotPage.deviceNameInput.first().fill(originalName);
@@ -199,7 +211,10 @@ test.describe('Modul IoT Device Management - CRUD Operations E2E', () => {
 
           const deviceCode = `DELETE-DEVICE-${Date.now()}`;
 
+          await iotPage.addDeviceBtn.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(750);
           await iotPage.addDeviceBtn.click();
+          await page.waitForTimeout(1500);
           await expect(iotPage.deviceCodeInput.first()).toBeVisible({ timeout: 10000 });
           await iotPage.deviceCodeInput.first().fill(deviceCode);
           await iotPage.deviceNameInput.first().fill('Device Will Be Deleted');
@@ -230,7 +245,10 @@ test.describe('Modul IoT Device Management - CRUD Operations E2E', () => {
 
           const deviceCode = `STATUS-DEVICE-${Date.now()}`;
 
+          await iotPage.addDeviceBtn.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(750);
           await iotPage.addDeviceBtn.click();
+          await page.waitForTimeout(1500);
           await expect(iotPage.deviceCodeInput.first()).toBeVisible({ timeout: 10000 });
           await iotPage.deviceCodeInput.first().fill(deviceCode);
           await iotPage.deviceNameInput.first().fill('Device Status Test');
@@ -278,7 +296,10 @@ test.describe('Modul IoT Device Management - CRUD Operations E2E', () => {
           await iotPage.gotoDevices();
           const deviceCode = `MAP-DEVICE-${Date.now()}`;
 
+          await iotPage.addDeviceBtn.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(750);
           await iotPage.addDeviceBtn.click();
+          await page.waitForTimeout(1500);
           await expect(iotPage.deviceCodeInput.first()).toBeVisible({ timeout: 10000 });
           await iotPage.deviceCodeInput.first().fill(deviceCode);
           await iotPage.deviceNameInput.first().fill('Device for Mapping');
@@ -330,7 +351,10 @@ test.describe('Modul IoT Device Management - CRUD Operations E2E', () => {
           await iotPage.gotoDevices();
           const deviceCode = `DUP-MAP-DEVICE-${Date.now()}`;
 
+          await iotPage.addDeviceBtn.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(750);
           await iotPage.addDeviceBtn.click();
+          await page.waitForTimeout(1500);
           await expect(iotPage.deviceCodeInput.first()).toBeVisible({ timeout: 10000 });
           await iotPage.deviceCodeInput.first().fill(deviceCode);
           await iotPage.deviceNameInput.first().fill('Duplicate Mapping Device');
@@ -389,7 +413,10 @@ test.describe('Modul IoT Device Management - CRUD Operations E2E', () => {
           await iotPage.gotoDevices();
           const deviceCode = `EDIT-MAP-DEVICE-${Date.now()}`;
 
+          await iotPage.addDeviceBtn.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(750);
           await iotPage.addDeviceBtn.click();
+          await page.waitForTimeout(1500);
           await expect(iotPage.deviceCodeInput.first()).toBeVisible({ timeout: 10000 });
           await iotPage.deviceCodeInput.first().fill(deviceCode);
           await iotPage.deviceNameInput.first().fill('Edit Mapping Device');
@@ -448,7 +475,10 @@ test.describe('Modul IoT Device Management - CRUD Operations E2E', () => {
           await iotPage.gotoDevices();
           const deviceCode = `DEL-MAP-DEVICE-${Date.now()}`;
 
+          await iotPage.addDeviceBtn.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(750);
           await iotPage.addDeviceBtn.click();
+          await page.waitForTimeout(1500);
           await expect(iotPage.deviceCodeInput.first()).toBeVisible({ timeout: 10000 });
           await iotPage.deviceCodeInput.first().fill(deviceCode);
           await iotPage.deviceNameInput.first().fill('Delete Mapping Device');

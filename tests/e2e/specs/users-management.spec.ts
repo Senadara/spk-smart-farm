@@ -98,12 +98,9 @@ test.describe.serial('Modul Manajemen User / Petugas - E2E QA', () => {
         await expect(usersPage.submitButton).toBeVisible();
 
         // Act
-        // Isi form dummy yang fail constraint length/email
-        // Langsung hajar hit confirm tanpa context isi
         await usersPage.submitButton.click();
 
         // Assert
-        // Modal idealnya harus tetap berada disitu dan row user tidak di trigger reload
         await expect(usersPage.submitButton).toBeVisible();
         await expect(page.getByText('Akun Petugas berhasil dibuat.')).not.toBeVisible();
     });

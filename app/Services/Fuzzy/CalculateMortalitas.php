@@ -20,8 +20,19 @@ class CalculateMortalitas
             $mati     = empty($coopIds) ? 0 : DB::table('kematian')->join('laporan', 'kematian.laporanId', '=', 'laporan.id')->whereIn('laporan.unitBudidayaId', $coopIds)->where('laporan.isDeleted', 0)->where('kematian.isDeleted', 0)->whereDate('kematian.tanggal', '>=', $startOfMonth)->count();
         }
 
-        if ($populasi <= 0) return 0.0;
+       // SEBELUM
+if ($populasi <= 0) return 0.0;
 
-        return round(($mati / $populasi) * 100, 3);
+return round(($mati / $populasi) * 100, 3);
+
+// SESUDAH
+return $this->persenMortalitas($mati, $populasi);
     }
+    public function persenMortalitas(float $mati, float $populasi): float
+{
+    if ($populasi <= 0) {
+        return 0.0;
+    }
+    return round(($mati / $populasi) * 100, 3);
+}
 }

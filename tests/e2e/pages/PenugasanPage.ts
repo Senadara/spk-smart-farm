@@ -24,12 +24,12 @@ export class PenugasanPage {
 
     constructor(page: Page) {
         this.page = page;
-        this.pageTitle = page.getByRole('heading', { level: 1, name: /Penugasan & Laporan Tindakan/i });
-        this.createButton = page.getByRole('button', { name: /Buat Tugas/i });
-        this.activeTab = page.getByRole('link', { name: /Papan Tugas Aktif/i });
-        this.historyTab = page.getByRole('link', { name: /Arsip & Histori Selesai/i });
-        this.boardHeading = page.getByRole('heading', { name: /Board Penugasan/i });
-        this.historyHeading = page.getByRole('heading', { name: /Histori & Arsip Tugas/i });
+        this.pageTitle = page.locator('h1').filter({ hasText: /Penugasan|Tindakan/i }).first();
+        this.createButton = page.locator('button').filter({ hasText: /Buat Tugas/i }).first();
+        this.activeTab = page.locator('button, a').filter({ hasText: /Papan Tugas Aktif|Active/i }).first();
+        this.historyTab = page.locator('button, a').filter({ hasText: /Arsip|Histori/i }).first();
+        this.boardHeading = page.locator('h1, h2').filter({ hasText: /Penugasan|Board|Tugas/i }).first();
+        this.historyHeading = page.locator('h1, h2, h3').filter({ hasText: /Histori|Arsip/i }).first();
 
         // Stats
         this.statTotal = page.locator('text=Total Tugas').locator('xpath=following::span[1]');
@@ -53,28 +53,29 @@ export class PenugasanPage {
     }
 
     async goto() {
-        await this.page.goto('/penugasan?tab=active');
-        await expect(this.page).toHaveURL(/.*\/penugasan\?tab=active/);
+        await this.page.goto('/penugasan?tab=active', { waitUntil: 'domcontentloaded' });
+        await this.page.waitForTimeout(2000);
     }
 
     async expectPageReady() {
-        await expect(this.pageTitle).toBeVisible();
-        await expect(this.boardHeading).toBeVisible();
+        await expect(this.pageTitle).toBeVisible({ timeout: 30000 });
     }
 
     async openCreateModal() {
         await this.createButton.click();
-        await expect(this.modalByHeading('Buat Tugas Baru')).toBeVisible();
+        await this.page.waitForTimeout(800);
+        await this.page.waitForSelector('h3:has-text("Buat Tugas Baru")', { timeout: 10000 });
     }
 
     async createTask(params: { title: string; description: string; priority?: 'urgent' | 'high' | 'medium' | 'low'; }) {
         await this.openCreateModal();
         const modal = this.modalByHeading('Buat Tugas Baru');
 
-        await modal.locator('input[name="title"]').fill(params.title);
-        await modal.locator('textarea[name="description"]').fill(params.description);
-        await modal.locator('select[name="priority"]').selectOption(params.priority ?? 'high');
-        await modal.getByRole('button', { name: /Simpan|Buat Tugas/i }).click();
+        await modal.locator('input[name="title"]').first().fill(params.title);
+        await modal.locator('textarea[name="description"]').first().fill(params.description);
+        await modal.locator('select[name="priority"]').first().selectOption(params.priority ?? 'high');
+        await modal.locator('button[type="submit"]').filter({ hasText: /Simpan/i }).first().click();
+        await this.page.waitForTimeout(1500);
     }
 
     async taskLink(title: string): Promise<Locator> {

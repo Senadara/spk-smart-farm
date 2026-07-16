@@ -13,8 +13,8 @@ export class SupplierSpkPage {
         this.page = page;
         this.catalogHeading = page.getByRole('heading', { name: /Katalog Supplier Peternakan/i });
         this.productsHeading = page.getByRole('heading', { name: /Perbandingan Produk Supplier/i });
-        this.dssConfigHeading = page.getByRole('heading', { name: /Konfigurasi AHP — Bobot Supplier/i });
-        this.dssDashboardHeading = page.getByRole('heading', { name: /Dashboard DSS Supplier \(SAW\)/i });
+        this.dssConfigHeading = page.getByRole('heading', { name: /Bobot Kriteria \(AHP\)/i });
+        this.dssDashboardHeading = page.getByRole('heading', { name: /Ranking supplier - SAW/i });
         this.configForm = page.locator('#ahp-form');
         this.rankingTable = page.getByRole('table').filter({ has: page.getByText('Peringkat Supplier (SAW)') });
     }

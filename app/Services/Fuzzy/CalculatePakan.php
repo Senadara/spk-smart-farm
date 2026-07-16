@@ -20,9 +20,21 @@ class CalculatePakan
             $pakan    = empty($coopIds) ? 0.0 : (float) DB::table('harianTernak')->join('laporan', 'harianTernak.laporanId', '=', 'laporan.id')->whereIn('laporan.unitBudidayaId', $coopIds)->where('laporan.isDeleted', 0)->where('harianTernak.isDeleted', 0)->whereDate('laporan.createdAt', $today)->sum('harianTernak.pakan');
         }
 
-        if ($populasi <= 0) return 0.0;
+        // SEBELUM (baris 23–26)
+if ($populasi <= 0) return 0.0;
 
-        // Konversi kg ke gram, bagi per ekor
-        return round(($pakan * 1000) / $populasi, 1);
+// Konversi kg ke gram, bagi per ekor
+return round(($pakan * 1000) / $populasi, 1);
+
+// SESUDAH (jadi satu baris)
+return $this->pakanPerEkor($pakan, $populasi);
     }
+    public function pakanPerEkor(float $pakanKg, float $populasi): float
+{
+    if ($populasi <= 0) {
+        return 0.0;
+    }
+    // Konversi kg ke gram, bagi per ekor
+    return round(($pakanKg * 1000) / $populasi, 1);
+}
 }
