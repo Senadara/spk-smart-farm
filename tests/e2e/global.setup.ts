@@ -64,7 +64,7 @@ setup('Global Authentication Setup (Login to cache session)', async ({ page }) =
     await page.waitForLoadState('domcontentloaded');
 
     try {
-        await authPage.loginAndWaitForDashboard('petugas@email.com', 'Password123.');
+        await authPage.loginAndWaitForDashboard('pjawab@email.com', 'Password123.');
         await expect(page).toHaveURL(/.*dashboard/, { timeout: 150000 });
         await page.context().storageState({ path: authFile });
     } catch (err) {

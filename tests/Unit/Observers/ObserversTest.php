@@ -80,6 +80,7 @@ class ObserversTest extends TestCase
     {
         $rankingMock = Mockery::mock('alias:' . SpkRanking::class);
         $rankingMock->shouldReceive('where')->with('user_id', 1)->andReturnSelf();
+        $rankingMock->shouldReceive('exists')->andReturnTrue();
         $rankingMock->shouldReceive('update')->with(['is_valid' => false])->twice();
 
         $observer = new SpkAhpBobotObserver();
