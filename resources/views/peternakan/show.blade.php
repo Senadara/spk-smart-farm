@@ -160,6 +160,13 @@
                         Settlement / PDF
                     </a>
                 @endif
+                <a
+                    href="{{ route('peternakan.individual-productivity', array_filter(['id' => $barn['id'], 'komoditas' => $activeKomoditasId])) }}"
+                    class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 no-underline sm:w-auto sm:px-4 sm:text-sm"
+                >
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 15l3-3 3 2 5-6"/></svg>
+                    HDP Individu
+                </a>
             </div>
         </div>
 
@@ -220,6 +227,139 @@
         </div>
 
         {{-- ═══ SENSOR TREND CHART + LIVE SENSORS ═══ --}}
+        @php
+            $healthStatus = $healthContext['status'] ?? 'normal';
+            $healthTone = [
+                'normal' => ['badge' => 'bg-emerald-50 text-emerald-700', 'border' => 'border-emerald-100'],
+                'warning' => ['badge' => 'bg-amber-50 text-amber-700', 'border' => 'border-amber-100'],
+                'danger' => ['badge' => 'bg-red-50 text-red-700', 'border' => 'border-red-100'],
+            ][$healthStatus] ?? ['badge' => 'bg-gray-50 text-gray-600', 'border' => 'border-gray-100'];
+            $metricTone = [
+                'emerald' => 'bg-emerald-50 text-emerald-700 border-emerald-100',
+                'amber' => 'bg-amber-50 text-amber-700 border-amber-100',
+                'red' => 'bg-red-50 text-red-700 border-red-100',
+                'sky' => 'bg-sky-50 text-sky-700 border-sky-100',
+                'gray' => 'bg-gray-50 text-gray-600 border-gray-100',
+            ];
+            $signalTone = [
+                'danger' => 'border-red-100 bg-red-50 text-red-700',
+                'warning' => 'border-amber-100 bg-amber-50 text-amber-700',
+                'info' => 'border-sky-100 bg-sky-50 text-sky-700',
+            ];
+            $canCreateHealthTask = data_get(session('user'), 'role') === 'pjawab';
+            $eggDrop = data_get($healthContext, 'egg_production_drop');
+        @endphp
+        <div class="rounded-xl border {{ $healthTone['border'] }} bg-white p-4 shadow-sm sm:p-5">
+            @if(session('health_indication_success') || session('health_indication_warning') || session('health_indication_error'))
+                <div class="mb-4 rounded-xl border px-3 py-2 text-xs font-semibold {{
+                    session('health_indication_success') ? 'border-emerald-100 bg-emerald-50 text-emerald-700' :
+                    (session('health_indication_warning') ? 'border-amber-100 bg-amber-50 text-amber-700' : 'border-red-100 bg-red-50 text-red-700')
+                }}">
+                    {{ session('health_indication_success') ?? session('health_indication_warning') ?? session('health_indication_error') }}
+                </div>
+            @endif
+
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="text-base font-semibold text-gray-800">Konteks Kesehatan Kandang</h3>
+                        <x-metric-hint title="Konteks Kesehatan" body="Bagian ini menggabungkan data existing dari laporan mobile, produktivitas, kematian, sakit, pakan, dan SPK web. Jumlah sakit ditampilkan sebagai jumlah laporan karena mobile belum menyimpan jumlah ayam sakit eksplisit." source="laporan, sakit, kematian, panen, harianTernak, spk_fuzzy_logs" />
+                        <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $healthTone['badge'] }}">
+                            {{ $healthContext['status_label'] ?? 'Terkendali' }}
+                        </span>
+                    </div>
+                    <p class="mt-1 max-w-3xl text-xs leading-relaxed text-gray-500">
+                        {{ $healthContext['summary'] ?? 'Belum ada sinyal kesehatan penting dari data existing.' }}
+                    </p>
+                </div>
+                @if($canCreateHealthTask && data_get($healthContext, 'task.recommended'))
+                    <a href="{{ data_get($healthContext, 'task.url') }}" class="inline-flex w-full items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-700 no-underline sm:w-auto">
+                        Buat Tugas Pemeriksaan
+                    </a>
+                @endif
+            </div>
+
+            @if($eggProductionDropError ?? null)
+                <div class="mt-4 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500">
+                    Data ayam tidak bertelur belum bisa dibaca dari Node API: {{ $eggProductionDropError }}
+                </div>
+            @endif
+
+            @if($eggDrop)
+                <div class="mt-4 rounded-xl border {{ data_get($eggDrop, 'isIndication') ? 'border-amber-100 bg-amber-50' : 'border-sky-100 bg-sky-50' }} p-3">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="min-w-0">
+                            <p class="text-[10px] font-bold uppercase tracking-wide {{ data_get($eggDrop, 'isIndication') ? 'text-amber-700' : 'text-sky-700' }}">
+                                HDP individu
+                            </p>
+                            <h4 class="mt-1 text-sm font-black text-slate-900">Analisis per ayam tersedia di halaman khusus</h4>
+                            <p class="mt-1 text-xs leading-relaxed text-slate-600">
+                                Buka tabel HDP individu untuk membandingkan periode sekarang dan sebelumnya, mengurutkan ayam dengan penurunan terbesar, serta membuat laporan indikasi sakit otomatis bila diperlukan.
+                            </p>
+                        </div>
+                        <a
+                            href="{{ route('peternakan.individual-productivity', array_filter(['id' => $barn['id'], 'komoditas' => $activeKomoditasId])) }}"
+                            class="inline-flex w-full shrink-0 items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-700 no-underline sm:w-auto"
+                        >
+                            Buka Tabel HDP
+                        </a>
+                    </div>
+                </div>
+            @endif
+
+            <div class="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-5">
+                @foreach (($healthContext['metrics'] ?? []) as $metric)
+                    <div class="rounded-xl border px-3 py-3 {{ $metricTone[$metric['tone'] ?? 'gray'] ?? $metricTone['gray'] }}">
+                        <p class="text-[10px] font-bold uppercase tracking-wide opacity-70">{{ $metric['label'] }}</p>
+                        <p class="mt-1 text-base font-black">{{ $metric['value'] }}</p>
+                        <p class="mt-1 text-[11px] leading-snug opacity-80">{{ $metric['caption'] }}</p>
+                    </div>
+                @endforeach
+            </div>
+
+            <div class="mt-4 grid gap-3 lg:grid-cols-2">
+                <div class="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                    <p class="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Sinyal yang terbaca</p>
+                    <div class="space-y-2">
+                        @forelse (array_slice($healthContext['signals'] ?? [], 0, 4) as $signal)
+                            <div class="rounded-lg border px-3 py-2 {{ $signalTone[$signal['level'] ?? 'info'] ?? $signalTone['info'] }}">
+                                <p class="text-xs font-bold">{{ $signal['title'] }}</p>
+                                <p class="mt-0.5 text-[11px] leading-relaxed opacity-90">{{ $signal['message'] }}</p>
+                                <p class="mt-1 text-[10px] font-semibold opacity-70">Sumber: {{ $signal['source'] }}</p>
+                            </div>
+                        @empty
+                            <p class="rounded-lg border border-dashed border-gray-200 bg-white px-3 py-4 text-center text-xs text-gray-400">
+                                Belum ada sinyal sakit, mati, atau produktivitas yang perlu ditindaklanjuti.
+                            </p>
+                        @endforelse
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-gray-100 bg-white p-3">
+                    <p class="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Instruksi untuk mobile</p>
+                    <div class="space-y-2">
+                        @foreach (($healthContext['mobile_checklist'] ?? []) as $item)
+                            <div class="flex gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                                <span class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"></span>
+                                <p class="text-xs leading-relaxed text-slate-600">{{ $item }}</p>
+                            </div>
+                        @endforeach
+                    </div>
+                    @if(!empty($healthContext['latest_sick']))
+                        <div class="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
+                            <p class="text-[10px] font-bold uppercase tracking-wide text-amber-600">Laporan sakit terakhir</p>
+                            <p class="mt-1 text-xs font-semibold text-slate-800">
+                                {{ data_get($healthContext, 'latest_sick.diagnosis') ?: 'Diagnosis belum tersedia' }}
+                            </p>
+                            <p class="mt-0.5 text-[11px] text-slate-500">
+                                Status {{ data_get($healthContext, 'latest_sick.status') }} - {{ data_get($healthContext, 'latest_sick.created_at') }}
+                            </p>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
             <div class="lg:col-span-3 bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-sm">
                 <div class="flex flex-col gap-3 mb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">

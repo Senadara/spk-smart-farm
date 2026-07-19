@@ -16,6 +16,10 @@ class PeternakanService
 
     private ?bool $unitBudidayaHasUmurMinggu = null;
 
+    public function __construct(
+        protected LivestockMasterConfigService $livestockMasterConfigService
+    ) {}
+
     public function forKomoditas(?string $komoditasId): self
     {
         $this->activeKomoditasId = $this->resolveKomoditasId($komoditasId);
@@ -24,7 +28,7 @@ class PeternakanService
             : null;
 
         $this->activeJenisBudidayaId = $komod?->jenisBudidayaId
-            ?? DB::table('jenisBudidaya')->where('nama', 'like', '%Ayam Petelur%')->where('isDeleted', 0)->value('id');
+            ?? $this->livestockMasterConfigService->firstLivestockJenisBudidayaId();
 
         $this->cachedBarnEnvironment = null;
 
@@ -43,23 +47,7 @@ class PeternakanService
 
     public function resolveKomoditasId(?string $requestedId): ?string
     {
-        if ($requestedId) {
-            $exists = DB::table('komoditas')->where('id', $requestedId)->where('isDeleted', 0)->exists();
-            if ($exists) {
-                return $requestedId;
-            }
-        }
-
-        $layer = DB::table('komoditas')
-            ->where('isDeleted', 0)
-            ->whereRaw('LOWER(nama) LIKE ?', ['%layer%'])
-            ->value('id');
-
-        if ($layer) {
-            return $layer;
-        }
-
-        return DB::table('komoditas')->where('isDeleted', 0)->orderBy('nama')->value('id');
+        return $this->livestockMasterConfigService->resolveLivestockCommodityId($requestedId);
     }
 
     public function getActiveCoopIds(bool $activeOnly = true): array
@@ -218,6 +206,26 @@ class PeternakanService
                 'min' => (float) $row->minValue,
                 'max' => (float) $row->maxValue,
             ];
+        }
+
+        if (Schema::hasTable('livestock_master_configs') && Schema::hasTable('livestock_environment_parameters')) {
+            $masterRows = DB::table('livestock_environment_parameters')
+                ->join('livestock_master_configs', 'livestock_master_configs.id', '=', 'livestock_environment_parameters.config_id')
+                ->join('komoditas', 'komoditas.jenisBudidayaId', '=', 'livestock_master_configs.jenis_budidaya_id')
+                ->where('komoditas.id', $this->activeKomoditasId)
+                ->where('livestock_environment_parameters.is_active', true)
+                ->get([
+                    'livestock_environment_parameters.parameter_code',
+                    'livestock_environment_parameters.min_value',
+                    'livestock_environment_parameters.max_value',
+                ]);
+
+            foreach ($masterRows as $row) {
+                $defaults[$row->parameter_code] = [
+                    'min' => $row->min_value !== null ? (float) $row->min_value : null,
+                    'max' => $row->max_value !== null ? (float) $row->max_value : null,
+                ];
+            }
         }
 
         return $defaults;

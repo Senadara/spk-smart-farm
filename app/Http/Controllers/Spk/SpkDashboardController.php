@@ -10,6 +10,7 @@ use App\Services\Fuzzy\FuzzySensorCardMapper;
 use App\Services\Fuzzy\InputResolver;
 use App\Services\Fuzzy\MamdaniEngine;
 use App\Services\Fuzzy\NarrativeGenerator;
+use App\Services\LivestockMasterConfigService;
 use App\Services\Notifications\SpkEnvironmentAlertService;
 use App\Services\PeternakanService;
 use App\Services\Spk\SpkFuzzyEvaluationService;
@@ -22,7 +23,7 @@ class SpkDashboardController extends Controller
     /**
      * Tampilkan halaman utama SPK Analysis Dashboard.
      */
-    public function index(Request $request, PeternakanService $peternakanService)
+    public function index(Request $request, PeternakanService $peternakanService, LivestockMasterConfigService $livestockMasterConfigService)
     {
         $komoditas = $request->input('komoditas', 'petelur');
         $coopId    = $request->filled('coop_id') ? $request->input('coop_id') : null;   // null = global
@@ -63,9 +64,7 @@ class SpkDashboardController extends Controller
             ->prepend(['id' => null, 'name' => 'Semua Kandang (Global)'])
             ->toArray();
 
-        $komoditasOptions = DB::table('komoditas')
-            ->where('isDeleted', 0)
-            ->orderBy('nama')
+        $komoditasOptions = $livestockMasterConfigService->livestockCommodities()
             ->pluck('nama', 'id')
             ->toArray();
 
@@ -80,12 +79,26 @@ class SpkDashboardController extends Controller
         ));
     }
 
-    public function evaluate(Request $request, PeternakanService $peternakanService)
+    public function evaluate(Request $request, PeternakanService $peternakanService, LivestockMasterConfigService $livestockMasterConfigService)
     {
         $komoditas = $request->input('komoditas', 'petelur');
         $coopId = $request->filled('coop_id') ? $request->input('coop_id') : null;
 
         $peternakanService->forKomoditas($komoditas);
+        $masterConfigStatus = $livestockMasterConfigService->readinessForCommodity($peternakanService->getActiveKomoditasId());
+
+        if (! ($masterConfigStatus['configured'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'processed' => 0,
+                'errors' => [[
+                    'coop_id' => null,
+                    'message' => 'Data Master ternak belum lengkap. Lengkapi konfigurasi sebelum menjalankan SPK.',
+                ]],
+                'evaluation_time' => null,
+            ], 422);
+        }
+
         $coopIds = $coopId ? [$coopId] : $peternakanService->getActiveCoopIds();
         if (!$coopId) {
             $coopIds[] = null;

@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Komoditas;
+use App\Services\LivestockMasterConfigService;
 use App\Services\Notifications\SpkEnvironmentAlertService;
 use App\Services\PeternakanService;
 use App\Services\Spk\SpkFuzzyEvaluationService;
@@ -84,13 +84,18 @@ class EvaluateEnvironmentSpk extends Command
             return [(string) $this->option('commodity')];
         }
 
-        $profileCommodityIds = DB::table('spk_fuzzy_profiles')
-            ->where('is_active', true)
-            ->pluck('commodity_id')
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
+        $livestockCommodityIds = app(LivestockMasterConfigService::class)->livestockCommodityIds();
+
+        $profileCommodityIds = ! empty($livestockCommodityIds)
+            ? DB::table('spk_fuzzy_profiles')
+                ->where('is_active', true)
+                ->whereIn('commodity_id', $livestockCommodityIds)
+                ->pluck('commodity_id')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all()
+            : [];
 
         if (! empty($profileCommodityIds)) {
             return $profileCommodityIds;
@@ -105,11 +110,7 @@ class EvaluateEnvironmentSpk extends Command
             return [null];
         }
 
-        $ids = Komoditas::query()
-            ->where('isDeleted', 0)
-            ->orderBy('nama')
-            ->pluck('id')
-            ->all();
+        $ids = $livestockCommodityIds;
 
         return ! empty($ids) ? $ids : [null];
     }

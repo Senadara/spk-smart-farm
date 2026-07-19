@@ -17,20 +17,26 @@
                 <p class="text-xs text-gray-400 mt-0.5">Diagnosa Fuzzy 3-Mode, tren sensor lingkungan, dan logistik</p>
             </div>
             
-            <div class="flex flex-wrap items-center gap-3">
+            <div class="flex w-full flex-col gap-3 md:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 
                 {{-- Histori Navigasi dipindahkan ke komponen Fuzzy Logic --}}
+                <a href="{{ route('spk.simulation.index') }}" class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:w-auto">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M3 9h2m-2 6h2m14-6h2m-2 6h2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                    </svg>
+                    Buka Simulasi SPK
+                </a>
 
-                <form id="spkFilterForm" method="GET" action="{{ route('spk.dashboard') }}" class="flex flex-wrap items-center gap-3">
+                <form id="spkFilterForm" method="GET" action="{{ route('spk.dashboard') }}" class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
                     {{-- Komoditas --}}
-                    <select name="komoditas" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-emerald-400 cursor-pointer" onchange="document.getElementById('spkFilterForm').submit()">
+                    <select name="komoditas" class="w-full cursor-pointer rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs text-gray-600 focus:border-emerald-400 focus:outline-none sm:w-auto" onchange="document.getElementById('spkFilterForm').submit()">
                         @foreach ($filterOptions['komoditas'] as $val => $label)
                             <option value="{{ $val }}" {{ $komoditas === $val ? 'selected' : '' }}>{{ $label }}</option>
                         @endforeach
                     </select>
 
                     {{-- Lokasi / Kandang --}}
-                    <select name="coop_id" class="text-xs border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-600 focus:outline-none focus:border-emerald-400 cursor-pointer" onchange="document.getElementById('spkFilterForm').submit()">
+                    <select name="coop_id" class="w-full cursor-pointer rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs text-gray-600 focus:border-emerald-400 focus:outline-none sm:w-auto" onchange="document.getElementById('spkFilterForm').submit()">
                         @foreach ($barnsOption as $barn)
                             <option value="{{ $barn['id'] }}" {{ $coopId == $barn['id'] ? 'selected' : '' }}>{{ $barn['name'] }}</option>
                         @endforeach

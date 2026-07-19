@@ -7,6 +7,7 @@ use App\Models\SpkActionReport;
 use App\Models\SpkActionTask;
 use App\Models\SpkFuzzyLog;
 use App\Services\Fuzzy\NarrativeGenerator;
+use App\Services\Health\BarnHealthContextService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,10 @@ use Illuminate\Validation\Rule;
 
 class SpkTaskController extends Controller
 {
+    public function __construct(
+        protected BarnHealthContextService $barnHealthContextService,
+    ) {}
+
     /**
      * Halaman utama penugasan.
      */
@@ -128,6 +133,9 @@ class SpkTaskController extends Controller
         $taskPlans = $this->role() === 'pjawab'
             ? $this->buildTaskPlans($recentSpks, $users, $barns->pluck('nama', 'id'))
             : collect();
+        $healthTaskPlans = $this->role() === 'pjawab'
+            ? $this->barnHealthContextService->taskPlansForBarns($barns, $users)
+            : collect();
 
         $prefill = [
             'showModal' => $request->has('create_task'),
@@ -148,6 +156,7 @@ class SpkTaskController extends Controller
             'barns',
             'recentSpks',
             'taskPlans',
+            'healthTaskPlans',
             'tab',
             'statusFilter',
             'priorityFilter',

@@ -2,14 +2,23 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\LivestockMasterConfigService;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+
 class DataMasterController extends Controller
 {
+    public function __construct(
+        protected LivestockMasterConfigService $livestockMasterConfigService
+    ) {}
+
     /**
-     * DASH-02: Halaman Data Master Operasional (Read-Only)
-     * Menampilkan daftar user dan blok kebun dalam mode baca saja.
+     * Data Master ternak membaca jenis ternak dari mobile, lalu web menentukan
+     * parameter lingkungan dan fungsi produktivitas yang boleh dipakai IoT/SPK.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $masterOverview = $this->livestockMasterConfigService->overview($request->query('jenis_budidaya_id'));
         $users = $this->getDummyUsers();
         $blokKebun = $this->getDummyBlokKebun();
 
@@ -22,11 +31,71 @@ class DataMasterController extends Controller
         $jenisBudidayaOptions = $this->getDummyJenisBudidaya();
 
         return view('data-master.index', compact(
+            'masterOverview',
             'users',
             'blokKebun',
             'roleOptions',
             'jenisBudidayaOptions'
         ));
+    }
+
+    public function storeLivestockMaster(Request $request)
+    {
+        $validated = $request->validate([
+            'jenis_budidaya_id' => 'required|string|exists:jenisBudidaya,id',
+            'commodity_id' => 'nullable|string|exists:komoditas,id',
+            'notes' => 'nullable|string|max:1000',
+            'environment_parameters' => 'required|array|min:1',
+            'environment_parameters.*.parameter_code' => ['nullable', 'string', 'max:50', 'regex:/^[a-zA-Z0-9_\\-\\s]+$/'],
+            'environment_parameters.*.parameter_name' => 'nullable|string|max:150',
+            'environment_parameters.*.unit' => 'nullable|string|max:30',
+            'environment_parameters.*.min_value' => 'nullable|numeric',
+            'environment_parameters.*.max_value' => 'nullable|numeric',
+            'environment_parameters.*.fallback_value' => 'nullable|numeric',
+            'environment_parameters.*.stale_minutes' => 'nullable|integer|min:1|max:10080',
+            'environment_parameters.*.required_for_iot' => 'nullable|boolean',
+            'environment_parameters.*.required_for_fuzzy' => 'nullable|boolean',
+            'productivity_function_ids' => 'required|array|min:1',
+            'productivity_function_ids.*' => 'string|exists:livestock_productivity_functions,id',
+        ], [
+            'environment_parameters.required' => 'Minimal satu parameter lingkungan wajib diisi.',
+            'environment_parameters.min' => 'Minimal satu parameter lingkungan wajib diisi.',
+            'productivity_function_ids.required' => 'Pilih minimal satu fungsi produktivitas.',
+            'productivity_function_ids.min' => 'Pilih minimal satu fungsi produktivitas.',
+            'environment_parameters.*.parameter_code.regex' => 'Kode parameter hanya boleh huruf, angka, spasi, underscore, atau dash.',
+        ]);
+
+        $filledEnvironmentRows = collect($validated['environment_parameters'])
+            ->filter(fn ($row) => trim((string) ($row['parameter_code'] ?? '')) !== '' || trim((string) ($row['parameter_name'] ?? '')) !== '');
+
+        if ($filledEnvironmentRows->isEmpty()) {
+            throw ValidationException::withMessages([
+                'environment_parameters' => 'Minimal satu parameter lingkungan wajib diisi.',
+            ]);
+        }
+
+        foreach ($filledEnvironmentRows as $index => $row) {
+            if (trim((string) ($row['parameter_code'] ?? '')) === '' || trim((string) ($row['parameter_name'] ?? '')) === '') {
+                throw ValidationException::withMessages([
+                    "environment_parameters.{$index}.parameter_code" => 'Kode dan nama parameter wajib diisi pada baris yang aktif.',
+                ]);
+            }
+
+            if (($row['min_value'] ?? null) !== null && ($row['max_value'] ?? null) !== null && (float) $row['min_value'] >= (float) $row['max_value']) {
+                throw ValidationException::withMessages([
+                    "environment_parameters.{$index}.min_value" => 'Nilai minimum harus lebih kecil dari maksimum.',
+                ]);
+            }
+        }
+
+        $validated['environment_parameters'] = $filledEnvironmentRows->values()->all();
+        $validated['configured_by'] = data_get(session('user'), 'id');
+
+        $this->livestockMasterConfigService->saveConfiguration($validated);
+
+        return redirect()
+            ->route('data-master.index', ['jenis_budidaya_id' => $validated['jenis_budidaya_id']])
+            ->with('success', 'Konfigurasi Data Master ternak berhasil disimpan.');
     }
 
     /**

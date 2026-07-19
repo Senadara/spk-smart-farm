@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Peternakan;
 
 use App\Http\Controllers\Controller;
-use App\Models\Komoditas;
 use App\Models\SpkActionTask;
 use App\Models\SpkFuzzyLog;
 use App\Models\SpkFuzzyProfile;
@@ -11,6 +10,9 @@ use App\Services\Fuzzy\FuzzySensorCardMapper;
 use App\Services\Fuzzy\InputResolver;
 use App\Services\Fuzzy\MamdaniEngine;
 use App\Services\Fuzzy\NarrativeGenerator;
+use App\Services\Health\BarnHealthContextService;
+use App\Services\Health\NodeHealthIndicationClient;
+use App\Services\LivestockMasterConfigService;
 use App\Services\Notifications\SpkEnvironmentAlertService;
 use App\Services\PeternakanService;
 use App\Services\Spk\SpkFuzzyEvaluationService;
@@ -31,6 +33,9 @@ class PeternakanController extends Controller
         protected NarrativeGenerator $narrativeGenerator,
         protected SpkFuzzyEvaluationService $fuzzyEvaluationService,
         protected SpkEnvironmentAlertService $environmentAlertService,
+        protected BarnHealthContextService $barnHealthContextService,
+        protected NodeHealthIndicationClient $nodeHealthIndicationClient,
+        protected LivestockMasterConfigService $livestockMasterConfigService,
     ) {}
 
     /**
@@ -46,8 +51,12 @@ class PeternakanController extends Controller
         $this->peternakanService->forKomoditas($komoditasId);
         $activeKomoditasId = $this->peternakanService->getActiveKomoditasId();
 
-        $komoditas = Komoditas::where('isDeleted', 0)->orderBy('nama')->get();
+        $komoditas = $this->livestockMasterConfigService->livestockCommodities();
         $activeKomoditas = $komoditas->firstWhere('id', $activeKomoditasId);
+        $masterConfigStatus = $this->livestockMasterConfigService->readinessForCommodity($activeKomoditasId);
+        $masterConfigStatus['data_master_url'] = route('data-master.index', array_filter([
+            'jenis_budidaya_id' => $masterConfigStatus['jenis_budidaya_id'] ?? null,
+        ]));
 
         $barnEnvironment = $this->peternakanService->getBarnEnvironment();
         $barns = $barnEnvironment['barns'];
@@ -83,6 +92,7 @@ class PeternakanController extends Controller
             'spkDailySummary' => $this->buildDailySpkSummary($activeKomoditasId, $barns, $dailyReportStatus),
             'evaluationTime' => $evaluationTime,
             'hasKomoditas' => $komoditas->isNotEmpty(),
+            'masterConfigStatus' => $masterConfigStatus,
         ]);
     }
 
@@ -101,11 +111,21 @@ class PeternakanController extends Controller
 
         $iotDevices = $this->peternakanService->getBarnIotDevices($barn);
 
+        $barnDetail = $this->peternakanService->getBarnDetail($barn);
+        $kpi = $this->peternakanService->getBarnKpi($barn);
+        $eggProductionDropResponse = $this->nodeHealthIndicationClient->eggProductionDropContext($barn['id'], [
+            'days' => 7,
+            'thresholdPercent' => 40,
+        ]);
+        $eggProductionDropContext = $eggProductionDropResponse['success'] ?? false
+            ? ($eggProductionDropResponse['data'] ?? null)
+            : null;
+
         return view('peternakan.show', [
-            'barn' => $this->peternakanService->getBarnDetail($barn),
+            'barn' => $barnDetail,
             'sensors' => $this->peternakanService->getBarnSensors($barn),
             'sensorTrend' => $this->peternakanService->getBarnSensorTrend($barn['id'] ?? null),
-            'kpi' => $this->peternakanService->getBarnKpi($barn),
+            'kpi' => $kpi,
             'productionLog' => $this->peternakanService->getBarnProductionLog($barn),
             'iotDevice' => $iotDevices[0] ?? null,
             'spkMessages' => $this->peternakanService->getBarnSpkMessages($barn),
@@ -113,8 +133,118 @@ class PeternakanController extends Controller
             'productivityTrend' => $this->peternakanService->getProductivityTrend($barn['id']),
             'eggQuality' => $this->peternakanService->getEggQuality($barn),
             'dailyDataAudit' => $this->peternakanService->getBarnDailyDataAudit($barn),
+            'healthContext' => $this->barnHealthContextService->forBarn($barn['id'], $kpi, $barnDetail['name'] ?? null, $eggProductionDropContext),
+            'eggProductionDropError' => ($eggProductionDropResponse['success'] ?? false) ? null : ($eggProductionDropResponse['message'] ?? null),
             'activeKomoditasId' => $this->peternakanService->getActiveKomoditasId(),
         ]);
+    }
+
+    public function individualProductivity(Request $request, $id)
+    {
+        $this->peternakanService->forKomoditas($request->query('komoditas'));
+
+        $barns = $this->peternakanService->getBarnEnvironment()['barns'];
+        $barn = collect($barns)->first(fn ($b) => ($b['id'] ?? null) == $id);
+        if (! $barn || ($barn['id'] ?? null) === 'no-data') {
+            abort(404, 'Kandang tidak ditemukan untuk komoditas aktif.');
+        }
+
+        $days = in_array((int) $request->query('days'), [7, 14, 30], true)
+            ? (int) $request->query('days')
+            : 7;
+        $threshold = (float) $request->query('threshold', 40);
+        $threshold = $threshold >= 1 && $threshold <= 100 ? $threshold : 40;
+        $sort = in_array($request->query('sort'), ['drop', 'drop_points', 'current', 'previous', 'non_laying', 'name'], true)
+            ? $request->query('sort')
+            : 'drop';
+        $direction = $request->query('direction') === 'asc' ? 'asc' : 'desc';
+        $filter = in_array($request->query('filter'), ['all', 'indication'], true)
+            ? $request->query('filter')
+            : 'all';
+
+        $response = $this->nodeHealthIndicationClient->individualEggProductivity($barn['id'], [
+            'days' => $days,
+            'thresholdPercent' => $threshold,
+            'sort' => $sort,
+            'direction' => $direction,
+        ]);
+
+        $productivity = ($response['success'] ?? false) ? ($response['data'] ?? []) : [];
+        $rows = collect(data_get($productivity, 'rows', []));
+
+        if ($filter === 'indication') {
+            $rows = $rows->filter(fn ($row) => (bool) data_get($row, 'isDropIndication'));
+        }
+
+        return view('peternakan.individual-productivity', [
+            'barn' => $this->peternakanService->getBarnDetail($barn),
+            'productivity' => $productivity,
+            'rows' => $rows->values()->all(),
+            'filters' => [
+                'days' => $days,
+                'threshold' => $threshold,
+                'sort' => $sort,
+                'direction' => $direction,
+                'filter' => $filter,
+            ],
+            'error' => ($response['success'] ?? false) ? null : ($response['message'] ?? 'Data produktivitas individu belum bisa dibaca.'),
+            'activeKomoditasId' => $this->peternakanService->getActiveKomoditasId(),
+        ]);
+    }
+
+    public function storeHealthIndication(Request $request, $id)
+    {
+        abort_unless(
+            in_array(session('user.role'), ['pjawab', 'owner', 'admin'], true),
+            403,
+            'Hanya penanggung jawab, owner, atau admin yang dapat membuat laporan indikasi kesehatan.'
+        );
+
+        $analysisMode = $request->input('analysis_mode') === 'individual_productivity_drop'
+            ? 'individual_productivity_drop'
+            : null;
+        $days = in_array((int) $request->input('days'), [7, 14, 30], true)
+            ? (int) $request->input('days')
+            : 7;
+        $threshold = (float) $request->input('threshold', 40);
+        $threshold = $threshold >= 1 && $threshold <= 100 ? $threshold : 40;
+
+        $result = $this->nodeHealthIndicationClient->createAutomaticHealthIndication($id, [
+            'days' => $days,
+            'thresholdPercent' => $threshold,
+            'analysisMode' => $analysisMode,
+            'sort' => $request->input('sort'),
+            'direction' => $request->input('direction'),
+            'userId' => data_get(session('user'), 'id'),
+            'source' => $analysisMode === 'individual_productivity_drop'
+                ? 'laravel-spk-individual-productivity'
+                : 'laravel-spk',
+            'notify' => true,
+            'targetRole' => 'petugas',
+        ]);
+
+        if (! ($result['success'] ?? false)) {
+            return back()->with('health_indication_error', $result['message'] ?? 'Gagal membuat laporan indikasi kesehatan.');
+        }
+
+        $data = $result['data'] ?? [];
+        if (($data['created'] ?? false) === true) {
+            $affectedCount = (int) data_get($data, 'report.affectedObjectCount', 0);
+            $objectText = $affectedCount > 0
+                ? " untuk {$affectedCount} ayam terindikasi"
+                : '';
+
+            return back()->with('health_indication_success', "Laporan indikasi sakit otomatis{$objectText} berhasil dibuat dan notifikasi dikirim ke mobile petugas.");
+        }
+
+        $reason = $data['reason'] ?? null;
+        $message = match ($reason) {
+            'BELOW_THRESHOLD' => 'Belum dibuat karena persentase ayam tidak bertelur belum melewati ambang 40%.',
+            'DUPLICATE_PERIOD' => 'Laporan indikasi untuk periode ini sudah pernah dibuat.',
+            default => 'Request diproses, tetapi laporan baru tidak dibuat.',
+        };
+
+        return back()->with('health_indication_warning', $message);
     }
 
     public function exportProductivity(Request $request, $id)
@@ -180,6 +310,19 @@ class PeternakanController extends Controller
     public function evaluateAll(Request $request): JsonResponse
     {
         $this->peternakanService->forKomoditas($request->input('komoditas_id'));
+        $masterConfigStatus = $this->livestockMasterConfigService->readinessForCommodity($this->peternakanService->getActiveKomoditasId());
+
+        if (! ($masterConfigStatus['configured'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'processed' => 0,
+                'errors' => [[
+                    'coop_id' => null,
+                    'message' => 'Data Master ternak belum lengkap. Lengkapi parameter lingkungan dan fungsi produktivitas sebelum menjalankan SPK.',
+                ]],
+                'evaluation_time' => null,
+            ], 422);
+        }
 
         $coopIds = $this->peternakanService->getActiveCoopIds();
         $processed = 0;

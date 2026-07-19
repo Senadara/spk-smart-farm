@@ -12,6 +12,7 @@
         modal: {{ session('errors') ? (old('deviceCode') && old('_method') == 'PUT' ? '\'editDevice\'' : '\'addDevice\'') : 'null' }},
         activeTab: 'devices',
         editData: {},
+        editConnection: {},
         editParameter: {},
         editCommodityParam: {},
         connectionMode: 'MQTT',
@@ -38,6 +39,15 @@
         openAddConnection(mode = 'MQTT') {
             this.connectionMode = this.normalizeProtocol(mode) || 'MQTT';
             this.modal = 'addConnection';
+        },
+        openEditConnection(data, mode = 'MQTT') {
+            const headers = data?.headers || null;
+            this.editConnection = {
+                ...data,
+                headersText: headers ? JSON.stringify(headers, null, 2) : '',
+            };
+            this.connectionMode = this.normalizeProtocol(mode || data?.protocol?.protocolName || 'MQTT') || 'MQTT';
+            this.modal = 'editConnection';
         }
     }" class="space-y-6">
         {{-- Page Header --}}
@@ -119,16 +129,36 @@
                     @endphp
                     <div class="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
                         <div class="flex items-start justify-between gap-3">
-                            <div>
+                            <div class="min-w-0">
                                 <span class="inline-flex px-2 py-1 rounded-full {{ $protocolName === 'MQTT' ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700' }} text-[10px] font-bold uppercase">{{ $connection->protocol->protocolName ?? '-' }}</span>
                                 <p class="mt-2 font-mono text-xs text-gray-800 break-all">{{ $target }}</p>
                             </div>
-                            @if ($protocolName === 'MQTT')
-                                <form action="{{ route('iot.connections.test', $connection->id) }}" method="POST">
+                            <div class="flex shrink-0 items-center gap-1">
+                                @if ($protocolName === 'MQTT')
+                                    <form action="{{ route('iot.connections.test', $connection->id) }}" method="POST">
+                                        @csrf
+                                        <button type="submit" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-100 bg-white text-emerald-700 transition hover:bg-emerald-50" title="Test MQTT">
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 12.55a11 11 0 0114.08 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 016.95 0M12 20h.01" />
+                                            </svg>
+                                        </button>
+                                    </form>
+                                @endif
+                                <button type="button" @click="openEditConnection(@js($connection), '{{ $protocolName }}')" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-100 bg-white text-blue-600 transition hover:bg-blue-50" title="Edit koneksi">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                </button>
+                                <form action="{{ route('iot.connections.destroy', $connection->id) }}" method="POST" onsubmit="return confirm('Hapus koneksi {{ $connection->protocol->protocolName ?? 'IoT' }} ini?\nKoneksi yang masih dipakai device tidak bisa dihapus.');">
                                     @csrf
-                                    <button type="submit" class="inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-semibold bg-white text-emerald-700 border border-emerald-100 hover:bg-emerald-50">Test MQTT</button>
+                                    @method('DELETE')
+                                    <button type="submit" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-100 bg-white text-red-600 transition hover:bg-red-50" title="Hapus koneksi">
+                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
                                 </form>
-                            @endif
+                            </div>
                         </div>
                         <div class="mt-3 flex flex-wrap gap-2 text-[11px] text-gray-500">
                             @if ($protocolName === 'MQTT')
@@ -142,8 +172,14 @@
                                 <span class="px-2 py-1 rounded-lg bg-white">{{ $connection->authType ?: 'Tanpa auth' }}</span>
                                 <span class="px-2 py-1 rounded-lg bg-white">Polling dari device</span>
                             @endif
+                            <span class="px-2 py-1 rounded-lg bg-white">{{ $connection->devices_count ?? 0 }} device memakai koneksi ini</span>
                         </div>
-                        <button type="button" @click="openAddDevice('{{ $connection->id }}')" class="mt-3 inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-semibold text-[var(--color-primary)] bg-white border border-[var(--color-primary)]20 hover:bg-[var(--color-primary)]05">Pakai untuk Device</button>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <button type="button" @click="openAddDevice('{{ $connection->id }}')" class="inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-semibold text-[var(--color-primary)] bg-white border border-[var(--color-primary)]20 hover:bg-[var(--color-primary)]05">Pakai untuk Device</button>
+                            @if(($connection->devices_count ?? 0) > 0)
+                                <span class="inline-flex items-center rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-700">Hapus terkunci sampai device dipindahkan</span>
+                            @endif
+                        </div>
                     </div>
                 @empty
                     <div class="lg:col-span-2 rounded-xl border border-dashed border-blue-200 bg-blue-50/50 p-6 text-center">
@@ -557,6 +593,113 @@
                 </div>
             </x-iot.modal-form>
         </form>
+
+        {{-- Modal: Edit Connection --}}
+        <template x-if="editConnection.id">
+            <form :action="`{{ url('/iot/connections') }}/${editConnection.id}`" method="POST">
+                @csrf
+                @method('PUT')
+                <x-iot.modal-form id="editConnection" title="Edit Koneksi IoT" size="lg">
+                    <div class="space-y-4">
+                        <div class="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                            <p class="text-xs leading-5 text-slate-600">Perubahan koneksi akan langsung dipakai oleh device yang terhubung. Jika koneksi MQTT sedang didengar listener, jalankan ulang listener agar konfigurasi baru terbaca.</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Jalur Koneksi *</label>
+                            <input type="hidden" name="protocolId" :value="protocolIds[connectionMode]">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                @foreach ($protocolOptions as $option)
+                                    <button type="button" @click="connectionMode = '{{ $option['code'] }}'"
+                                        :class="connectionMode === '{{ $option['code'] }}' ? 'border-[var(--color-primary)] bg-[var(--color-primary)]10 text-[var(--color-primary)]' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'"
+                                        class="text-left rounded-xl border px-3 py-3 transition-colors">
+                                        <span class="block text-sm font-bold">{{ $option['label'] }}</span>
+                                        <span class="block mt-1 text-[11px] leading-4">{{ $option['description'] }}</span>
+                                    </button>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <div x-show="connectionMode === 'API'" x-cloak class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="sm:col-span-2 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                                <p class="text-xs leading-5 text-blue-700">Edit koneksi API/Antares. Auth key dikosongkan jika tidak ingin mengganti token yang sudah tersimpan.</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">Base URL *</label>
+                                <input type="text" name="baseUrl" x-model="editConnection.baseUrl" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">Endpoint Path</label>
+                                <input type="text" name="endpointPath" x-model="editConnection.endpointPath" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">Tipe Autentikasi</label>
+                                <select name="authType" x-model="editConnection.authType" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                                    <option value="none">None</option>
+                                    <option value="api_key">API Key</option>
+                                    <option value="bearer">Bearer Token</option>
+                                    <option value="basic">Basic Auth</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">Auth Key / Token</label>
+                                <input type="password" name="authKey" placeholder="Kosongkan jika tidak berubah" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">Custom Headers (JSON)</label>
+                                <textarea rows="3" name="headers" x-model="editConnection.headersText" placeholder='{"Content-Type": "application/json"}' class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-mono focus:outline-none focus:border-[var(--color-primary)] transition-all resize-none"></textarea>
+                            </div>
+                        </div>
+
+                        <div x-show="connectionMode === 'MQTT'" x-cloak class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="sm:col-span-2 rounded-xl border border-violet-100 bg-violet-50/60 p-3">
+                                <p class="text-xs leading-5 text-violet-700">Edit broker MQTT. Password dikosongkan jika tidak ingin mengganti password yang sudah tersimpan.</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Broker URL *</label>
+                                <input type="text" name="mqttBrokerUrl" x-model="editConnection.mqttBrokerUrl" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">Port MQTT</label>
+                                <input type="number" name="mqttPort" x-model="editConnection.mqttPort" min="1" max="65535" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">Default MQTT Topic</label>
+                                <input type="text" name="mqttTopic" x-model="editConnection.mqttTopic" placeholder="smartfarm/devices/{deviceCode}/sensors" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Client ID</label>
+                                <input type="text" name="mqttClientId" x-model="editConnection.mqttClientId" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Username</label>
+                                <input type="text" name="mqttUsername" x-model="editConnection.mqttUsername" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Password</label>
+                                <input type="password" name="mqttPassword" placeholder="Kosongkan jika tidak berubah" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">QoS</label>
+                                <select name="mqttQos" x-model="editConnection.mqttQos" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                                    <option value="0">0 - At most once</option>
+                                    <option value="1">1 - At least once</option>
+                                    <option value="2">2 - Exactly once</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">Keep Alive (detik)</label>
+                                <input type="number" name="mqttKeepAlive" x-model="editConnection.mqttKeepAlive" min="5" max="65535" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            </div>
+                            <div class="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-2">
+                                <input type="checkbox" name="mqttUseTls" value="1" id="mqttUseTlsEditSetup" x-model="editConnection.mqttUseTls" class="rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]">
+                                <label for="mqttUseTlsEditSetup" class="text-sm font-medium text-gray-700">Gunakan TLS</label>
+                            </div>
+                        </div>
+                    </div>
+                </x-iot.modal-form>
+            </form>
+        </template>
 
         {{-- ═══ MODAL: Add Device ═══ --}}
         <form action="{{ route('iot.devices.store') }}" method="POST">

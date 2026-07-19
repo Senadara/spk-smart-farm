@@ -36,6 +36,12 @@
             </a>
         @endif
 
+        <a href="{{ route('settings.health-scheduler.index') }}" class="rounded-lg border border-amber-200 bg-amber-50 p-5 hover:bg-amber-100" style="text-decoration:none;">
+            <p class="text-sm font-bold text-amber-950">Scheduler Indikasi Kesehatan</p>
+            <p class="mt-1 text-sm text-amber-800">Atur jam pengecekan HDP individu dan kirim notifikasi awal sebelum owner membuat penugasan.</p>
+            <p class="mt-3 text-xs font-semibold text-amber-700">Atur Scheduler</p>
+        </a>
+
         <div class="rounded-lg border border-gray-200 bg-white p-5">
             <p class="text-sm font-bold text-gray-900">DSS Supplier AHP-SAW</p>
             <p class="mt-1 text-sm text-gray-500">Atur bobot AHP, cek ranking SAW, dan bandingkan supplier untuk kebutuhan restock.</p>

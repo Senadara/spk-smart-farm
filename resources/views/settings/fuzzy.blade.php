@@ -124,6 +124,27 @@
         </div>
     @endif
 
+    @if($activeProfile && !($masterConfigStatus['configured'] ?? false))
+        <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h2 class="font-bold">{{ $masterConfigStatus['title'] ?? 'Data Master belum lengkap' }}</h2>
+                        <span class="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-bold text-amber-700">
+                            {{ $masterConfigStatus['environment_count'] ?? 0 }} lingkungan / {{ $masterConfigStatus['function_count'] ?? 0 }} fungsi
+                        </span>
+                    </div>
+                    <p class="mt-1 leading-6">{{ $masterConfigStatus['message'] ?? 'Lengkapi Data Master sebelum mapping sumber data fuzzy.' }}</p>
+                </div>
+                <a href="{{ $masterConfigStatus['data_master_url'] ?? route('data-master.index') }}"
+                    class="inline-flex items-center justify-center rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700"
+                    style="text-decoration:none;">
+                    Buka Data Master
+                </a>
+            </div>
+        </div>
+    @endif
+
     <div class="space-y-4">
         <section class="rounded-2xl border border-gray-100 bg-white p-4" style="box-shadow: var(--shadow-sm);">
             <div class="flex flex-wrap items-center justify-between gap-3">

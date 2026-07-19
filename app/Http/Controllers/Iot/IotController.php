@@ -11,17 +11,21 @@ use App\Models\IotParameter;
 use App\Models\IotParameterMapping;
 use App\Models\IotProtocol;
 use App\Models\IotSensorData;
-use App\Models\Komoditas;
 use App\Models\UnitBudidaya;
 use App\Events\IotSensorDataReceived;
 use App\Services\Iot\IotPayloadIngestor;
 use App\Services\Iot\MqttSubscriptionService;
+use App\Services\LivestockMasterConfigService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class IotController extends Controller
 {
+    public function __construct(
+        protected LivestockMasterConfigService $livestockMasterConfigService
+    ) {}
+
     private const FIXED_PROTOCOLS = [
         'API' => [
             'label' => 'API / Antares',
@@ -62,19 +66,34 @@ class IotController extends Controller
     {
         $this->ensureFixedProtocols();
         $connectionConfigs = IotConnectionConfig::with('protocol')
+            ->withCount('devices')
             ->whereHas('protocol', fn ($query) => $query->whereIn('protocolName', array_keys(self::FIXED_PROTOCOLS)))
             ->get();
+        $livestockCommodityIds = $this->livestockMasterConfigService->livestockCommodityIds();
+        $visibleUnitBudidaya = $this->visibleUnitBudidayaOptions();
+        $visibleUnitIds = $visibleUnitBudidaya->pluck('id')->filter()->values()->all();
+        $deviceIds = IotDevice::query()
+            ->when(! empty($visibleUnitIds), fn ($query) => $query->whereIn('unitBudidayaId', $visibleUnitIds), fn ($query) => $query->whereRaw('1 = 0'))
+            ->pluck('id')
+            ->values()
+            ->all();
 
         return view('iot.devices', [
-            'devices' => IotDevice::with(['unitBudidaya', 'connectionConfig.protocol'])->get(),
-            'unitBudidaya' => $this->visibleUnitBudidayaOptions(),
+            'devices' => IotDevice::with(['unitBudidaya', 'connectionConfig.protocol'])
+                ->when(! empty($visibleUnitIds), fn ($query) => $query->whereIn('unitBudidayaId', $visibleUnitIds), fn ($query) => $query->whereRaw('1 = 0'))
+                ->get(),
+            'unitBudidaya' => $visibleUnitBudidaya,
             'connectionConfigs' => $connectionConfigs,
             'protocols' => IotProtocol::whereIn('protocolName', array_keys(self::FIXED_PROTOCOLS))->get(),
             'protocolOptions' => $this->fixedProtocolOptions(),
-            'parameters' => IotParameter::all(),
-            'mappings' => IotParameterMapping::with(['device', 'parameter'])->get(),
-            'commodityParameters' => CommodityParameter::with(['commodity', 'parameter'])->get(),
-            'commodities' => Komoditas::all(),
+            'parameters' => $this->livestockMasterConfigService->configuredIotParametersForCommodity(null, false),
+            'mappings' => IotParameterMapping::with(['device', 'parameter'])
+                ->when(! empty($deviceIds), fn ($query) => $query->whereIn('deviceId', $deviceIds), fn ($query) => $query->whereRaw('1 = 0'))
+                ->get(),
+            'commodityParameters' => CommodityParameter::with(['commodity', 'parameter'])
+                ->when(! empty($livestockCommodityIds), fn ($query) => $query->whereIn('commodityId', $livestockCommodityIds), fn ($query) => $query->whereRaw('1 = 0'))
+                ->get(),
+            'commodities' => $this->livestockMasterConfigService->livestockCommodities(),
         ]);
     }
 
@@ -97,6 +116,10 @@ class IotController extends Controller
             'pollingInterval.min'          => 'Interval polling minimal 10 detik.',
         ]);
 
+        if (! $this->isVisibleLivestockUnit($validated['unitBudidayaId'])) {
+            return back()->withErrors(['unitBudidayaId' => 'Device peternakan hanya bisa dipasang ke kandang bertipe hewan.'])->withInput();
+        }
+
         IotDevice::create($this->normalizeDevicePayload($validated));
         return back()->with('success', 'Device berhasil didaftarkan.');
     }
@@ -116,6 +139,10 @@ class IotController extends Controller
         ], [
             'deviceCode.unique' => 'Kode device sudah terdaftar.',
         ]);
+
+        if (! $this->isVisibleLivestockUnit($validated['unitBudidayaId'])) {
+            return back()->withErrors(['unitBudidayaId' => 'Device peternakan hanya bisa dipasang ke kandang bertipe hewan.'])->withInput();
+        }
 
         IotDevice::findOrFail($id)->update($this->normalizeDevicePayload($validated));
         return back()->with('success', 'Device berhasil diperbarui.');
@@ -154,6 +181,11 @@ class IotController extends Controller
             'parameterId.exists' => 'Parameter tidak ditemukan.',
             'payloadKey.required'=> 'Payload key wajib diisi.',
         ]);
+
+        $deviceUnitId = IotDevice::where('id', $validated['deviceId'])->value('unitBudidayaId');
+        if (! $deviceUnitId || ! $this->isVisibleLivestockUnit($deviceUnitId)) {
+            return back()->withErrors(['mapping' => 'Mapping hanya bisa dibuat untuk device kandang bertipe hewan.'])->withInput();
+        }
 
         // Cek duplikat kombinasi
         if (IotParameterMapping::where('deviceId', $validated['deviceId'])->where('parameterId', $validated['parameterId'])->exists()) {
@@ -407,6 +439,10 @@ class IotController extends Controller
             return back()->withErrors(['commodity' => 'Nilai minimum harus lebih kecil dari nilai maksimum.'])->withInput();
         }
 
+        if (! $this->livestockMasterConfigService->isLivestockCommodity($validated['commodityId'])) {
+            return back()->withErrors(['commodity' => 'Komoditas IoT pada menu peternakan hanya boleh bertipe hewan.'])->withInput();
+        }
+
         CommodityParameter::create($validated);
         return back()->with('success', 'Parameter komoditas berhasil ditambahkan.');
     }
@@ -542,15 +578,18 @@ class IotController extends Controller
     private function visibleUnitBudidayaOptions()
     {
         $query = DB::table('unitBudidaya')
-            ->select('id', 'nama', 'lokasi', 'status', 'isDeleted', 'owner_id')
-            ->orderBy('nama');
+            ->join('jenisBudidaya', 'unitBudidaya.jenisBudidayaId', '=', 'jenisBudidaya.id')
+            ->select('unitBudidaya.id', 'unitBudidaya.nama', 'unitBudidaya.lokasi', 'unitBudidaya.status', 'unitBudidaya.isDeleted', 'unitBudidaya.owner_id')
+            ->where('jenisBudidaya.tipe', 'hewan')
+            ->where('jenisBudidaya.isDeleted', 0)
+            ->orderBy('unitBudidaya.nama');
 
         if (Schema::hasColumn('unitBudidaya', 'isDeleted')) {
-            $query->where('isDeleted', 0);
+            $query->where('unitBudidaya.isDeleted', 0);
         }
 
         if (Schema::hasColumn('unitBudidaya', 'status')) {
-            $query->where('status', 1);
+            $query->where('unitBudidaya.status', 1);
         }
 
         if (Schema::hasColumn('unitBudidaya', 'owner_id')) {
@@ -565,8 +604,8 @@ class IotController extends Controller
 
             if ($ownerId) {
                 $query->where(function ($tenantQuery) use ($ownerId) {
-                    $tenantQuery->where('owner_id', $ownerId)
-                        ->orWhereNull('owner_id');
+                    $tenantQuery->where('unitBudidaya.owner_id', $ownerId)
+                        ->orWhereNull('unitBudidaya.owner_id');
                 });
             }
         }
@@ -591,6 +630,12 @@ class IotController extends Controller
                 ];
             })
             ->values();
+    }
+
+    private function isVisibleLivestockUnit(string $unitBudidayaId): bool
+    {
+        return $this->visibleUnitBudidayaOptions()
+            ->contains(fn ($unit) => (string) $unit->id === (string) $unitBudidayaId);
     }
 
     private function protocolCode(string $protocolId): string

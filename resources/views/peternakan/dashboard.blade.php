@@ -273,8 +273,41 @@
                 <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                 <span class="font-medium">Belum ada data komoditas.</span>
             </div>
-            <p class="text-xs text-amber-700 mt-1 ml-7">Tambahkan komoditas di Data Master / IoT Config agar filter dashboard berfungsi.</p>
+            <p class="text-xs text-amber-700 mt-1 ml-7">Tambahkan jenis ternak dan komoditas dari mobile agar filter dashboard berfungsi.</p>
         </div>
+        @endif
+
+        @if($hasKomoditas && !($masterConfigStatus['configured'] ?? false))
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 shadow-sm">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="flex gap-3">
+                        <div class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.2 16c-.77 1.33.19 3 1.73 3z"/></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 class="text-sm font-bold">{{ $masterConfigStatus['title'] ?? 'Belum terhubung Data Master' }}</h2>
+                                <span class="rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-bold text-amber-700">
+                                    {{ $masterConfigStatus['environment_count'] ?? 0 }} lingkungan / {{ $masterConfigStatus['function_count'] ?? 0 }} fungsi
+                                </span>
+                            </div>
+                            <p class="mt-1 text-sm leading-relaxed">{{ $masterConfigStatus['message'] ?? 'Lengkapi Data Master sebelum IoT dan Fuzzy SPK dikonfigurasi.' }}</p>
+                            @if(!empty($masterConfigStatus['hints']))
+                                <div class="mt-2 flex flex-wrap gap-2 text-xs">
+                                    @foreach($masterConfigStatus['hints'] as $hint)
+                                        <span class="rounded-full bg-white/70 px-2.5 py-1 font-semibold">{{ $hint }}</span>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                    <a href="{{ $masterConfigStatus['data_master_url'] ?? route('data-master.index') }}"
+                       class="inline-flex items-center justify-center rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-700"
+                       style="text-decoration:none;">
+                        Konfigurasi Data Master
+                    </a>
+                </div>
+            </div>
         @endif
 
         @if(!($dailyReportStatus['isReady'] ?? false))

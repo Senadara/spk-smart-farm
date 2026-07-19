@@ -253,6 +253,9 @@
                                 <option value="{{ $class }}">{{ $label }}</option>
                             @endforeach
                         </select>
+                        @if(empty($availableFunctions))
+                            <p class="mt-2 text-xs leading-5 text-amber-700">Belum ada fungsi produktivitas aktif dari Data Master untuk komoditas ini.</p>
+                        @endif
                     </div>
 
                     <div x-show="editSource.source_type === 'database'" class="rounded-xl border border-amber-100 bg-amber-50/40 p-4 space-y-4">

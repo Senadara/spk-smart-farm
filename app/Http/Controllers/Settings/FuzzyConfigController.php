@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
-use App\Models\Komoditas;
 use App\Models\IotParameter;
 use App\Models\SpkFuzzyProfile;
 use App\Models\SpkFuzzyVariable;
@@ -11,6 +10,7 @@ use App\Models\SpkFuzzySet;
 use App\Models\SpkFuzzyRule;
 use App\Models\SpkFuzzyRuleCondition;
 use App\Models\SpkFuzzyInputSource;
+use App\Services\LivestockMasterConfigService;
 use App\Services\Fuzzy\MamdaniEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -19,35 +19,46 @@ use Illuminate\Validation\Validator;
 
 class FuzzyConfigController extends Controller
 {
+    public function __construct(
+        protected LivestockMasterConfigService $livestockMasterConfigService
+    ) {}
+
     /**
      * Halaman utama konfigurasi Fuzzy Mamdani.
      */
     public function index(Request $request)
     {
+        $livestockCommodityIds = $this->livestockMasterConfigService->livestockCommodityIds();
         $profiles = SpkFuzzyProfile::with('commodity')
+            ->when(! empty($livestockCommodityIds), function ($query) use ($livestockCommodityIds) {
+                $query->where(function ($inner) use ($livestockCommodityIds) {
+                    $inner->whereIn('commodity_id', $livestockCommodityIds)
+                        ->orWhereNull('commodity_id');
+                });
+            }, fn ($query) => $query->whereNull('commodity_id'))
             ->orderByDesc('is_active')
             ->orderBy('name')
             ->get();
 
         $activeProfile = $request->filled('profile_id')
-            ? SpkFuzzyProfile::with('commodity')->find($request->query('profile_id'))
-            : SpkFuzzyProfile::resolveForContext();
+            ? $profiles->firstWhere('id', $request->query('profile_id'))
+            : ($profiles->firstWhere('is_active', true) ?: $profiles->first());
 
         $activeProfile = $activeProfile ?: $profiles->first();
         $activeProfileId = $activeProfile?->id;
 
         $variables = SpkFuzzyVariable::with(['sets', 'inputSource'])
-            ->when($activeProfileId, fn ($query) => $query->where('profile_id', $activeProfileId))
+            ->when($activeProfileId, fn ($query) => $query->where('profile_id', $activeProfileId), fn ($query) => $query->whereRaw('1 = 0'))
             ->orderByRaw("FIELD(`group`, 'lingkungan', 'kesehatan', 'kausalitas')")
             ->get();
 
         $rules = SpkFuzzyRule::with(['conditions.variable', 'conditions.set', 'outputSet.variable'])
-            ->when($activeProfileId, fn ($query) => $query->where('profile_id', $activeProfileId))
+            ->when($activeProfileId, fn ($query) => $query->where('profile_id', $activeProfileId), fn ($query) => $query->whereRaw('1 = 0'))
             ->orderByRaw("FIELD(`group`, 'lingkungan', 'kesehatan', 'kausalitas')")
             ->get();
 
         $inputSources = SpkFuzzyInputSource::with('variable')
-            ->when($activeProfileId, fn ($query) => $query->where('profile_id', $activeProfileId))
+            ->when($activeProfileId, fn ($query) => $query->where('profile_id', $activeProfileId), fn ($query) => $query->whereRaw('1 = 0'))
             ->get();
 
         // Untuk dropdown di modal rule
@@ -56,10 +67,14 @@ class FuzzyConfigController extends Controller
             ->get()
             ->groupBy('variable_id');
 
-        $commodities = Komoditas::where('isDeleted', 0)->orderBy('nama')->get(['id', 'nama']);
-        $iotParameters = IotParameter::orderBy('parameterCode')->get(['id', 'parameterCode', 'parameterName', 'unit']);
-        $availableFunctions = $this->availableSourceFunctions();
+        $commodities = $this->livestockMasterConfigService->livestockCommodities();
+        $iotParameters = $this->livestockMasterConfigService->configuredIotParametersForCommodity($activeProfile?->commodity_id, false);
+        $availableFunctions = $this->availableSourceFunctions($activeProfile?->commodity_id);
         $databaseSources = $this->allowedDatabaseFields();
+        $masterConfigStatus = $this->livestockMasterConfigService->readinessForCommodity($activeProfile?->commodity_id);
+        $masterConfigStatus['data_master_url'] = route('data-master.index', array_filter([
+            'jenis_budidaya_id' => $masterConfigStatus['jenis_budidaya_id'] ?? null,
+        ]));
 
         // Summary stats
         $stats = [
@@ -82,7 +97,8 @@ class FuzzyConfigController extends Controller
             'commodities',
             'iotParameters',
             'availableFunctions',
-            'databaseSources'
+            'databaseSources',
+            'masterConfigStatus'
         ));
     }
 
@@ -96,6 +112,12 @@ class FuzzyConfigController extends Controller
             'reviewed_by' => 'nullable|string|max:150',
             'notes' => 'nullable|string|max:1000',
         ]);
+
+        if (! empty($validated['commodity_id']) && ! $this->livestockMasterConfigService->isLivestockCommodity($validated['commodity_id'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'commodity_id' => 'Profil Fuzzy pada menu peternakan hanya boleh memakai komoditas bertipe hewan.',
+            ]);
+        }
 
         $validated['is_active'] = $validated['status'] === 'active';
         if ($validated['status'] === 'active' && ! empty($validated['reviewed_by'])) {
@@ -517,6 +539,7 @@ class FuzzyConfigController extends Controller
             ->where('profile_id', $validated['profile_id'])
             ->where('type', 'input')
             ->first();
+        $profile = SpkFuzzyProfile::find($validated['profile_id']);
 
         if (! $variable || $variable->group === 'kausalitas') {
             throw \Illuminate\Validation\ValidationException::withMessages([
@@ -557,6 +580,16 @@ class FuzzyConfigController extends Controller
                 throw \Illuminate\Validation\ValidationException::withMessages(['parameter_code' => 'Parameter IoT tidak ditemukan.']);
             }
 
+            $allowedCodes = $this->livestockMasterConfigService
+                ->configuredIotParametersForCommodity($profile?->commodity_id, false)
+                ->pluck('parameterCode')
+                ->values()
+                ->all();
+
+            if ($this->livestockMasterConfigService->hasSchema() && ! in_array($validated['parameter_code'], $allowedCodes, true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['parameter_code' => 'Parameter IoT belum masuk Data Master ternak untuk komoditas ini.']);
+            }
+
             $extra = [
                 'parameterCode' => $validated['parameter_code'],
                 'maxAgeMinutes' => (int) ($validated['max_age_minutes'] ?? 30),
@@ -583,7 +616,7 @@ class FuzzyConfigController extends Controller
         }
 
         if ($validated['source_type'] === 'function') {
-            $functions = array_keys($this->availableSourceFunctions());
+            $functions = array_keys($this->availableSourceFunctions($profile?->commodity_id));
             if (empty($validated['function_name']) || ! in_array($validated['function_name'], $functions, true)) {
                 throw \Illuminate\Validation\ValidationException::withMessages(['function_name' => 'Function source tidak valid.']);
             }
@@ -614,14 +647,9 @@ class FuzzyConfigController extends Controller
         return [$validated, $payload];
     }
 
-    private function availableSourceFunctions(): array
+    private function availableSourceFunctions(?string $commodityId = null): array
     {
-        return [
-            'App\\Services\\Fuzzy\\CalculateHdp' => 'HDP - Hen Day Production',
-            'App\\Services\\Fuzzy\\CalculatePakan' => 'Pakan per ekor per hari',
-            'App\\Services\\Fuzzy\\CalculateMortalitas' => 'Mortalitas bulan berjalan',
-            'App\\Services\\Fuzzy\\CalculateFcr' => 'FCR - Feed Conversion Ratio',
-        ];
+        return $this->livestockMasterConfigService->availableProductivityFunctionMap($commodityId);
     }
 
     private function allowedDatabaseFields(): array

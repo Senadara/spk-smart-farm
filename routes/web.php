@@ -64,12 +64,17 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
     Route::get('/peternakan', [PeternakanController::class, 'index'])->name('peternakan');
     Route::post('/peternakan/evaluate-all', [PeternakanController::class, 'evaluateAll'])->name('peternakan.evaluate-all');
     Route::get('/peternakan/{id}/settlement', [PeternakanController::class, 'settlement'])->name('peternakan.settlement');
+    Route::get('/peternakan/{id}/produktivitas-individu', [PeternakanController::class, 'individualProductivity'])->name('peternakan.individual-productivity');
     Route::get('/peternakan/{id}/export-productivity', [PeternakanController::class, 'exportProductivity'])->name('peternakan.export-productivity');
+    Route::post('/peternakan/{id}/health-indication', [PeternakanController::class, 'storeHealthIndication'])->name('peternakan.health-indication.store');
     Route::get('/peternakan/{id}', [PeternakanController::class, 'show'])->name('peternakan.show');
 
     // Analisa SPK
     Route::get('/spk-analysis', [\App\Http\Controllers\Spk\SpkDashboardController::class, 'index'])->name('spk.dashboard');
     Route::post('/spk-analysis/evaluate', [\App\Http\Controllers\Spk\SpkDashboardController::class, 'evaluate'])->name('spk.dashboard.evaluate');
+    Route::get('/spk-analysis/simulation', [\App\Http\Controllers\Spk\SpkSimulationController::class, 'index'])->name('spk.simulation.index');
+    Route::post('/spk-analysis/simulation', [\App\Http\Controllers\Spk\SpkSimulationController::class, 'run'])->name('spk.simulation.run');
+    Route::post('/spk-analysis/simulation/notification', [\App\Http\Controllers\Spk\SpkSimulationController::class, 'sendNotification'])->name('spk.simulation.notification');
 
     // Fuzzy Mamdani Engine
     Route::prefix('spk-fuzzy')->group(function () {
@@ -169,10 +174,18 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
     });
 
     // Data Master (DASH-02)
-    Route::middleware('role:pjawab,owner,admin')->get('/data-master', [DataMasterController::class, 'index'])->name('data-master.index');
+    Route::middleware('role:pjawab,owner,admin')->group(function () {
+        Route::get('/data-master', [DataMasterController::class, 'index'])->name('data-master.index');
+        Route::post('/data-master/livestock', [DataMasterController::class, 'storeLivestockMaster'])->name('data-master.livestock.store');
+    });
 
     // Pengaturan (Settings Hub)
     Route::middleware('role:pjawab,owner,admin')->get('/settings', [\App\Http\Controllers\Settings\SettingsController::class, 'index'])->name('settings.index');
+    Route::middleware('role:pjawab,owner,admin')->prefix('settings/health-scheduler')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Settings\HealthSchedulerController::class, 'index'])->name('settings.health-scheduler.index');
+        Route::put('/', [\App\Http\Controllers\Settings\HealthSchedulerController::class, 'update'])->name('settings.health-scheduler.update');
+        Route::post('/run', [\App\Http\Controllers\Settings\HealthSchedulerController::class, 'runNow'])->name('settings.health-scheduler.run');
+    });
 
     // Manajemen Karyawan / Petugas (Khusus Owner)
     Route::middleware('role:pjawab')->group(function () {
