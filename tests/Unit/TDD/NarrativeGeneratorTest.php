@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Unit\Narrative;
+namespace Tests\Unit\TDD;
 
 use App\Services\Fuzzy\NarrativeGenerator;
 use PHPUnit\Framework\TestCase;

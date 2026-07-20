@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Unit\Fuzzy;
+namespace Tests\Unit\TDD;
 
 use App\Services\Fuzzy\CalculateHdp;
 use PHPUnit\Framework\TestCase;

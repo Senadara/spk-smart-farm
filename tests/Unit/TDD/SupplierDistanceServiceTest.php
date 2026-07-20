@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Unit\Distance;
+namespace Tests\Unit\TDD;
 
 use App\Services\SupplierDistanceService;
 use PHPUnit\Framework\TestCase;

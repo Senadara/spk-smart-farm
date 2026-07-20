@@ -28,6 +28,17 @@ class CalculatePakan
         if ($populasi <= 0) return 0.0;
 
         // Konversi kg ke gram, bagi per ekor
-        return round(($pakan * 1000) / $populasi, 1);
+        // baris terakhir handle() menjadi:
+return $this->pakanPerEkor($pakan, $populasi);
     }
+
+    public function pakanPerEkor(float $pakan, float $populasi): float
+{
+    if ($populasi <= 0) {
+        return 0.0;
+    }
+
+    // Konversi kg ke gram, bagi per ekor
+    return round(($pakan * 1000) / $populasi, 1);
+}
 }

@@ -193,37 +193,37 @@ class NarrativeGenerator
     // ────────────────────────────────────────────────────────────────────
 
     private function buildDiagnosis(string $diagnosisLabel, array $kausalitas, string $lingkLabel, string $kesehatLabel): string
-    {
-        $recommendation = $kausalitas['recommendation'] ?? null;
-        $ruleMatch      = $kausalitas['matched_rule'] ?? null;
+{
+    $recommendation = $kausalitas['recommendation'] ?? null;
+    $ruleMatch      = $kausalitas['matched_rule'] ?? null;
 
-        // Bangun kalimat berdasarkan diagnosis label
-        $diagnosisMap = [
-            'Krisis Total'            => "Sistem mendiagnosis kondisi ini sebagai Krisis Total. Gabungan lingkungan buruk dan kesehatan buruk memerlukan intervensi darurat segera.",
-            'Stres Lingkungan'        => "Diagnosis sistem: Stres Lingkungan. Tekanan lingkungan yang buruk mulai mempengaruhi keseimbangan kandang meski ayam masih bertahan.",
-            'Lingkungan Berisiko'     => "Meski kesehatan ayam masih terjaga, kondisi lingkungan yang buruk merupakan risiko laten. Diagnosis: Lingkungan Berisiko.",
-            'Gangguan Non-Lingkungan' => "Lingkungan dalam kondisi waspada, namun gangguan kesehatan yang buruk menunjukkan masalah non-lingkungan. Diagnosis: Gangguan Non-Lingkungan.",
-            'Performa Tidak Stabil'   => "Kedua dimensi lingkungan dan kesehatan berada di level waspada. Diagnosis: Performa Tidak Stabil. Sistem manajemen perlu dievaluasi.",
-            'Toleransi Baik'          => "Lingkungan dalam kondisi waspada namun ayam menunjukkan toleransi yang baik. Diagnosis: Toleransi Baik. Lanjutkan monitoring.",
-            'Wabah Internal'          => "Lingkungan baik namun kesehatan buruk. Sistem menduga adanya masalah internal. Diagnosis: Wabah Internal, indikasi penyakit perlu diperiksa.",
-            'Inefisiensi Sistem'      => "Lingkungan baik, namun produktivitas belum optimal. Diagnosis: Inefisiensi Sistem. Periksa manajemen pakan dan operasional.",
-            'Stabil'                  => "Kondisi keseluruhan stabil. Diagnosis: Stabil. Tidak ada tindakan darurat yang diperlukan.",
-            'Anomali Medis'           => "Lingkungan optimal namun kesehatan memburuk. Hal ini mengindikasikan anomali medis. Diagnosis: Anomali Medis, segera cek kemungkinan penyakit.",
-            'Perlu Monitoring'        => "Kondisi mendekati optimal namun kesehatan perlu dipantau. Diagnosis: Perlu Monitoring. Pantau tren 24 sampai 48 jam ke depan.",
-            'Kondisi Baik'            => "Lingkungan optimal dan kesehatan baik. Diagnosis: Kondisi Baik. Pertahankan manajemen saat ini.",
-            'Kondisi Optimal'         => "Seluruh dimensi berada di level optimal. Diagnosis: Kondisi Optimal. Pertahankan semua aspek manajemen.",
-        ];
+    // Bangun kalimat berdasarkan diagnosis label
+    $diagnosisMap = [
+        'Krisis Total'            => "Sistem mendiagnosis kondisi ini sebagai **Krisis Total** — gabungan lingkungan buruk dan kesehatan buruk memerlukan intervensi darurat segera.",
+        'Stres Lingkungan'        => "Diagnosis sistem: **Stres Lingkungan** — tekanan lingkungan yang buruk mulai mempengaruhi keseimbangan kandang meski ayam masih bertahan.",
+        'Lingkungan Berisiko'     => "Meski kesehatan ayam masih terjaga, kondisi lingkungan yang buruk merupakan risiko laten. Diagnosis: **Lingkungan Berisiko**.",
+        'Gangguan Non-Lingkungan' => "Lingkungan dalam kondisi waspada, namun gangguan kesehatan yang buruk menunjukkan masalah non-lingkungan. Diagnosis: **Gangguan Non-Lingkungan**.",
+        'Performa Tidak Stabil'   => "Kedua dimensi lingkungan dan kesehatan berada di level waspada. Diagnosis: **Performa Tidak Stabil** — sistem manajemen perlu dievaluasi.",
+        'Toleransi Baik'          => "Lingkungan dalam kondisi waspada namun ayam menunjukkan toleransi yang baik. Diagnosis: **Toleransi Baik** — lanjutkan monitoring.",
+        'Wabah Internal'          => "Lingkungan baik namun kesehatan buruk. Sistem menduga adanya masalah internal. Diagnosis: **Wabah Internal**, indikasi penyakit perlu diperiksa.",
+        'Inefisiensi Sistem'      => "Lingkungan baik, namun produktivitas belum optimal. Diagnosis: **Inefisiensi Sistem** — periksa manajemen pakan dan operasional.",
+        'Stabil'                  => "Kondisi keseluruhan stabil. Diagnosis: **Stabil** — tidak ada tindakan darurat yang diperlukan.",
+        'Anomali Medis'           => "Lingkungan optimal namun kesehatan memburuk. Hal ini mengindikasikan anomali medis. Diagnosis: **Anomali Medis**, segera cek kemungkinan penyakit.",
+        'Perlu Monitoring'        => "Kondisi mendekati optimal namun kesehatan perlu dipantau. Diagnosis: **Perlu Monitoring** — pantau tren 24 sampai 48 jam ke depan.",
+        'Kondisi Baik'            => "Lingkungan optimal dan kesehatan baik. Diagnosis: **Kondisi Baik** — pertahankan manajemen saat ini.",
+        'Kondisi Optimal'         => "Seluruh dimensi berada di level optimal. Diagnosis: **Kondisi Optimal** — pertahankan semua aspek manajemen.",
+    ];
 
-        $sentenceDiagnosis = $diagnosisMap[$diagnosisLabel]
-            ?? "Diagnosis sistem: {$diagnosisLabel} berdasarkan kombinasi kondisi lingkungan ({$lingkLabel}) dan kesehatan ({$kesehatLabel}).";
+    $sentenceDiagnosis = $diagnosisMap[$diagnosisLabel]
+        ?? "Diagnosis sistem: **{$diagnosisLabel}** berdasarkan kombinasi kondisi lingkungan ({$lingkLabel}) dan kesehatan ({$kesehatLabel}).";
 
-        // Tambahkan rekomendasi jika ada
-        if ($recommendation && $recommendation !== '-') {
-            $sentenceDiagnosis .= " Rekomendasi: {$recommendation}.";
-        }
-
-        return $sentenceDiagnosis;
+    // Tambahkan rekomendasi jika ada
+    if ($recommendation && $recommendation !== '-') {
+        $sentenceDiagnosis .= " **Rekomendasi:** {$recommendation}.";
     }
+
+    return $sentenceDiagnosis;
+}
 
     // ────────────────────────────────────────────────────────────────────
     // HELPER

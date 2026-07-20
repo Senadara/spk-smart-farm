@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Unit\Sensor;
+namespace Tests\Unit\TDD;
 
 use App\Services\PeternakanService;
 use PHPUnit\Framework\Attributes\DataProvider;

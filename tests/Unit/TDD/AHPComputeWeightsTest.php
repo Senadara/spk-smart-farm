@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Unit\Ahp;
+namespace Tests\Unit\TDD;
 
 use App\Services\AHPService;
 use PHPUnit\Framework\TestCase;
