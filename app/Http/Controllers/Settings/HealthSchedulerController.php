@@ -80,18 +80,18 @@ class HealthSchedulerController extends Controller
 
         $summary = data_get($result, 'data.summary', []);
         $processed = (int) data_get($summary, 'processedUnitCount', 0);
-        $created = (int) data_get($summary, 'createdReportCount', 0);
+        $created = (int) data_get($summary, 'createdIndicationCount', data_get($summary, 'createdReportCount', 0));
         $affected = (int) data_get($summary, 'affectedObjectCount', 0);
         $reminders = (int) data_get($summary, 'reminderNotificationCount', 0);
         $duplicateUnits = collect(data_get($summary, 'units', []))
             ->where('reason', 'DUPLICATE_PERIOD')
             ->count();
 
-        $message = "Uji scheduler selesai. {$processed} kandang dicek, {$created} laporan dibuat untuk {$affected} ayam.";
+        $message = "Uji scheduler selesai. {$processed} kandang dicek, {$created} indikasi dibuat untuk {$affected} ayam.";
         if ($reminders > 0) {
-            $message .= " {$reminders} notifikasi pengingat dikirim untuk indikasi yang sudah punya laporan.";
+            $message .= " {$reminders} notifikasi pengingat dikirim untuk indikasi yang masih pending.";
         } elseif ($created === 0 && $duplicateUnits > 0) {
-            $message .= " Ada {$duplicateUnits} kandang yang dilewati karena laporan periode ini sudah pernah dibuat.";
+            $message .= " Ada {$duplicateUnits} kandang yang dilewati karena indikasi periode ini sudah pernah dibuat.";
         }
 
         return redirect()

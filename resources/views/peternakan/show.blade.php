@@ -294,7 +294,7 @@
                             </p>
                             <h4 class="mt-1 text-sm font-black text-slate-900">Analisis per ayam tersedia di halaman khusus</h4>
                             <p class="mt-1 text-xs leading-relaxed text-slate-600">
-                                Buka tabel HDP individu untuk membandingkan periode sekarang dan sebelumnya, mengurutkan ayam dengan penurunan terbesar, serta membuat laporan indikasi sakit otomatis bila diperlukan.
+                                Buka tabel HDP individu untuk membandingkan periode sekarang dan sebelumnya, mengurutkan ayam dengan penurunan terbesar, serta membuat indikasi pemeriksaan kesehatan bila diperlukan.
                             </p>
                         </div>
                         <a

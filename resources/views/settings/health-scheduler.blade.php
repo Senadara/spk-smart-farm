@@ -20,7 +20,7 @@
             <a href="{{ route('settings.index') }}" class="text-xs font-bold text-gray-400 hover:text-gray-600" style="text-decoration:none;">Pengaturan</a>
             <h1 class="mt-1 text-2xl font-black text-gray-950">Scheduler Indikasi Kesehatan</h1>
             <p class="mt-1 max-w-3xl text-sm leading-relaxed text-gray-500">
-                Scheduler ini mengecek HDP individu ayam pada jam yang ditentukan. Jika ada ayam turun minimal ambang yang dipilih, sistem membuat laporan indikasi sakit dan mengirim notifikasi awal ke mobile.
+                Scheduler ini mengecek HDP individu ayam pada jam yang ditentukan. Jika ada ayam turun minimal ambang yang dipilih, sistem menyimpan indikasi pemeriksaan dan mengirim notifikasi awal ke mobile.
             </p>
         </div>
 
@@ -33,7 +33,7 @@
     </div>
 
     <x-page-hint title="Cara kerja singkat" tone="amber" :open="true">
-        Mobile tetap mengirim panen individu melalui detailPanen. Node mengecek kandang bertipe individu, membandingkan HDP periode sekarang dengan periode sebelumnya, lalu mengirim notifikasi awal jika ada indikasi. Owner tetap bisa membuat penugasan resmi setelah membaca laporan.
+        Mobile tetap mengirim panen individu melalui detailPanen. Node mengecek kandang bertipe individu, membandingkan HDP periode sekarang dengan periode sebelumnya, lalu menyimpan daftar objek ayam yang perlu diperiksa. Petugas mobile membuka indikasi itu untuk masuk ke checklist.
     </x-page-hint>
 
     @if(session('success') || session('error'))
