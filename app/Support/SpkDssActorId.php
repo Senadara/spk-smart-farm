@@ -59,6 +59,16 @@ class SpkDssActorId
             }
         }
 
+        // Fallback UUID: cari user di tabel 'user' (singular) by email — skip positiveIntFromMixed
+        $email = $sess['email'] ?? null;
+        if (is_string($email) && $email !== '' && Schema::hasTable('user')) {
+            $uuidRow = DB::table('user')->where('email', $email)->first(['id']);
+            if ($uuidRow !== null && is_string($uuidRow->id)) {
+                // Gunakan crc32 hash UUID sebagai ID numerik positif untuk session DSS
+                return crc32($uuidRow->id) & 0x7FFFFFFF;
+            }
+        }
+
         return null;
     }
 
