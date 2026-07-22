@@ -13,6 +13,12 @@
     $inputCount = $inputVariables->count();
     $sourceCompletion = $inputCount > 0 ? (int) round(($configuredInputCount / $inputCount) * 100) : 100;
     $unconfiguredInputCount = max($inputCount - $configuredInputCount, 0);
+    $assignments = $templateAssignments ?? collect();
+    $activeAssignmentCount = $assignments->whereNotNull('active_profile')->count();
+    $activeTemplateAssignment = $assignments->firstWhere('jenis_budidaya_id', $activeJenisBudidayaId);
+    $profilesForActiveJenis = $profiles->where('jenis_budidaya_id', $activeJenisBudidayaId)->values();
+    $activeLivestockType = $livestockTypes->firstWhere('id', $activeJenisBudidayaId);
+    $initialStageTab = in_array(request('tab'), ['variables', 'sources', 'rules'], true) ? request('tab') : 'variables';
 
     $engineMeta = [
         'lingkungan' => [
@@ -31,42 +37,34 @@
             'label' => 'Engine 3',
             'title' => 'Kausalitas',
             'hint' => 'Menggabungkan hasil engine 1 dan 2 menjadi diagnosis.',
-            'tone' => 'amber',
+            'tone' => 'gray',
         ],
     ];
 
     $stepCards = [
         [
             'number' => '1',
-            'title' => 'Profil',
-            'body' => 'Pilih konfigurasi aktif.',
-            'status' => $activeProfile ? 'Siap' : 'Kosong',
-            'state' => $activeProfile ? 'ok' : 'warn',
-            'tone' => 'gray',
-        ],
-        [
-            'number' => '2',
             'title' => 'Variabel',
-            'body' => 'Input, output, dan set fuzzy.',
+            'body' => 'Input dari Data Master, output default.',
             'status' => $stats['totalVariables'] . ' variabel',
             'state' => $stats['totalVariables'] > 0 ? 'ok' : 'warn',
             'tone' => 'emerald',
         ],
         [
-            'number' => '3',
+            'number' => '2',
             'title' => 'Sumber',
-            'body' => 'Mapping nilai dari data sistem.',
+            'body' => 'Mapping IoT dan laporan sistem.',
             'status' => $configuredInputCount . '/' . $inputCount . ' sumber',
             'state' => $unconfiguredInputCount === 0 ? 'ok' : 'warn',
             'tone' => 'sky',
         ],
         [
-            'number' => '4',
+            'number' => '3',
             'title' => 'Rule',
-            'body' => 'IF-THEN untuk diagnosis.',
+            'body' => 'IF-THEN pakar termasuk kausalitas.',
             'status' => $stats['totalRules'] . ' rule',
             'state' => $stats['totalRules'] > 0 ? 'ok' : 'warn',
-            'tone' => 'amber',
+            'tone' => 'gray',
         ],
     ];
 @endphp
@@ -82,15 +80,10 @@
                 <span class="font-medium text-gray-600">Fuzzy Mamdani</span>
             </div>
             <h1 class="text-2xl font-bold text-[var(--color-gray-900)]">Konfigurasi Fuzzy Mamdani</h1>
-            <p class="mt-1 text-sm text-[var(--color-gray-500)]">Atur profil, variabel, sumber data, dan rule SPK.</p>
+            <p class="mt-1 text-sm text-[var(--color-gray-500)]">Template mengikuti jenis ternak. Input utama ditarik dari Data Master, lalu dipetakan ke IoT atau laporan.</p>
         </div>
 
         <div class="flex flex-wrap gap-2">
-            <button type="button" @click="modal = 'addProfile'"
-                class="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700">
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-                Profil Baru
-            </button>
             <form action="{{ route('settings.fuzzy.reset') }}" method="POST" onsubmit="return confirm('Semua konfigurasi fuzzy akan di-reset ke default. Lanjutkan?');">
                 @csrf
                 <button type="submit"
@@ -134,7 +127,7 @@
                             {{ $masterConfigStatus['environment_count'] ?? 0 }} lingkungan / {{ $masterConfigStatus['function_count'] ?? 0 }} fungsi
                         </span>
                     </div>
-                    <p class="mt-1 leading-6">{{ $masterConfigStatus['message'] ?? 'Lengkapi Data Master sebelum mapping sumber data fuzzy.' }}</p>
+                    <p class="mt-1 leading-6">{{ $masterConfigStatus['message'] ?? 'Lengkapi parameter lingkungan dan produktivitas Data Master sebelum mapping sumber data.' }}</p>
                 </div>
                 <a href="{{ $masterConfigStatus['data_master_url'] ?? route('data-master.index') }}"
                     class="inline-flex items-center justify-center rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700"
@@ -145,71 +138,74 @@
         </div>
     @endif
 
+    @if(($syncSummary['variables_created'] ?? 0) > 0 || ($syncSummary['sets_created'] ?? 0) > 0 || ($syncSummary['sources_synced'] ?? 0) > 0)
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            Konfigurasi template diselaraskan dari Data Master: {{ $syncSummary['variables_created'] ?? 0 }} variabel baru, {{ $syncSummary['sets_created'] ?? 0 }} set baru, {{ $syncSummary['sources_synced'] ?? 0 }} sumber data tersinkron.
+        </div>
+    @endif
+
     <div class="space-y-4">
         <section class="rounded-2xl border border-gray-100 bg-white p-4" style="box-shadow: var(--shadow-sm);">
-            <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(260px,0.9fr)_minmax(0,1.4fr)] xl:items-start">
                 <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <h2 class="text-base font-semibold text-gray-900">Profil Konfigurasi</h2>
+                    <h2 class="text-base font-semibold text-gray-900">Jenis Ternak Aktif</h2>
+                    <p class="mt-1 text-sm leading-6 text-gray-500">
+                        Pilih konteks jenis ternak terlebih dahulu. Variabel, sumber data, dan rule yang tampil mengikuti template aktif pada jenis ternak ini.
+                    </p>
+                    <form method="GET" action="{{ route('settings.fuzzy.index') }}" class="mt-3">
+                        <input type="hidden" name="tab" value="{{ $initialStageTab }}">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">Pilih jenis ternak</label>
+                        <select name="jenis_budidaya_id"
+                            class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm transition-all focus:border-[var(--color-primary)] focus:outline-none"
+                            onchange="this.form.submit()">
+                            @forelse($livestockTypes as $type)
+                                <option value="{{ $type->id }}" {{ $type->id === $activeJenisBudidayaId ? 'selected' : '' }}>
+                                    {{ $type->nama }}
+                                </option>
+                            @empty
+                                <option value="">Belum ada jenis ternak</option>
+                            @endforelse
+                        </select>
+                    </form>
+                </div>
+
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                        <div class="text-[11px] font-semibold uppercase text-gray-400">Jenis</div>
+                        <div class="truncate text-sm font-semibold text-gray-800">{{ $activeLivestockType->nama ?? '-' }}</div>
+                    </div>
+                    <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                        <div class="text-[11px] font-semibold uppercase text-gray-400">Template Aktif</div>
+                        <div class="truncate text-sm font-semibold text-gray-800">{{ $activeProfile?->name ?? 'Belum ada' }}</div>
+                    </div>
+                    <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                        <div class="text-[11px] font-semibold uppercase text-gray-400">Template Tersedia</div>
+                        <div class="text-sm font-semibold text-gray-800">{{ $profilesForActiveJenis->count() }}</div>
+                    </div>
+                    <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                        <div class="text-[11px] font-semibold uppercase text-gray-400">Status</div>
                         @if($activeProfile)
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase
-                                {{ $activeProfile->status === 'active' ? 'bg-emerald-50 text-emerald-700' : ($activeProfile->status === 'review' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600') }}">
-                                {{ $activeProfile->status }}
-                            </span>
-                            @if($activeProfile->is_active)
-                                <span class="inline-flex items-center rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">Aktif</span>
-                            @endif
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase
+                                    {{ $activeProfile->status === 'active' ? 'bg-emerald-50 text-emerald-700' : ($activeProfile->status === 'review' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600') }}">
+                                    {{ $activeProfile->status }}
+                                </span>
+                                @if($activeProfile->is_active)
+                                    <span class="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">Aktif</span>
+                                @endif
+                            </div>
+                        @else
+                            <div class="text-sm font-semibold text-amber-700">Belum aktif</div>
                         @endif
                     </div>
-                </div>
 
-                @if($activeProfile && ! $activeProfile->is_active)
-                    <form action="{{ route('settings.fuzzy.profiles.activate', $activeProfile->id) }}" method="POST" onsubmit="return confirm('Jadikan profil ini sebagai konfigurasi aktif untuk komoditas terkait?');">
-                        @csrf @method('PATCH')
-                        <button type="submit" class="inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 sm:w-auto">
-                            Aktifkan Profil
-                        </button>
-                    </form>
-                @endif
+                    @if(! $activeProfile)
+                        <div class="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 sm:col-span-2 xl:col-span-4">
+                            Jenis ternak ini belum memiliki template aktif. Buat atau aktifkan template pada panel Manajemen Template di bawah.
+                        </div>
+                    @endif
+                </div>
             </div>
-
-            <form method="GET" action="{{ route('settings.fuzzy.index') }}" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-                <div>
-                    <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">Profil yang sedang diedit</label>
-                    <select name="profile_id" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm transition-all focus:border-[var(--color-primary)] focus:outline-none" onchange="this.form.submit()">
-                        @foreach($profiles as $profile)
-                            <option value="{{ $profile->id }}" {{ $profile->id === $activeProfileId ? 'selected' : '' }}>
-                                {{ $profile->name }} {{ $profile->version ? '(' . $profile->version . ')' : '' }} - {{ $profile->commodity->nama ?? 'Tanpa komoditas' }}
-                            </option>
-                        @endforeach
-                    </select>
-                    <input type="hidden" name="tab" :value="tab">
-                </div>
-                <noscript>
-                    <button type="submit" class="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white">Pilih</button>
-                </noscript>
-            </form>
-
-            @if($activeProfile)
-                <div class="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
-                    <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                        <div class="text-[11px] font-semibold uppercase text-gray-400">Nama</div>
-                        <div class="truncate text-sm font-semibold text-gray-800">{{ $activeProfile->name }}</div>
-                    </div>
-                    <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                        <div class="text-[11px] font-semibold uppercase text-gray-400">Komoditas</div>
-                        <div class="truncate text-sm font-semibold text-gray-800">{{ $activeProfile->commodity->nama ?? '-' }}</div>
-                    </div>
-                    <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                        <div class="text-[11px] font-semibold uppercase text-gray-400">Versi</div>
-                        <div class="text-sm font-semibold text-gray-800">{{ $activeProfile->version ?: '-' }}</div>
-                    </div>
-                    <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                        <div class="text-[11px] font-semibold uppercase text-gray-400">Reviewer</div>
-                        <div class="truncate text-sm font-semibold text-gray-800">{{ $activeProfile->reviewed_by ?: '-' }}</div>
-                    </div>
-                </div>
-            @endif
         </section>
 
         <aside class="rounded-2xl border border-emerald-100 bg-white p-4" style="box-shadow: var(--shadow-sm);">
@@ -217,7 +213,7 @@
                 <div class="flex items-start justify-between gap-3 xl:block">
                     <div>
                         <h2 class="text-base font-semibold text-gray-900">Kesiapan SPK</h2>
-                        <p class="mt-0.5 text-xs text-gray-500">Ringkasan konfigurasi aktif.</p>
+                        <p class="mt-0.5 text-xs text-gray-500">Ringkasan template, mapping, dan rule aktif.</p>
                     </div>
                     <span class="rounded-full border px-2.5 py-1 text-xs font-bold {{ $unconfiguredInputCount === 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700' }}">
                         {{ $sourceCompletion }}%
@@ -262,6 +258,7 @@
                             'emerald' => 'border-emerald-100 bg-emerald-50 text-emerald-800',
                             'sky' => 'border-sky-100 bg-sky-50 text-sky-800',
                             'amber' => 'border-amber-100 bg-amber-50 text-amber-800',
+                            'gray' => 'border-gray-200 bg-gray-50 text-gray-700',
                         ][$meta['tone']];
                     @endphp
                     <div class="rounded-lg border {{ $engineToneClasses }} px-3 py-2">
@@ -281,6 +278,10 @@
         </aside>
     </div>
 
+    <div>
+        @include('settings.fuzzy-partials.templates')
+    </div>
+
     <details class="rounded-2xl border border-gray-100 bg-white p-4" style="box-shadow: var(--shadow-sm);">
         <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
             <div>
@@ -289,7 +290,7 @@
             </div>
             <span class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm">Lihat alur</span>
         </summary>
-        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
             @foreach($stepCards as $step)
                 @php
                     $stepTone = [
@@ -365,16 +366,16 @@
             </button>
             <button type="button" @click="setTab('rules')"
                 :aria-selected="tab === 'rules'"
-                :class="tab === 'rules' ? 'border-amber-500 bg-amber-500 text-white shadow-md shadow-amber-100 ring-2 ring-amber-100' : 'border-gray-200 bg-white text-gray-700 hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 hover:shadow-md'"
-                class="group cursor-pointer rounded-xl border px-4 py-3 text-left shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-amber-200"
+                :class="tab === 'rules' ? 'border-slate-300 bg-slate-100 text-slate-950 shadow-md shadow-slate-200 ring-2 ring-slate-100' : 'border-gray-200 bg-white text-gray-700 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 hover:shadow-md'"
+                class="group cursor-pointer rounded-xl border px-4 py-3 text-left shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-slate-200"
                 role="tab">
                 <div class="flex items-center gap-3">
-                    <span class="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-black transition-colors" :class="tab === 'rules' ? 'bg-white/20 text-white ring-1 ring-white/30' : 'bg-amber-100 text-amber-700 group-hover:bg-white'">3</span>
+                    <span class="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-black transition-colors" :class="tab === 'rules' ? 'bg-white text-slate-900 ring-1 ring-slate-200' : 'bg-slate-100 text-slate-700 group-hover:bg-white'">3</span>
                     <div class="min-w-0">
                         <span class="block text-sm font-bold">Rule IF-THEN</span>
                         <span class="block text-xs opacity-80">{{ $stats['totalRules'] }} rule</span>
                     </div>
-                    <svg class="ml-auto h-4 w-4 flex-shrink-0 transition-transform" :class="tab === 'rules' ? 'text-white' : 'text-amber-500 group-hover:translate-x-0.5'" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                    <svg class="ml-auto h-4 w-4 flex-shrink-0 transition-transform" :class="tab === 'rules' ? 'text-slate-700' : 'text-slate-500 group-hover:translate-x-0.5'" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                 </div>
             </button>
         </div>
@@ -398,7 +399,7 @@
 <script>
 function fuzzyConfig() {
     return {
-        tab: @json(request('tab', 'variables')),
+        tab: @json($initialStageTab),
         modal: null,
         editVar: {},
         editSet: {},

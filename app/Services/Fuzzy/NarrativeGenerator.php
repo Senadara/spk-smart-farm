@@ -130,6 +130,13 @@ class NarrativeGenerator
         $diagnosis = $dominant['diagnosis'] ?? null;
         $alpha     = isset($dominant['alpha']) ? round($dominant['alpha'] * 100) : null;
 
+        $lingkLabel = match ($lingkLabel) {
+            'Sangat Nyaman' => 'Optimal',
+            'Nyaman' => 'Baik',
+            'Bahaya', 'Sangat Bahaya' => 'Buruk',
+            default => $lingkLabel,
+        };
+
         // Pilih struktur kalimat berdasarkan label
         $base = match ($lingkLabel) {
             'Optimal' => "Parameter lingkungan — {$nilaiStr} — seluruhnya berada dalam zona ideal.",
@@ -172,6 +179,13 @@ class NarrativeGenerator
         }
 
         $diagnosis = $dominant['diagnosis'] ?? null;
+        $kesehatLabel = match ($kesehatLabel) {
+            'Sangat Sehat' => 'Optimal',
+            'Sehat', 'Efisien Positif' => 'Baik',
+            'Kurang Sehat', 'Inefisiensi', 'Sangat Boros', 'Boros Pakan' => 'Waspada',
+            'Sakit Kritis', 'Sakit Berat', 'Sakit Sedang' => 'Buruk',
+            default => $kesehatLabel,
+        };
 
         $base = match ($kesehatLabel) {
             'Optimal' => "Di sisi produktivitas, semua indikator berada di puncak: {$nilaiStr}.",
@@ -201,11 +215,15 @@ class NarrativeGenerator
         $diagnosisMap = [
             'Krisis Total'            => "Sistem mendiagnosis kondisi ini sebagai Krisis Total. Gabungan lingkungan buruk dan kesehatan buruk memerlukan intervensi darurat segera.",
             'Stres Lingkungan'        => "Diagnosis sistem: Stres Lingkungan. Tekanan lingkungan yang buruk mulai mempengaruhi keseimbangan kandang meski ayam masih bertahan.",
+            'Daya Tahan Baik'         => "Meski produktivitas masih baik, kondisi lingkungan buruk menjadi risiko laten. Diagnosis: Daya Tahan Baik.",
             'Lingkungan Berisiko'     => "Meski kesehatan ayam masih terjaga, kondisi lingkungan yang buruk merupakan risiko laten. Diagnosis: Lingkungan Berisiko.",
+            'Sakit Non-Cuaca'         => "Lingkungan cukup aman, tetapi indikator kesehatan buruk. Diagnosis: Sakit Non-Cuaca, fokus pemeriksaan medis dan kualitas pakan.",
             'Gangguan Non-Lingkungan' => "Lingkungan dalam kondisi waspada, namun gangguan kesehatan yang buruk menunjukkan masalah non-lingkungan. Diagnosis: Gangguan Non-Lingkungan.",
+            'Performa Stagnan'        => "Kedua dimensi berada di level sedang. Diagnosis: Performa Stagnan. Sistem manajemen perlu dievaluasi.",
             'Performa Tidak Stabil'   => "Kedua dimensi lingkungan dan kesehatan berada di level waspada. Diagnosis: Performa Tidak Stabil. Sistem manajemen perlu dievaluasi.",
             'Toleransi Baik'          => "Lingkungan dalam kondisi waspada namun ayam menunjukkan toleransi yang baik. Diagnosis: Toleransi Baik. Lanjutkan monitoring.",
             'Wabah Internal'          => "Lingkungan baik namun kesehatan buruk. Sistem menduga adanya masalah internal. Diagnosis: Wabah Internal, indikasi penyakit perlu diperiksa.",
+            'Inefisiensi Pakan'       => "Lingkungan baik, namun produktivitas belum optimal. Diagnosis: Inefisiensi Pakan. Periksa manajemen pakan dan operasional.",
             'Inefisiensi Sistem'      => "Lingkungan baik, namun produktivitas belum optimal. Diagnosis: Inefisiensi Sistem. Periksa manajemen pakan dan operasional.",
             'Stabil'                  => "Kondisi keseluruhan stabil. Diagnosis: Stabil. Tidak ada tindakan darurat yang diperlukan.",
             'Anomali Medis'           => "Lingkungan optimal namun kesehatan memburuk. Hal ini mengindikasikan anomali medis. Diagnosis: Anomali Medis, segera cek kemungkinan penyakit.",
@@ -231,7 +249,9 @@ class NarrativeGenerator
 
     private function combinedSeverity(string $lingkLabel, string $kesehatLabel): string
     {
-        $severityMap = ['Buruk' => 1, 'Waspada' => 2, 'Baik' => 3, 'Optimal' => 4];
+        $lingkLabel = LayerChickenFuzzyTemplateDefinition::causalityLookupLabel($lingkLabel, 'lingkungan');
+        $kesehatLabel = LayerChickenFuzzyTemplateDefinition::causalityLookupLabel($kesehatLabel, 'kesehatan');
+        $severityMap = ['Buruk' => 1, 'Sedang' => 2, 'Waspada' => 2, 'Baik' => 3, 'Optimal' => 4];
 
         $lingkScore   = $severityMap[$lingkLabel] ?? 2;
         $kesehatScore = $severityMap[$kesehatLabel] ?? 2;
