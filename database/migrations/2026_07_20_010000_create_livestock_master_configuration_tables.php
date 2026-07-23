@@ -103,6 +103,13 @@ return new class extends Migration
                 'description' => 'Persentase produksi harian terhadap populasi aktif.',
                 'required_inputs' => ['panen.jumlah', 'unitBudidaya.jumlah'],
             ],
+            'hhep' => [
+                'name' => 'HHEP - Hen Housed Egg Production',
+                'service_class' => 'App\\Services\\Fuzzy\\CalculateHhep',
+                'output_unit' => '%',
+                'description' => 'Persentase produksi harian terhadap estimasi populasi awal kandang.',
+                'required_inputs' => ['panen.jumlah', 'unitBudidaya.jumlah', 'kematian.id'],
+            ],
             'feed_intake' => [
                 'name' => 'Pakan per ekor per hari',
                 'service_class' => 'App\\Services\\Fuzzy\\CalculatePakan',
@@ -123,6 +130,27 @@ return new class extends Migration
                 'output_unit' => 'rasio',
                 'description' => 'Rasio pakan terhadap egg mass dari panen.',
                 'required_inputs' => ['harianTernak.pakan', 'panen.berat'],
+            ],
+            'egg_mass' => [
+                'name' => 'Egg Mass / Berat panen harian',
+                'service_class' => 'App\\Services\\Fuzzy\\CalculateEggMass',
+                'output_unit' => 'kg',
+                'description' => 'Total berat telur yang dipanen harian dari laporan mobile.',
+                'required_inputs' => ['panen.berat'],
+            ],
+            'avg_egg_weight' => [
+                'name' => 'Berat rata-rata telur',
+                'service_class' => 'App\\Services\\Fuzzy\\CalculateAverageEggWeight',
+                'output_unit' => 'g/butir',
+                'description' => 'Rata-rata berat telur harian dari total berat panen dibagi jumlah butir.',
+                'required_inputs' => ['panen.berat', 'panen.jumlah'],
+            ],
+            'flock_age' => [
+                'name' => 'Umur biologis flock',
+                'service_class' => 'App\\Services\\Fuzzy\\CalculateFlockAge',
+                'output_unit' => 'minggu',
+                'description' => 'Rata-rata umur biologis kandang aktif dari input mobile atau tanggal kandang dibuat.',
+                'required_inputs' => ['unitBudidaya.umurMinggu', 'unitBudidaya.createdAt'],
             ],
         ];
 

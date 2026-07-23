@@ -13,7 +13,7 @@
     $groupStyles = [
         'lingkungan' => 'bg-emerald-50 text-emerald-700 border-emerald-100',
         'kesehatan' => 'bg-sky-50 text-sky-700 border-sky-100',
-        'kausalitas' => 'bg-amber-50 text-amber-700 border-amber-100',
+        'kausalitas' => 'bg-gray-50 text-gray-700 border-gray-200',
     ];
 @endphp
 
@@ -23,8 +23,8 @@
             <div class="flex items-center gap-2">
                 <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-sm font-black text-emerald-700">3</span>
                 <div>
-                    <h2 class="text-base font-semibold text-gray-900">Rule IF-THEN</h2>
-                    <p class="text-xs text-gray-500">Atur kondisi dan output diagnosis.</p>
+                <h2 class="text-base font-semibold text-gray-900">Rule IF-THEN</h2>
+                    <p class="text-xs text-gray-500">Atur kondisi pakar dari nol. Engine 3 menggabungkan hasil Engine 1 dan Engine 2 setelah rule kausalitas dibuat.</p>
                 </div>
             </div>
             <button type="button" @click="ruleConditions = [{ variable_id: '', set_id: '' }, { variable_id: '', set_id: '' }]; modal = 'addRule'"
@@ -61,6 +61,21 @@
                     <input type="text" x-model="ruleSearch" placeholder="Cari diagnosis atau rekomendasi..." class="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm transition-all focus:border-[var(--color-primary)] focus:outline-none">
                 </span>
             </label>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+            <div class="text-xs font-bold uppercase tracking-wide text-emerald-700">Engine 1</div>
+            <p class="mt-1 text-xs leading-5 text-emerald-800">Kondisi sensor lingkungan menghasilkan status lingkungan.</p>
+        </div>
+        <div class="rounded-xl border border-sky-100 bg-sky-50 p-3">
+            <div class="text-xs font-bold uppercase tracking-wide text-sky-700">Engine 2</div>
+            <p class="mt-1 text-xs leading-5 text-sky-800">Data laporan dan fungsi produktivitas menghasilkan indeks produktivitas.</p>
+        </div>
+        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div class="text-xs font-bold uppercase tracking-wide text-gray-700">Engine 3</div>
+            <p class="mt-1 text-xs leading-5 text-gray-600">Kausalitas menggabungkan dua label sebelumnya menjadi diagnosis akhir.</p>
         </div>
     </div>
 

@@ -53,15 +53,18 @@ class PeternakanController extends Controller
 
         $komoditas = $this->livestockMasterConfigService->livestockCommodities();
         $activeKomoditas = $komoditas->firstWhere('id', $activeKomoditasId);
-        $masterConfigStatus = $this->livestockMasterConfigService->readinessForCommodity($activeKomoditasId);
+        $masterConfigStatus = $this->livestockMasterConfigService->summaryForCommodity($activeKomoditasId);
         $masterConfigStatus['data_master_url'] = route('data-master.index', array_filter([
             'jenis_budidaya_id' => $masterConfigStatus['jenis_budidaya_id'] ?? null,
         ]));
 
         $barnEnvironment = $this->peternakanService->getBarnEnvironment();
         $barns = $barnEnvironment['barns'];
+        $masterConfigured = (bool) ($masterConfigStatus['configured'] ?? false);
 
-        $fuzzyByBarn = $this->buildFuzzyByBarn($barns);
+        $fuzzyByBarn = $masterConfigured
+            ? $this->buildFuzzyByBarn($barns)
+            : $this->buildMasterBlockedFuzzyByBarn($barns, $masterConfigStatus);
         $defaultBarnId = $barns[0]['id'] ?? 'all';
         $activeFuzzy = $fuzzyByBarn[$defaultBarnId] ?? $fuzzyByBarn['all'] ?? $this->emptyFuzzyPayload();
 
@@ -71,6 +74,9 @@ class PeternakanController extends Controller
             : 'Belum ada evaluasi otomatis';
 
         $dailyReportStatus = $this->peternakanService->getDailyReportStatus();
+        $spkDailySummary = $masterConfigured
+            ? $this->buildDailySpkSummary($activeKomoditasId, $barns, $dailyReportStatus)
+            : $this->masterBlockedSpkSummary($activeKomoditasId, $barns, $masterConfigStatus);
 
         return view('peternakan.dashboard', [
             'komoditas' => $komoditas,
@@ -89,7 +95,7 @@ class PeternakanController extends Controller
             'productionLog' => $this->peternakanService->getProductionLog(),
             'listKandang' => $this->peternakanService->getListKandang(),
             'dailyReportStatus' => $dailyReportStatus,
-            'spkDailySummary' => $this->buildDailySpkSummary($activeKomoditasId, $barns, $dailyReportStatus),
+            'spkDailySummary' => $spkDailySummary,
             'evaluationTime' => $evaluationTime,
             'hasKomoditas' => $komoditas->isNotEmpty(),
             'masterConfigStatus' => $masterConfigStatus,
@@ -197,7 +203,7 @@ class PeternakanController extends Controller
         abort_unless(
             in_array(session('user.role'), ['pjawab', 'owner', 'admin'], true),
             403,
-            'Hanya penanggung jawab, owner, atau admin yang dapat membuat laporan indikasi kesehatan.'
+            'Hanya penanggung jawab, owner, atau admin yang dapat membuat indikasi pemeriksaan kesehatan.'
         );
 
         $analysisMode = $request->input('analysis_mode') === 'individual_productivity_drop'
@@ -224,24 +230,24 @@ class PeternakanController extends Controller
         ]);
 
         if (! ($result['success'] ?? false)) {
-            return back()->with('health_indication_error', $result['message'] ?? 'Gagal membuat laporan indikasi kesehatan.');
+            return back()->with('health_indication_error', $result['message'] ?? 'Gagal membuat indikasi pemeriksaan kesehatan.');
         }
 
         $data = $result['data'] ?? [];
         if (($data['created'] ?? false) === true) {
-            $affectedCount = (int) data_get($data, 'report.affectedObjectCount', 0);
+            $affectedCount = (int) data_get($data, 'indication.affectedObjectCount', 0);
             $objectText = $affectedCount > 0
                 ? " untuk {$affectedCount} ayam terindikasi"
                 : '';
 
-            return back()->with('health_indication_success', "Laporan indikasi sakit otomatis{$objectText} berhasil dibuat dan notifikasi dikirim ke mobile petugas.");
+            return back()->with('health_indication_success', "Indikasi pemeriksaan kesehatan{$objectText} berhasil dibuat dan notifikasi dikirim ke mobile petugas.");
         }
 
         $reason = $data['reason'] ?? null;
         $message = match ($reason) {
             'BELOW_THRESHOLD' => 'Belum dibuat karena persentase ayam tidak bertelur belum melewati ambang 40%.',
-            'DUPLICATE_PERIOD' => 'Laporan indikasi untuk periode ini sudah pernah dibuat.',
-            default => 'Request diproses, tetapi laporan baru tidak dibuat.',
+            'DUPLICATE_PERIOD' => 'Indikasi untuk periode ini sudah pernah dibuat.',
+            default => 'Request diproses, tetapi indikasi baru tidak dibuat.',
         };
 
         return back()->with('health_indication_warning', $message);
@@ -407,6 +413,91 @@ class PeternakanController extends Controller
         ];
 
         return $map;
+    }
+
+    private function buildMasterBlockedFuzzyByBarn(array $barns, array $masterConfigStatus): array
+    {
+        $payload = [];
+
+        foreach ($barns as $barn) {
+            if (($barn['id'] ?? null) === 'no-data') {
+                continue;
+            }
+
+            $payload[$barn['id']] = $this->masterBlockedFuzzyPayload($masterConfigStatus);
+        }
+
+        $payload['all'] = $this->masterBlockedFuzzyPayload($masterConfigStatus);
+
+        return $payload;
+    }
+
+    private function masterBlockedFuzzyPayload(array $masterConfigStatus): array
+    {
+        $message = $masterConfigStatus['message'] ?? 'Konfigurasikan Data Master terlebih dahulu agar card SPK dapat menampilkan input yang valid.';
+
+        return [
+            'fuzzySensors' => [
+                'lingkungan' => [],
+                'produktivitas' => [],
+            ],
+            'spkResults' => [
+                'lingkungan' => [
+                    'status' => 'BELUM SIAP',
+                    'statusColor' => 'gray',
+                    'score' => 0,
+                    'scoreColor' => 'gray',
+                    'title' => 'Menunggu Data Master',
+                    'description' => $message,
+                    'link' => $masterConfigStatus['data_master_url'] ?? '#',
+                ],
+                'produktivitas' => [
+                    'status' => 'BELUM SIAP',
+                    'statusColor' => 'gray',
+                    'score' => 0,
+                    'scoreColor' => 'gray',
+                    'title' => 'Card produktivitas belum aktif',
+                    'description' => 'Pilih fungsi produktivitas di Data Master sebelum ringkasan produktivitas ditampilkan.',
+                    'link' => $masterConfigStatus['data_master_url'] ?? '#',
+                ],
+                'gabungan' => [
+                    'status' => 'DATA MASTER',
+                    'statusColor' => 'gray',
+                    'score' => 0,
+                    'scoreColor' => 'gray',
+                    'title' => 'Konfigurasi diperlukan',
+                    'description' => $message,
+                    'link' => $masterConfigStatus['data_master_url'] ?? '#',
+                    'isMain' => true,
+                ],
+            ],
+            'spider' => ['labels' => [], 'values' => []],
+            'indicators' => [],
+        ];
+    }
+
+    private function masterBlockedSpkSummary(?string $commodityId, array $barns, array $masterConfigStatus): array
+    {
+        return [
+            'status' => 'Butuh Data Master',
+            'tone' => 'amber',
+            'score' => null,
+            'analyses_today' => 0,
+            'last_update' => null,
+            'last_update_human' => null,
+            'hints' => array_values(array_filter(array_unique(array_merge(
+                [$masterConfigStatus['message'] ?? 'Lengkapi Data Master sebelum menjalankan SPK.'],
+                $masterConfigStatus['hints'] ?? []
+            )))),
+            'active_tasks' => 0,
+            'needs_action_count' => 0,
+            'barn_count' => collect($barns)->where('id', '!=', 'no-data')->count(),
+            'action_candidates' => [],
+            'spk_url' => route('spk.dashboard', array_filter([
+                'komoditas' => $commodityId,
+            ])),
+            'tasks_url' => route('spk.tasks.index', ['tab' => 'active']),
+        ];
     }
 
     private function buildDailySpkSummary(?string $commodityId, array $barns, array $dailyReportStatus): array
@@ -595,6 +686,7 @@ class PeternakanController extends Controller
         $kesehatScore = round((float) ($kesehatan['value'] ?? 0), 1);
         $gabScore = round(min($lingkScore, $kesehatScore), 1);
         $sensorCards = $this->sensorCardMapper->fromResult($result);
+        $environmentCards = $this->peternakanService->filterEnvironmentCardsByMaster($sensorCards['lingkungan'] ?? []);
         $spkLink = route('spk.dashboard', array_filter([
             'komoditas' => $this->peternakanService->getActiveKomoditasId(),
             'coop_id' => $barn['id'] ?? null,
@@ -614,12 +706,19 @@ class PeternakanController extends Controller
             ['label' => 'Amonia',     'percent' => round($ammoPct),  'status' => $amonia > 20 ? 'warning' : 'normal', 'statusLabel' => round($amonia, 1).' ppm - '.(isset($fuzzLingk['amonia']) && $fuzzLingk['amonia'] ? array_search(max($fuzzLingk['amonia']), $fuzzLingk['amonia']) : '-')],
         ];
 
-        $productivityCards = $sensorCards['produktivitas'] ?? [];
+        $productivityCards = $this->peternakanService->filterProductivityCardsByMaster($sensorCards['produktivitas'] ?? []);
+        $productivityFallback = $this->cachedProduktivitasData($barn['id'] ?? null);
+        $productivityIndicators = $productivityCards
+            ? $this->sensorCardMapper->toIndicators($productivityCards)
+            : ($productivityFallback['indicators'] ?? []);
+        $productivitySpider = $productivityCards
+            ? $this->sensorCardMapper->toSpider($productivityCards)
+            : ($productivityFallback['spider'] ?? ['labels' => [], 'values' => []]);
 
         return [
             'fuzzySensors' => [
-                'lingkungan' => $sensorCards['lingkungan'] ?? [],
-                'produktivitas' => $productivityCards,
+                'lingkungan' => $environmentCards,
+                'produktivitas' => $productivityCards ?: ($productivityFallback['productivitySensors'] ?? []),
             ],
             'spkResults' => [
                 'lingkungan' => [
@@ -651,8 +750,8 @@ class PeternakanController extends Controller
                     'isMain' => true,
                 ],
             ],
-            'spider' => $this->sensorCardMapper->toSpider($productivityCards),
-            'indicators' => $this->sensorCardMapper->toIndicators($productivityCards),
+            'spider' => $productivitySpider,
+            'indicators' => $productivityIndicators,
         ];
     }
 

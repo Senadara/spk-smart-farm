@@ -274,7 +274,7 @@ class BarnHealthContextService
                 'title' => 'Indikasi ayam tidak bertelur tinggi',
                 'message' => number_format($percent, 1, ',', '.')."% ayam ({$count}/{$active}) tidak bertelur selama {$days} hari, melewati ambang ".number_format($threshold, 0, ',', '.').'%.',
                 'source' => 'detailPanen + objekBudidaya',
-                'action' => 'Buat laporan indikasi sakit otomatis dan minta petugas menjalankan checklist kesehatan di mobile.',
+                'action' => 'Buat indikasi pemeriksaan kesehatan dan minta petugas menjalankan checklist kesehatan di mobile.',
             ]];
         }
 

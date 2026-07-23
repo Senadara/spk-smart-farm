@@ -11,16 +11,19 @@ use App\Models\SpkFuzzyRule;
 use App\Models\SpkFuzzyRuleCondition;
 use App\Models\SpkFuzzyInputSource;
 use App\Services\LivestockMasterConfigService;
+use App\Services\Fuzzy\FuzzyProfileTemplateService;
+use App\Services\Fuzzy\LayerChickenFuzzyDefaultTemplateService;
 use App\Services\Fuzzy\MamdaniEngine;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Validator;
 
 class FuzzyConfigController extends Controller
 {
     public function __construct(
-        protected LivestockMasterConfigService $livestockMasterConfigService
+        protected LivestockMasterConfigService $livestockMasterConfigService,
+        protected FuzzyProfileTemplateService $fuzzyProfileTemplateService
     ) {}
 
     /**
@@ -29,23 +32,61 @@ class FuzzyConfigController extends Controller
     public function index(Request $request)
     {
         $livestockCommodityIds = $this->livestockMasterConfigService->livestockCommodityIds();
-        $profiles = SpkFuzzyProfile::with('commodity')
-            ->when(! empty($livestockCommodityIds), function ($query) use ($livestockCommodityIds) {
+        $livestockJenisBudidayaIds = $this->livestockMasterConfigService->livestockJenisBudidayaIds();
+        $profileHasJenisColumn = Schema::hasColumn('spk_fuzzy_profiles', 'jenis_budidaya_id');
+        $profiles = SpkFuzzyProfile::with(['commodity', 'jenisBudidaya'])
+            ->when(! empty($livestockJenisBudidayaIds) || ! empty($livestockCommodityIds), function ($query) use ($livestockJenisBudidayaIds, $livestockCommodityIds, $profileHasJenisColumn) {
                 $query->where(function ($inner) use ($livestockCommodityIds) {
-                    $inner->whereIn('commodity_id', $livestockCommodityIds)
-                        ->orWhereNull('commodity_id');
+                    if (! empty($livestockCommodityIds)) {
+                        $inner->whereIn('commodity_id', $livestockCommodityIds)
+                            ->orWhereNull('commodity_id');
+                    } else {
+                        $inner->whereNull('commodity_id');
+                    }
                 });
+                if ($profileHasJenisColumn) {
+                    $query->orWhere(function ($inner) use ($livestockJenisBudidayaIds) {
+                        if (! empty($livestockJenisBudidayaIds)) {
+                            $inner->whereIn('jenis_budidaya_id', $livestockJenisBudidayaIds)
+                                ->orWhereNull('jenis_budidaya_id');
+                        } else {
+                            $inner->whereNull('jenis_budidaya_id');
+                        }
+                    });
+                }
             }, fn ($query) => $query->whereNull('commodity_id'))
             ->orderByDesc('is_active')
             ->orderBy('name')
             ->get();
 
-        $activeProfile = $request->filled('profile_id')
-            ? $profiles->firstWhere('id', $request->query('profile_id'))
-            : ($profiles->firstWhere('is_active', true) ?: $profiles->first());
+        $livestockTypes = $this->livestockMasterConfigService->livestockTypeOptions();
+        $requestedJenisBudidayaId = $request->filled('jenis_budidaya_id')
+            ? $this->livestockMasterConfigService->resolveLivestockJenisBudidayaId($request->query('jenis_budidaya_id'))
+            : null;
 
-        $activeProfile = $activeProfile ?: $profiles->first();
+        $activeProfile = null;
+
+        if ($request->filled('profile_id')) {
+            $activeProfile = $profiles->firstWhere('id', $request->query('profile_id'));
+        } elseif ($requestedJenisBudidayaId) {
+            $profilesForJenis = $profiles->where('jenis_budidaya_id', $requestedJenisBudidayaId)->values();
+            $activeProfile = $profilesForJenis->firstWhere('is_active', true) ?: $profilesForJenis->first();
+        } else {
+            $activeProfile = $profiles->firstWhere('is_active', true) ?: $profiles->first();
+        }
+
         $activeProfileId = $activeProfile?->id;
+        $syncSummary = $activeProfile ? $this->fuzzyProfileTemplateService->syncFromMaster($activeProfile) : null;
+
+        if ($activeProfile) {
+            $activeProfile->refresh()->load(['commodity', 'jenisBudidaya']);
+        }
+
+        $activeJenisBudidayaId = $requestedJenisBudidayaId
+            ?: $activeProfile?->jenis_budidaya_id
+            ?: SpkFuzzyProfile::resolveJenisBudidayaIdFromCommodity($activeProfile?->commodity_id);
+        $activeCommodityId = $activeProfile?->commodity_id
+            ?: $this->livestockMasterConfigService->resolveLivestockCommodityIdForJenis($activeJenisBudidayaId);
 
         $variables = SpkFuzzyVariable::with(['sets', 'inputSource'])
             ->when($activeProfileId, fn ($query) => $query->where('profile_id', $activeProfileId), fn ($query) => $query->whereRaw('1 = 0'))
@@ -68,13 +109,39 @@ class FuzzyConfigController extends Controller
             ->groupBy('variable_id');
 
         $commodities = $this->livestockMasterConfigService->livestockCommodities();
-        $iotParameters = $this->livestockMasterConfigService->configuredIotParametersForCommodity($activeProfile?->commodity_id, false);
-        $availableFunctions = $this->availableSourceFunctions($activeProfile?->commodity_id);
+        $iotParameters = $this->livestockMasterConfigService->configuredIotParametersForJenis($activeJenisBudidayaId, false);
+        $availableFunctions = $this->availableSourceFunctions($activeCommodityId);
         $databaseSources = $this->allowedDatabaseFields();
-        $masterConfigStatus = $this->livestockMasterConfigService->readinessForCommodity($activeProfile?->commodity_id);
+        $masterConfigStatus = $activeJenisBudidayaId
+            ? $this->livestockMasterConfigService->readinessForJenis($activeJenisBudidayaId)
+            : [
+                'configured' => false,
+                'title' => 'Belum ada jenis ternak',
+                'message' => 'Buat atau pilih template fuzzy untuk jenis ternak terlebih dahulu.',
+                'environment_count' => 0,
+                'function_count' => 0,
+                'hints' => [],
+            ];
         $masterConfigStatus['data_master_url'] = route('data-master.index', array_filter([
-            'jenis_budidaya_id' => $masterConfigStatus['jenis_budidaya_id'] ?? null,
+            'jenis_budidaya_id' => $activeJenisBudidayaId,
         ]));
+        $masterVariableNames = $syncSummary['master_variable_names'] ?? [];
+        $templateAssignments = $livestockTypes->map(function ($type) use ($profiles) {
+            $typeProfiles = $profiles->where('jenis_budidaya_id', $type->id)->values();
+            $activeTemplate = $typeProfiles->firstWhere('is_active', true);
+
+            return (object) [
+                'jenis_budidaya_id' => $type->id,
+                'jenis_budidaya_nama' => $type->nama,
+                'primary_commodity_id' => $type->primary_commodity_id ?? null,
+                'template_count' => $typeProfiles->count(),
+                'active_profile' => $activeTemplate,
+                'profiles' => $typeProfiles,
+                'draft_count' => $typeProfiles->where('status', 'draft')->count(),
+                'review_count' => $typeProfiles->where('status', 'review')->count(),
+                'archived_count' => $typeProfiles->where('status', 'archived')->count(),
+            ];
+        });
 
         // Summary stats
         $stats = [
@@ -94,17 +161,24 @@ class FuzzyConfigController extends Controller
             'profiles',
             'activeProfile',
             'activeProfileId',
+            'livestockTypes',
+            'activeJenisBudidayaId',
+            'activeCommodityId',
             'commodities',
             'iotParameters',
             'availableFunctions',
             'databaseSources',
-            'masterConfigStatus'
+            'masterConfigStatus',
+            'syncSummary',
+            'masterVariableNames',
+            'templateAssignments'
         ));
     }
 
     public function storeProfile(Request $request)
     {
         $validated = $request->validate([
+            'jenis_budidaya_id' => 'required|string|exists:jenisBudidaya,id',
             'commodity_id' => 'nullable|exists:komoditas,id',
             'name' => 'required|string|max:150',
             'version' => 'required|string|max:30',
@@ -113,12 +187,18 @@ class FuzzyConfigController extends Controller
             'notes' => 'nullable|string|max:1000',
         ]);
 
-        if (! empty($validated['commodity_id']) && ! $this->livestockMasterConfigService->isLivestockCommodity($validated['commodity_id'])) {
+        $jenisBudidayaId = $this->livestockMasterConfigService
+            ->resolveLivestockJenisBudidayaId($validated['jenis_budidaya_id']);
+
+        if (! $jenisBudidayaId || $jenisBudidayaId !== $validated['jenis_budidaya_id']) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'commodity_id' => 'Profil Fuzzy pada menu peternakan hanya boleh memakai komoditas bertipe hewan.',
+                'jenis_budidaya_id' => 'Template Fuzzy hanya boleh memakai jenis budidaya bertipe hewan.',
             ]);
         }
 
+        $validated['jenis_budidaya_id'] = $jenisBudidayaId;
+        $validated['commodity_id'] = $this->livestockMasterConfigService
+            ->resolveLivestockCommodityIdForJenis($jenisBudidayaId, $validated['commodity_id'] ?? null);
         $validated['is_active'] = $validated['status'] === 'active';
         if ($validated['status'] === 'active' && ! empty($validated['reviewed_by'])) {
             $validated['reviewed_at'] = now();
@@ -126,16 +206,27 @@ class FuzzyConfigController extends Controller
 
         $profile = DB::transaction(function () use ($validated) {
             if ($validated['is_active']) {
-                SpkFuzzyProfile::where('commodity_id', $validated['commodity_id'])->update(['is_active' => false]);
+                $activeQuery = SpkFuzzyProfile::query();
+                if (Schema::hasColumn('spk_fuzzy_profiles', 'jenis_budidaya_id')) {
+                    $activeQuery->where('jenis_budidaya_id', $validated['jenis_budidaya_id']);
+                } else {
+                    $activeQuery->where('commodity_id', $validated['commodity_id']);
+                }
+                $activeQuery->update(['is_active' => false]);
             }
 
             return SpkFuzzyProfile::create($validated);
         });
 
+        $this->fuzzyProfileTemplateService->syncFromMaster($profile);
         MamdaniEngine::clearCache($profile->id);
 
-        return redirect()->route('settings.fuzzy.index', ['profile_id' => $profile->id])
-            ->with('success', 'Profile fuzzy berhasil dibuat.');
+        return redirect()->route('settings.fuzzy.index', [
+            'profile_id' => $profile->id,
+            'jenis_budidaya_id' => $profile->jenis_budidaya_id,
+            'tab' => 'variables',
+        ])
+            ->with('success', 'Template fuzzy berhasil dibuat.');
     }
 
     public function activateProfile(string $id)
@@ -143,7 +234,13 @@ class FuzzyConfigController extends Controller
         $profile = SpkFuzzyProfile::findOrFail($id);
 
         DB::transaction(function () use ($profile) {
-            SpkFuzzyProfile::where('commodity_id', $profile->commodity_id)->update(['is_active' => false]);
+            $activeQuery = SpkFuzzyProfile::query();
+            if (Schema::hasColumn('spk_fuzzy_profiles', 'jenis_budidaya_id') && $profile->jenis_budidaya_id) {
+                $activeQuery->where('jenis_budidaya_id', $profile->jenis_budidaya_id);
+            } else {
+                $activeQuery->where('commodity_id', $profile->commodity_id);
+            }
+            $activeQuery->update(['is_active' => false]);
             $profile->update([
                 'status' => 'active',
                 'is_active' => true,
@@ -151,13 +248,82 @@ class FuzzyConfigController extends Controller
             ]);
         });
 
+        $this->fuzzyProfileTemplateService->syncFromMaster($profile);
         MamdaniEngine::clearCache($profile->id);
 
-        return redirect()->route('settings.fuzzy.index', ['profile_id' => $profile->id])
-            ->with('success', "Profile '{$profile->name}' berhasil dijadikan aktif.");
+        return redirect()->route('settings.fuzzy.index', [
+            'profile_id' => $profile->id,
+            'jenis_budidaya_id' => $profile->jenis_budidaya_id,
+            'tab' => 'variables',
+        ])
+            ->with('success', "Template '{$profile->name}' berhasil dijadikan aktif.");
     }
 
     // ── VARIABLES ────────────────────────────────────────────────
+
+    public function activateTemplateForJenis(Request $request)
+    {
+        $validated = $request->validate([
+            'jenis_budidaya_id' => 'required|string|exists:jenisBudidaya,id',
+            'profile_id' => 'required|string|exists:spk_fuzzy_profiles,id',
+        ]);
+
+        $jenisBudidayaId = $this->livestockMasterConfigService
+            ->resolveLivestockJenisBudidayaId($validated['jenis_budidaya_id']);
+
+        if (! $jenisBudidayaId || $jenisBudidayaId !== $validated['jenis_budidaya_id']) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'jenis_budidaya_id' => 'Template Fuzzy hanya boleh diaktifkan untuk jenis budidaya bertipe hewan.',
+            ]);
+        }
+
+        $profile = SpkFuzzyProfile::findOrFail($validated['profile_id']);
+
+        if ($profile->jenis_budidaya_id && $profile->jenis_budidaya_id !== $jenisBudidayaId) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'profile_id' => 'Template ini sudah terhubung dengan jenis ternak lain. Buat profil baru untuk jenis ternak yang dipilih.',
+            ]);
+        }
+
+        if ($profile->status === 'archived') {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'profile_id' => 'Template yang sudah diarsipkan tidak bisa dijadikan aktif.',
+            ]);
+        }
+
+        $commodityId = $this->livestockMasterConfigService
+            ->resolveLivestockCommodityIdForJenis($jenisBudidayaId, $profile->commodity_id);
+
+        DB::transaction(function () use ($profile, $jenisBudidayaId, $commodityId) {
+            $activeQuery = SpkFuzzyProfile::query()
+                ->where('id', '<>', $profile->id);
+
+            if (Schema::hasColumn('spk_fuzzy_profiles', 'jenis_budidaya_id')) {
+                $activeQuery->where('jenis_budidaya_id', $jenisBudidayaId);
+            } else {
+                $activeQuery->where('commodity_id', $commodityId);
+            }
+
+            $activeQuery->update(['is_active' => false]);
+
+            $profile->forceFill([
+                'jenis_budidaya_id' => $jenisBudidayaId,
+                'commodity_id' => $commodityId,
+                'status' => 'active',
+                'is_active' => true,
+                'reviewed_at' => $profile->reviewed_at ?: now(),
+            ])->save();
+        });
+
+        $this->fuzzyProfileTemplateService->syncFromMaster($profile);
+        MamdaniEngine::clearCache($profile->id);
+
+        return redirect()->route('settings.fuzzy.index', [
+            'profile_id' => $profile->id,
+            'jenis_budidaya_id' => $jenisBudidayaId,
+            'tab' => 'variables',
+        ])->with('success', "Template '{$profile->name}' aktif untuk jenis ternak terkait.");
+    }
 
     public function storeVariable(Request $request)
     {
@@ -581,13 +747,17 @@ class FuzzyConfigController extends Controller
             }
 
             $allowedCodes = $this->livestockMasterConfigService
-                ->configuredIotParametersForCommodity($profile?->commodity_id, false)
+                ->configuredIotParametersForJenis(
+                    $profile?->jenis_budidaya_id
+                        ?: SpkFuzzyProfile::resolveJenisBudidayaIdFromCommodity($profile?->commodity_id),
+                    false
+                )
                 ->pluck('parameterCode')
                 ->values()
                 ->all();
 
             if ($this->livestockMasterConfigService->hasSchema() && ! in_array($validated['parameter_code'], $allowedCodes, true)) {
-                throw \Illuminate\Validation\ValidationException::withMessages(['parameter_code' => 'Parameter IoT belum masuk Data Master ternak untuk komoditas ini.']);
+                throw \Illuminate\Validation\ValidationException::withMessages(['parameter_code' => 'Parameter IoT belum masuk Data Master untuk jenis ternak ini.']);
             }
 
             $extra = [
@@ -704,12 +874,12 @@ class FuzzyConfigController extends Controller
      */
     public function resetToDefault()
     {
-        Artisan::call('db:seed', ['--class' => 'SpkFuzzySeeder', '--force' => true]);
-        MamdaniEngine::clearCache();
+        $stats = app(LayerChickenFuzzyDefaultTemplateService::class)->reset();
 
-        $profileId = SpkFuzzyProfile::where('name', 'Ayam Petelur - RFC v1')->value('id');
-
-        return redirect()->route('settings.fuzzy.index', ['profile_id' => $profileId])
-            ->with('success', 'Konfigurasi fuzzy berhasil di-reset ke default.');
+        return redirect()->route('settings.fuzzy.index', array_filter([
+            'profile_id' => $stats['profile_id'] ?? null,
+            'jenis_budidaya_id' => $stats['jenis_budidaya_id'] ?? null,
+            'tab' => 'rules',
+        ]))->with('success', 'Konfigurasi fuzzy ayam petelur berhasil di-reset ke default validasi pakar.');
     }
 }

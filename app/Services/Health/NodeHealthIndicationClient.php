@@ -33,7 +33,7 @@ class NodeHealthIndicationClient
 
     public function createAutomaticHealthIndication(string $unitBudidayaId, array $payload = []): array
     {
-        return $this->request('POST', 'internal/spk/health-indications', [
+        return $this->request('POST', 'internal/spk/health-indication-alerts', [
             'unitBudidayaId' => $unitBudidayaId,
             'days' => $payload['days'] ?? 7,
             'thresholdPercent' => $payload['thresholdPercent'] ?? 40,
