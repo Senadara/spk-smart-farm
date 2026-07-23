@@ -32,32 +32,32 @@ test.describe("Modul Supplier SPK - Dashboard SAW", () => {
         await supplierSpkPage.expectDssDashboardReady();
     });
 
-    test('Positif - DSS Dashboard menampilkan link "Edit bobot · AHP" untuk kembali ke config', async ({ page }) => {
+    test('Positif - DSS Dashboard menampilkan link "Atur AHP" untuk kembali ke config', async ({ page }) => {
         /**
          * Given: Dashboard loaded
          * When: Check navigation links
-         * Then: "Edit bobot · AHP" link visible
+         * Then: "Atur AHP" link visible (kembali ke konfigurasi bobot)
          */
 
         // Arrange & Act
         await page.goto('/spk-suppliers/dss/dashboard', { waitUntil: 'domcontentloaded' });
 
-        // Assert: Edit bobot link
-        await expect(page.getByRole('link', { name: /Edit bobot.*AHP/i })).toBeVisible();
+        // Assert: Atur AHP link
+        await expect(page.getByRole('link', { name: /Atur AHP/i }).first()).toBeVisible();
     });
 
-    test('Positif - DSS Dashboard menampilkan link "Komparasi produk"', async ({ page }) => {
+    test('Positif - DSS Dashboard menampilkan link "Cari Barang"', async ({ page }) => {
         /**
          * Given: Dashboard loaded
          * When: Check navigation links
-         * Then: "Komparasi produk" link visible
+         * Then: "Cari Barang" link visible (menuju halaman perbandingan barang)
          */
 
         // Arrange & Act
         await page.goto('/spk-suppliers/dss/dashboard', { waitUntil: 'domcontentloaded' });
 
-        // Assert: Komparasi produk link
-        await expect(page.getByRole('link', { name: /Komparasi produk/i })).toBeVisible();
+        // Assert: Cari Barang link
+        await expect(page.getByRole('link', { name: /Cari Barang/i }).first()).toBeVisible();
     });
 
     test('Positif - DSS Dashboard menampilkan warning jika bobot AHP belum valid (CR > 0.1)', async ({ page }) => {
@@ -91,7 +91,7 @@ test.describe("Modul Supplier SPK - Dashboard SAW", () => {
 
         // Step 1: Settings → AHP Config
         await settingsPage.goto();
-        await page.getByRole('link', { name: /Atur bobot.*AHP/i }).click();
+        await page.getByRole('link', { name: /Atur [Bb]obot/i }).first().click();
         await expect(page).toHaveURL(/.*\/spk-suppliers\/dss\/config/);
 
         // Step 2: Submit AHP Config
@@ -111,8 +111,8 @@ test.describe("Modul Supplier SPK - Dashboard SAW", () => {
         }
         await supplierSpkPage.expectDssDashboardReady();
 
-        // Step 4: Navigate to Products
-        await page.getByRole('link', { name: /Komparasi produk/i }).click();
+        // Step 4: Navigate to Products (link "Cari Barang" pada dashboard SAW)
+        await page.getByRole('link', { name: /Cari Barang/i }).first().click();
         await page.waitForTimeout(2000);
         await supplierSpkPage.expectProductsReady();
 
@@ -209,41 +209,38 @@ test.describe("Modul Supplier SPK - Dashboard SAW", () => {
         await expect(page).toHaveURL(/.*\/spk-suppliers\/dss\/dashboard/);
     });
 
-    test('Positif - Navigation step "② Operasi · SAW" di DSS Config adalah clickable link', async ({ page }) => {
+    test('Positif - DSS Config menampilkan langkah alur AHP (Pahami Kriteria s/d Lanjut SAW)', async ({ page }) => {
         /**
          * Given: DSS config page loaded
-         * When: Click step "② Operasi · SAW"
-         * Then: Navigate to dashboard
+         * When: Amati kartu langkah alur AHP
+         * Then: Langkah "Pahami Kriteria" dan "Validasi CR" tampil, serta link "Lanjut ke SAW"
+         * (Desain baru tidak lagi memakai stepper "② Operasi · SAW".)
          */
 
-        // Arrange
         await page.goto('/spk-suppliers/dss/config', { waitUntil: 'domcontentloaded' });
 
-        // Act: Click step 2
-        await page.locator('text=② Operasi · SAW').click();
-
-        // Assert: Navigate to dashboard
-        await expect(page).toHaveURL(/.*\/spk-suppliers\/dss\/dashboard/);
+        await expect(page.getByText('Pahami Kriteria')).toBeVisible();
+        await expect(page.getByText('Validasi CR')).toBeVisible();
+        await expect(page.getByRole('link', { name: /Lanjut ke SAW/i }).first()).toBeVisible();
     });
 
     /* ═══════════════════════════════════════════════════════════════════
        VISUAL & STYLING
        ═══════════════════════════════════════════════════════════════════ */
 
-    test('Positif - DSS Config hero section memiliki gradient emerald background', async ({ page }) => {
+    test('Positif - DSS Config memakai tema warna emerald pada elemen utama', async ({ page }) => {
         /**
          * Given: DSS config loaded
-         * When: Check hero styling
-         * Then: Hero has gradient background (from-emerald-600 via-teal-600 to-emerald-800)
+         * When: Check styling
+         * Then: Terdapat elemen bertema emerald (tombol/aksen). (Desain baru memakai shadow + emerald, bukan gradient.)
          */
 
         // Arrange & Act
         await page.goto('/spk-suppliers/dss/config', { waitUntil: 'domcontentloaded' });
 
-        // Assert: Hero with gradient (check for gradient classes)
-        const heroWithGradient = page.locator('[class*="gradient"]');
-        const count = await heroWithGradient.count();
-        expect(count).toBeGreaterThan(0);
+        // Assert: Elemen bertema emerald tersedia
+        const emeraldEls = page.locator('[class*="emerald"]');
+        expect(await emeraldEls.count()).toBeGreaterThan(0);
     });
 
     test('Positif - Criteria cards memiliki hover effect (border color change)', async ({ page }) => {

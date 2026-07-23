@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { AuthPage } from '../pages/AuthPage.js';
 
 /**
@@ -17,12 +17,12 @@ test.describe('Modul Supplier Recommendations UI - E2E Tests', () => {
 
      test.setTimeout(60000);
 
-      test.beforeEach(async ({ page }) => {
-           authPage = new AuthPage(page);
+     test.beforeEach(async ({ page }) => {
+          authPage = new AuthPage(page);
 
-           // Login as pjawab (authenticated user)
-           await authPage.loginAndWaitForDashboard('pjawab@email.com', 'Password123.');
-      });
+          // Login as pjawab (authenticated user)
+          await authPage.loginAndWaitForDashboard('pjawab@email.com', 'Password123.');
+     });
 
      // ═══════════════════════════════════════════════════════════════
      // SUPPLIER INDEX (Katalog) - /spk-suppliers
@@ -189,4 +189,97 @@ test.describe('Modul Supplier Recommendations UI - E2E Tests', () => {
      // ═══════════════════════════════════════════════════════════════
      // PRODUCT COMPARISON - /spk-suppliers/products
      // ═══════════════════════════════════════════════════════════════
+});
+
+
+// ============================================================
+// Uji Fungsional Mendalam - digabung dari func-shop.spec.ts (sebelumnya section 26.8)
+// ============================================================
+
+const PW = 'Password123.';
+
+async function cap(page: Page, path: string) {
+     try { await page.waitForLoadState('networkidle', { timeout: 10000 }); }
+     catch { await page.waitForLoadState('domcontentloaded').catch(() => { }); }
+     await page.waitForTimeout(500);
+     await page.screenshot({ path: `qa-evidence/${path}`, fullPage: true });
+}
+async function bodyText(page: Page): Promise<string> {
+     return (await page.locator('body').innerText().catch(() => '')) || '';
+}
+function parsePrices(texts: string[]): number[] {
+     return texts.map(t => parseInt((t.match(/[\d.]+/)?.[0] || '0').replace(/\./g, ''), 10) || 0);
+}
+
+test.describe('FUNC Belanja Supplier - Cari Barang (pjawab)', () => {
+     test.setTimeout(150000);
+     test.beforeEach(async ({ page }) => {
+          await page.route(/.*:5173.*/, (r) => r.abort());
+          const auth = new AuthPage(page);
+          await auth.loginAndWaitForDashboard('pjawab@email.com', PW);
+          await page.goto('/spk-suppliers/products', { waitUntil: 'domcontentloaded' });
+          await page.waitForTimeout(1000);
+     });
+
+     test('SHOPF001 - Pencarian barang: kata kunci valid & kata kunci tidak ada', async ({ page }) => {
+          const cards = page.locator('section article');
+          const total = await cards.count();
+          console.log('SHOPF001_total::' + total);
+          expect(total).toBeGreaterThan(0);
+          // ambil kata kunci dari nama produk pertama
+          const firstName = (await cards.first().locator('h2').innerText().catch(() => '')) || '';
+          const keyword = (firstName.split(/\s+/).find(w => w.length >= 4) || firstName.slice(0, 4)).trim();
+          const searchInput = page.locator('input[name="search"]');
+          await searchInput.fill(keyword);
+          await page.getByRole('button', { name: /^Cari$/ }).click();
+          await page.waitForLoadState('domcontentloaded').catch(() => { });
+          await page.waitForTimeout(1000);
+          const validCount = await page.locator('section article').count();
+          console.log('SHOPF001_valid:: keyword=' + keyword + ' hasil=' + validCount);
+          await cap(page, 'SHOP/SHOPF001a_search_valid.png');
+          expect(validCount).toBeGreaterThan(0);
+
+          // kata kunci tidak ada
+          await page.goto('/spk-suppliers/products?search=zzz-barang-tidak-ada-999', { waitUntil: 'domcontentloaded' });
+          await page.waitForTimeout(800);
+          const bodyN = await bodyText(page);
+          const kosong = /Barang tidak ditemukan/i.test(bodyN);
+          console.log('SHOPF001_none:: kosong=' + kosong);
+          await cap(page, 'SHOP/SHOPF001b_search_kosong.png');
+          expect(kosong).toBeTruthy();
+     });
+
+     test('SHOPF002 - Sorting Termurah -> harga urut menaik', async ({ page }) => {
+          await page.goto('/spk-suppliers/products?sort=cheapest', { waitUntil: 'domcontentloaded' });
+          await page.waitForTimeout(1000);
+          const priceTexts = await page.locator('section article p.text-lg.font-black').allInnerTexts();
+          const prices = parsePrices(priceTexts);
+          console.log('SHOPF002_prices::' + JSON.stringify(prices.slice(0, 10)));
+          expect(prices.length).toBeGreaterThan(0);
+          let ascending = true;
+          for (let i = 1; i < prices.length; i++) {
+               if (prices[i] < prices[i - 1]) { ascending = false; break; }
+          }
+          console.log('SHOPF002:: urutMenaik=' + ascending);
+          await cap(page, 'SHOP/SHOPF002_sort_termurah.png');
+          expect(ascending).toBeTruthy();
+     });
+
+     test('SHOPF003 - Filter kategori menyaring hasil', async ({ page }) => {
+          // ambil opsi kategori kedua (indeks 1) dari select
+          const options = await page.locator('select[name="category"] option').all();
+          expect(options.length).toBeGreaterThan(1);
+          const catValue = (await options[1].getAttribute('value')) || 'all';
+          await page.goto('/spk-suppliers/products?category=' + encodeURIComponent(catValue), { waitUntil: 'domcontentloaded' });
+          await page.waitForTimeout(1000);
+          const selected = await page.locator('select[name="category"]').inputValue();
+          const count = await page.locator('section article').count();
+          const bodyF = await bodyText(page);
+          const kosong = /Barang tidak ditemukan/i.test(bodyF);
+          console.log('SHOPF003:: kategori=' + catValue + ' terpilih=' + selected + ' hasil=' + count + ' kosong=' + kosong);
+          await cap(page, 'SHOP/SHOPF003_filter_kategori.png');
+          // filter diterapkan: nilai kategori terpilih sesuai, dan halaman menampilkan hasil ATAU empty state (keduanya valid)
+          expect(selected).toBe(catValue);
+          expect(count > 0 || kosong).toBeTruthy();
+     });
 });

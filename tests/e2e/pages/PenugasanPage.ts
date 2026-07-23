@@ -132,7 +132,16 @@ export class PenugasanPage {
 
         await modal.locator('textarea[name="description"]').fill(params.description);
         if (params.photo) {
-            await modal.locator('input[name="photo"]').fill(params.photo);
+            // Bukti foto laporan adalah <input type="file"> (disimpan ke disk public), BUKAN URL.
+            // Unggah PNG 1x1 in-memory agar tidak bergantung file fixture di disk.
+            await modal.locator('input[name="photo"]').setInputFiles({
+                name: 'bukti-laporan.png',
+                mimeType: 'image/png',
+                buffer: Buffer.from(
+                    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMCAQGVFrfaAAAAAElFTkSuQmCC',
+                    'base64',
+                ),
+            });
         }
         await modal.locator('select[name="status_update"]').selectOption(params.statusUpdate ?? 'done');
         await modal.getByRole('button', { name: /Kirim Laporan/i }).click();

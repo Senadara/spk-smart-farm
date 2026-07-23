@@ -1,152 +1,110 @@
 import { Page, Locator, expect } from '@playwright/test';
 
+/**
+ * IotPage — page object untuk modul IoT (redesign Nanda).
+ *
+ * Realita implementasi (resources/views/iot/*):
+ *  - /iot          => Dashboard "Monitoring Sensor" (heading), tombol/link "Setup IoT".
+ *  - /iot/devices  => halaman "Setup IoT Kandang" (SATU halaman berbasis modal, bukan tab).
+ *  - /iot/config   => redirect ke /iot/devices#advanced-iot-config.
+ *  - /iot/monitoring => "Monitoring Sensor" dengan tab Data Sensor & Device Logs.
+ *
+ * Protokol bersifat FIXED (API/Antares + MQTT, di-seed). Tidak ada CRUD protokol.
+ * Semua aksi (koneksi/device/mapping/parameter/threshold) lewat modal <x-iot.modal-form>
+ * dengan tombol submit berteks "Simpan". Modal aktif ditandai atribut
+ * x-show="modal === '<id>'". Sukses ditandai flash 'success' (toast-success)
+ * dan/atau baris/kartu baru pada halaman setelah reload.
+ */
 export class IotPage {
     readonly page: Page;
 
+    // Dashboard (/iot)
     readonly dashboardHeading: Locator;
+    readonly setupIotLink: Locator;
     readonly registerDeviceBtn: Locator;
-    readonly statCards: Locator;
 
-    readonly configHeading: Locator;
-    readonly protocolsTab: Locator;
-    readonly connectionsTab: Locator;
-    readonly parametersTab: Locator;
-    readonly commodityParamsTab: Locator;
-
-    // Protocol Form
-    readonly protocolNameInput: Locator;
-    readonly protocolDescriptionInput: Locator;
-    readonly protocolSubmitBtn: Locator;
-    readonly addProtocolBtn: Locator;
-
-    // Connection Form
-    readonly connectionProtocolSelect: Locator;
-    readonly baseUrlInput: Locator;
-    readonly endpointPathInput: Locator;
-    readonly mqttBrokerUrlInput: Locator;
-    readonly mqttTopicInput: Locator;
-    readonly authTypeSelect: Locator;
-    readonly authKeyInput: Locator;
-    readonly connectionSubmitBtn: Locator;
+    // Setup IoT (/iot/devices)
+    readonly setupHeading: Locator;
+    readonly mulaiSetupBtn: Locator;
     readonly addConnectionBtn: Locator;
-
-    // Parameter Form
-    readonly parameterCodeInput: Locator;
-    readonly parameterNameInput: Locator;
-    readonly parameterUnitInput: Locator;
-    readonly parameterDescriptionInput: Locator;
-    readonly parameterSubmitBtn: Locator;
-    readonly addParameterBtn: Locator;
-
-    // Commodity Parameter Form
-    readonly commoditySelect: Locator;
-    readonly commodityParameterSelect: Locator;
-    readonly minValueInput: Locator;
-    readonly maxValueInput: Locator;
-    readonly commodityParamSubmitBtn: Locator;
-    readonly addCommodityParamBtn: Locator;
-
-    readonly deviceManagementHeading: Locator;
     readonly addDeviceBtn: Locator;
     readonly addMappingBtn: Locator;
-    readonly deviceTable: Locator;
-    readonly deviceSubmitBtn: Locator;
-    readonly deviceCodeInput: Locator;
-    readonly deviceNameInput: Locator;
-    readonly unitBudidayaSelect: Locator;
-    readonly connectionConfigSelect: Locator;
-    readonly statusSelect: Locator;
-    readonly deleteButtons: Locator;
-    readonly toastSuccess: Locator;
-    readonly textDanger: Locator;
+    readonly addParameterBtn: Locator;
+    readonly addThresholdBtn: Locator;
 
+    // Monitoring (/iot/monitoring)
     readonly monitoringHeading: Locator;
     readonly sensorDataTab: Locator;
     readonly deviceLogsTab: Locator;
 
+    readonly toastSuccess: Locator;
+
     constructor(page: Page) {
         this.page = page;
 
-        this.dashboardHeading = page.locator('h1').filter({ hasText: /Monitoring Sensor|IoT Dashboard/i });
-        this.registerDeviceBtn = page.locator('a, button').filter({ hasText: /Register Device/i });
-        this.statCards = page.locator('.grid > div');
+        this.dashboardHeading = page.locator('h1').filter({ hasText: /Monitoring Sensor/i });
+        this.setupIotLink = page.locator('a').filter({ hasText: /Setup IoT/i });
+        this.registerDeviceBtn = page.locator('a, button').filter({ hasText: /Setup IoT|Register Device|Tambah Device/i });
 
-        this.configHeading = page.locator('h1').filter({ hasText: /Setup IoT Kandang|Konfigurasi IoT/i });
-        this.protocolsTab = page.getByRole('button', { name: 'Protokol' });
-        this.connectionsTab = page.getByRole('button', { name: 'Koneksi' });
-        this.parametersTab = page.getByRole('button', { name: /Parameter Sensor/i });
-        this.commodityParamsTab = page.getByRole('button', { name: /Komoditas Parameter/i });
-
-        // Protocol locators
-        this.protocolNameInput = page.locator('input[name="protocolName"]').first();
-        this.protocolDescriptionInput = page.locator('textarea[name="description"]').first();
-        this.protocolSubmitBtn = page.locator('button[type="submit"], button').filter({ hasText: /Simpan|Save/i }).first();
-        this.addProtocolBtn = page.locator('button').filter({ hasText: /Tambah Protokol/i });
-
-        // Connection locators
-        this.connectionProtocolSelect = page.locator('select[name="protocolId"]').first();
-        this.baseUrlInput = page.locator('input[name="baseUrl"]').first();
-        this.endpointPathInput = page.locator('input[name="endpointPath"]').first();
-        this.mqttBrokerUrlInput = page.locator('input[name="mqttBrokerUrl"]').first();
-        this.mqttTopicInput = page.locator('input[name="mqttTopic"]').first();
-        this.authTypeSelect = page.locator('select[name="authType"]').first();
-        this.authKeyInput = page.locator('input[name="authKey"]').first();
-        this.connectionSubmitBtn = page.locator('button[type="submit"], button').filter({ hasText: /Simpan|Save/i }).first();
-        this.addConnectionBtn = page.locator('button').filter({ hasText: /Tambah Koneksi/i });
+        this.setupHeading = page.locator('h1').filter({ hasText: /Setup IoT Kandang/i });
         this.mulaiSetupBtn = page.getByRole('button', { name: /Mulai Setup/i });
-
-        // Parameter locators
-        this.parameterCodeInput = page.locator('input[name="parameterCode"]').first();
-        this.parameterNameInput = page.locator('input[name="parameterName"]').first();
-        this.parameterUnitInput = page.locator('input[name="unit"]').first();
-        this.parameterDescriptionInput = page.locator('textarea[name="description"]').first();
-        this.parameterSubmitBtn = page.locator('button[type="submit"], button').filter({ hasText: /Simpan|Save/i }).first();
-        this.addParameterBtn = page.locator('button').filter({ hasText: /Tambah Parameter/i });
-
-        // Commodity Parameter locators
-        this.commoditySelect = page.locator('select[name="commodityId"]').first();
-        this.commodityParameterSelect = page.locator('select[name="parameterId"]').first();
-        this.minValueInput = page.locator('input[name="minValue"]').first();
-        this.maxValueInput = page.locator('input[name="maxValue"]').first();
-        this.commodityParamSubmitBtn = page.locator('button[type="submit"], button').filter({ hasText: /Simpan|Save/i }).first();
-        this.addCommodityParamBtn = page.locator('button').filter({ hasText: /Tambah/i });
-
-        this.deviceManagementHeading = page.locator('h1').filter({ hasText: /Setup IoT Kandang|Device Management/i });
-        this.addDeviceBtn = page.locator('button').filter({ hasText: /Tambah Device/i });
-        this.addMappingBtn = page.locator('button').filter({ hasText: /Tambah Mapping/i });
-        this.deviceTable = page.locator('table');
-
-        this.deviceCodeInput = page.locator('input[name="deviceCode"]');
-        this.deviceNameInput = page.locator('input[name="deviceName"]');
-        this.unitBudidayaSelect = page.locator('select[name="unitBudidayaId"]');
-        this.connectionConfigSelect = page.locator('select[name="connectionConfigId"]');
-        this.statusSelect = page.locator('select[name="status"]');
-        this.deviceSubmitBtn = page.locator('button[type="submit"], button').filter({ hasText: /Simpan|Save/i }).first();
-        this.deleteButtons = page.locator('form').filter({ hasText: /hapus|delete/i }).locator('button');
-
-        this.toastSuccess = page.locator('#toastContainer .toast-success');
-        this.textDanger = page.locator('.text-red-500, .text-danger, span').filter({ hasText: /wajib|required|kosong/i });
+        this.addConnectionBtn = page.getByRole('button', { name: /^\s*Tambah Koneksi\s*$/i });
+        this.addDeviceBtn = page.getByRole('button', { name: /^\s*Tambah Device\s*$/i });
+        this.addMappingBtn = page.getByRole('button', { name: /^\s*Tambah Mapping\s*$/i });
+        this.addParameterBtn = page.getByRole('button', { name: /^\s*Tambah Parameter\s*$/i });
+        this.addThresholdBtn = page.getByRole('button', { name: /^\s*Tambah Threshold\s*$/i });
 
         this.monitoringHeading = page.locator('h1').filter({ hasText: /Monitoring Sensor|Monitoring IoT/i });
         this.sensorDataTab = page.locator('button').filter({ hasText: /Data Sensor/i });
         this.deviceLogsTab = page.locator('button').filter({ hasText: /Device Logs/i });
+
+        this.toastSuccess = page.locator('#toastContainer .toast-success');
     }
 
+    /** Backdrop modal aktif (x-show="modal === '<id>'"). first() = backdrop luar yang memuat form + tombol Simpan. */
+    modal(id: string): Locator {
+        return this.page.locator(`[x-show="modal === '${id}'"]`).first();
+    }
+
+    modalSubmit(id: string): Locator {
+        return this.modal(id).locator('button[type="submit"]');
+    }
+
+    /**
+     * Submit form modal secara deterministik lewat form.requestSubmit() (menghindari flake klik
+     * tombol saat transisi modal / overlay). actionSubstr = potongan URL action form target.
+     * requestSubmit tetap menjalankan validasi HTML5 & handler onsubmit (mis. validateMinMax).
+     */
+    async submitForm(actionSubstr: string) {
+        const form = this.page.locator(`form[action*="${actionSubstr}"]`).first();
+        await form.evaluate((f: HTMLFormElement) => f.requestSubmit());
+        await this.page.waitForLoadState('networkidle').catch(() => { });
+    }
+
+    /**
+     * Submit form yang MEMBUNGKUS modal tertentu (form:has(backdrop modal)). Presisi — menghindari
+     * salah target ke form hapus/edit lain yang action-nya mirip. Menjalankan validasi & onsubmit.
+     */
+    async submitModal(id: string) {
+        const form = this.page.locator(`form:has([x-show="modal === '${id}'"])`).first();
+        await form.evaluate((f: HTMLFormElement) => f.requestSubmit());
+        await this.page.waitForLoadState('networkidle').catch(() => { });
+    }
+
+    // ─── Navigasi ──────────────────────────────────────────────────
     async gotoDashboard() {
         await this.page.goto('/iot', { timeout: 120000 }).catch(() => { });
         await this.expectToBeOnDashboard();
     }
 
-    async gotoConfig() {
-        // Nanda: /iot/config now redirects to /iot/devices#advanced-iot-config
-        // Navigate directly to devices page for reliability
-        await this.gotoDevices();
+    async gotoSetup() {
+        await this.page.goto('/iot/devices', { timeout: 120000 }).catch(() => { });
+        await this.expectToBeOnSetupPage();
     }
 
-    async gotoDevices() {
-        await this.page.goto('/iot/devices', { timeout: 120000 }).catch(() => { });
-        await this.expectToBeOnDevicesPage();
-    }
+    /** Alias historis — config & devices kini halaman Setup IoT yang sama. */
+    async gotoDevices() { await this.gotoSetup(); }
+    async gotoConfig() { await this.gotoSetup(); }
 
     async gotoMonitoring() {
         await this.page.goto('/iot/monitoring', { timeout: 120000 }).catch(() => { });
@@ -154,239 +112,209 @@ export class IotPage {
     }
 
     async expectToBeOnDashboard() {
-        await expect(this.dashboardHeading.first()).toBeVisible({ timeout: 12000 });
+        await expect(this.dashboardHeading.first()).toBeVisible({ timeout: 15000 });
     }
 
-    async expectToBeOnConfigPage() {
-        // Config page redirects to devices page. Check either heading.
-        try {
-            await expect(this.configHeading.first()).toBeVisible({ timeout: 12000 });
-        } catch {
-            await expect(this.deviceManagementHeading.first()).toBeVisible({ timeout: 12000 });
-        }
-    }
-
-    async expectToBeOnDevicesPage() {
-        await expect(this.deviceManagementHeading.first()).toBeVisible({ timeout: 12000 });
+    async expectToBeOnSetupPage() {
+        await expect(this.setupHeading.first()).toBeVisible({ timeout: 15000 });
     }
 
     async expectToBeOnMonitoringPage() {
-        await expect(this.monitoringHeading.first()).toBeVisible({ timeout: 12000 });
+        await expect(this.monitoringHeading.first()).toBeVisible({ timeout: 15000 });
     }
 
-    async createProtocol(protocolName: string, description = 'E2E protocol config') {
-        if (!this.page.url().includes('/iot/config')) {
-            await this.gotoConfig();
-            await this.expectToBeOnConfigPage();
-        }
-
-        await this.protocolsTab.waitFor({ state: 'visible' });
-        await this.protocolsTab.click();
-        const protocolsPanel = this.page.locator('div[x-show="activeTab === \'protocols\'"]');
-
-        await expect(async () => {
-            if (!(await protocolsPanel.isVisible())) {
-                await this.protocolsTab.click();
-            }
-            expect(await protocolsPanel.isVisible()).toBeTruthy();
-        }).toPass({ timeout: 10000 });
-
-        const addProtocolButton = protocolsPanel.getByRole('button', { name: 'Tambah' });
-        await addProtocolButton.click({ force: true });
-        await this.page.waitForTimeout(1500);
-
-        await this.protocolNameInput.waitFor({ state: 'visible', timeout: 15000 });
-        await this.protocolNameInput.fill(protocolName);
-        await this.protocolDescriptionInput.waitFor({ state: 'visible', timeout: 10000 });
-        await this.protocolDescriptionInput.fill(description);
-
-        const protocolForm = this.page.locator('form').filter({ has: this.page.locator('[name="protocolName"]') }).first();
-        const submitBtn = protocolForm.locator('button[type="submit"]').first();
-        await submitBtn.waitFor({ state: 'attached', timeout: 10000 });
-        await submitBtn.click({ force: true });
-
-        try {
-            await expect(this.page.getByRole('cell', { name: protocolName }).first()).toBeVisible({ timeout: 8000 });
-        } catch {
-            await expect(this.page.locator('select[name="protocolId"]').getByText(protocolName).first()).toBeVisible({ timeout: 8000 });
-        }
-
-        await this.page.keyboard.press('Escape');
-        await this.page.waitForTimeout(300);
+    // ─── Koneksi ───────────────────────────────────────────────────
+    async openConnectionModal() {
+        await this.addConnectionBtn.first().click({ force: true });
+        await expect(this.modal('addConnection')).toBeVisible({ timeout: 8000 });
     }
 
-    async createConnectionConfig(options: {
-        protocolName: string;
+    /**
+     * Buat koneksi via modal. Default MQTT. Mengembalikan nilai identitas yang tampil di kartu.
+     */
+    async createConnection(options: {
+        mode?: 'MQTT' | 'API';
+        mqttBrokerUrl?: string;
+        mqttPort?: number;
         baseUrl?: string;
         endpointPath?: string;
-        mqttBrokerUrl?: string;
-        mqttTopic?: string;
         authType?: 'none' | 'api_key' | 'bearer' | 'basic';
         authKey?: string;
-    }) {
+        expectSuccess?: boolean;
+    } = {}) {
         const {
-            protocolName,
-            baseUrl = '',
-            endpointPath = '',
-            mqttBrokerUrl = '',
-            mqttTopic = '',
-            authType = 'none',
-            authKey = '',
+            mode = 'MQTT',
+            mqttBrokerUrl = `mqtt://e2e-${Date.now()}.local`,
+            mqttPort,
+            baseUrl,
+            endpointPath,
+            authType,
+            authKey,
+            expectSuccess = true,
         } = options;
 
-        // Navigate to devices page (config redirects here)
-        await this.gotoDevices();
-        await this.expectToBeOnDevicesPage();
+        await this.gotoSetup();
+        await this.openConnectionModal();
+        const m = this.modal('addConnection');
 
-        // Click "Tambah Koneksi" button in Langkah 1 section
-        await this.page.getByRole('button', { name: /Tambah Koneksi/i }).first().click({ force: true });
-        await this.page.waitForTimeout(1500);
-
-        // Select protocol via card buttons (MQTT or API/Antares)
-        const isMqtt = protocolName.toUpperCase().includes('MQTT');
-        if (isMqtt) {
-            await this.page.locator('button').filter({ hasText: /^MQTT$/i }).click();
+        if (mode === 'API') {
+            await m.locator('button').filter({ hasText: /API \/ Antares/i }).first().click();
+            if (baseUrl) await m.locator('input[name="baseUrl"]').fill(baseUrl);
+            if (endpointPath) await m.locator('input[name="endpointPath"]').fill(endpointPath);
+            if (authType) await m.locator('select[name="authType"]').selectOption(authType);
+            if (authKey) await m.locator('input[name="authKey"]').fill(authKey);
         } else {
-            await this.page.locator('button').filter({ hasText: /API|Antares/i }).first().click();
-        }
-        await this.page.waitForTimeout(500);
-
-        if (baseUrl) {
-            await this.page.locator('input[name="baseUrl"]').fill(baseUrl);
-        }
-        if (endpointPath) {
-            await this.page.locator('input[name="endpointPath"]').fill(endpointPath);
-        }
-        if (mqttBrokerUrl) {
-            await this.page.locator('input[name="mqttBrokerUrl"]').fill(mqttBrokerUrl);
-        }
-        if (mqttTopic) {
-            await this.page.locator('input[name="mqttTopic"]').fill(mqttTopic);
+            // MQTT adalah mode default modal.
+            await m.locator('button').filter({ hasText: /Laravel subscribe broker MQTT/i }).first().click();
+            if (mqttBrokerUrl) await m.locator('input[name="mqttBrokerUrl"]').fill(mqttBrokerUrl);
+            if (mqttPort) await m.locator('input[name="mqttPort"]').fill(String(mqttPort));
         }
 
-        if (!isMqtt) {
-            await this.page.locator('select[name="authType"]').selectOption(authType);
-            if (authKey) {
-                await this.page.locator('input[name="authKey"]').fill(authKey);
-            }
+        await this.modalSubmit('addConnection').click({ force: true });
+
+        if (expectSuccess) {
+            const identity = mode === 'API' ? (baseUrl ?? '') : mqttBrokerUrl;
+            await expect(this.page.getByText(identity, { exact: false }).first()).toBeVisible({ timeout: 12000 });
         }
 
-        // Click Simpan in the modal footer
-        const modalBackdrop = this.page.locator('[x-show="modal === \'addConnection\'"]').last();
-        await modalBackdrop.locator('button[type="submit"]').click({ force: true });
+        return { mqttBrokerUrl, baseUrl };
+    }
 
-        try {
-            await expect(this.page.getByText('berhasil ditambahkan').first()).toBeVisible({ timeout: 8000 });
-        } catch {
-            // Connection created, may redirect or toast already gone
+    // ─── Device ────────────────────────────────────────────────────
+    async openDeviceModal() {
+        await this.addDeviceBtn.first().click({ force: true });
+        await expect(this.modal('addDevice')).toBeVisible({ timeout: 8000 });
+    }
+
+    /** Isi form Add Device di modal aktif (tidak submit). Deterministik: pilih opsi non-kosong & verifikasi nilai. */
+    async fillDeviceForm(deviceCode: string, deviceName: string, status: 'active' | 'inactive' | 'maintenance' = 'active') {
+        const m = this.modal('addDevice');
+        const codeInput = m.locator('input[name="deviceCode"]');
+        const unitSelect = m.locator('select[name="unitBudidayaId"]');
+        const connSelect = m.locator('select[name="connectionConfigId"]');
+
+        await codeInput.fill(deviceCode);
+        await m.locator('input[name="deviceName"]').fill(deviceName);
+
+        // Pilih opsi valid (bukan placeholder value="") berdasarkan value option ke-2.
+        const unitValue = await unitSelect.locator('option').nth(1).getAttribute('value');
+        const connValue = await connSelect.locator('option').nth(1).getAttribute('value');
+        await unitSelect.selectOption(unitValue!);
+        await connSelect.selectOption(connValue!);
+        await m.locator('select[name="status"]').selectOption(status);
+
+        // Pastikan field wajib benar-benar terisi sebelum submit (hindari race x-model Alpine).
+        await expect(codeInput).toHaveValue(deviceCode);
+        await expect(unitSelect).not.toHaveValue('');
+        await expect(connSelect).not.toHaveValue('');
+    }
+
+    async createDevice(deviceCode: string, deviceName: string, status: 'active' | 'inactive' | 'maintenance' = 'active') {
+        // Muat halaman setup fresh agar Alpine & daftar koneksi benar-benar siap (hindari race pasca-reload).
+        await this.gotoSetup();
+        await this.openDeviceModal();
+        await this.fillDeviceForm(deviceCode, deviceName, status);
+        await this.modalSubmit('addDevice').click({ force: true });
+        // Submit form => full page reload. Tunggu modal hilang & halaman settle lalu verifikasi baris device.
+        await this.modal('addDevice').waitFor({ state: 'hidden', timeout: 15000 }).catch(() => { });
+        await this.page.waitForLoadState('networkidle').catch(() => { });
+        await expect(this.page.getByRole('cell', { name: deviceCode }).first()).toBeVisible({ timeout: 15000 });
+    }
+
+    // ─── Parameter Sensor ──────────────────────────────────────────
+    async openParameterModal() {
+        await this.addParameterBtn.first().click({ force: true });
+        await expect(this.modal('addParameter')).toBeVisible({ timeout: 8000 });
+    }
+
+    async createParameter(parameterCode: string, parameterName: string, unit = '', description = 'E2E parameter') {
+        await this.gotoSetup();
+        await this.openParameterModal();
+        const m = this.modal('addParameter');
+        await m.locator('input[name="parameterCode"]').fill(parameterCode);
+        await m.locator('input[name="parameterName"]').fill(parameterName);
+        if (unit) await m.locator('input[name="unit"]').fill(unit);
+        if (description) await m.locator('textarea[name="description"]').fill(description);
+        await expect(m.locator('input[name="parameterCode"]')).toHaveValue(parameterCode);
+        await this.submitModal('addParameter');
+        // Catatan: tabel "Parameter Sensor" adalah daftar TERKURASI (configuredIotParametersForCommodity),
+        // sehingga parameter baru belum tentu tampil di tabel. Sukses diverifikasi via toast.
+        await expect(this.toastSuccess.first()).toBeVisible({ timeout: 10000 });
+    }
+
+    // ─── Threshold Komoditas ───────────────────────────────────────
+    async openThresholdModal() {
+        await this.addThresholdBtn.first().click({ force: true });
+        await expect(this.modal('addCommodityParam')).toBeVisible({ timeout: 8000 });
+    }
+
+    /**
+     * Buat threshold komoditas (modal addCommodityParam). Komoditas & parameter dipilih dari opsi ter-seed.
+     * expectSuccess=false untuk kasus negatif (mis. min>=max) — hanya submit tanpa assert sukses.
+     */
+    async createThreshold(min: number, max: number, expectSuccess = true) {
+        await this.gotoSetup();
+        await this.openThresholdModal();
+        const m = this.modal('addCommodityParam');
+        const commodityValue = await m.locator('select[name="commodityId"] option').nth(1).getAttribute('value');
+        const parameterValue = await m.locator('select[name="parameterId"] option').nth(1).getAttribute('value');
+        await m.locator('select[name="commodityId"]').selectOption(commodityValue!);
+        await m.locator('select[name="parameterId"]').selectOption(parameterValue!);
+        await m.locator('input[name="minValue"]').fill(String(min));
+        await m.locator('input[name="maxValue"]').fill(String(max));
+        // min>=max dicegah client-side (alert via onsubmit) → auto-accept dialog agar tidak menggantung.
+        this.page.on('dialog', dialog => dialog.accept().catch(() => { }));
+        await this.submitModal('addCommodityParam');
+        if (expectSuccess) {
+            await expect(this.toastSuccess.first()).toBeVisible({ timeout: 10000 });
         }
     }
 
-    async createParameter(paramCode: string, paramName: string, unit = '', description = 'E2E test parameter') {
-        if (!this.page.url().includes('/iot/config')) {
-            await this.gotoConfig();
-            await this.expectToBeOnConfigPage();
+    // ─── Mapping Payload ───────────────────────────────────────────
+    async openMappingModal() {
+        await this.addMappingBtn.first().click({ force: true });
+        await expect(this.modal('addMapping')).toBeVisible({ timeout: 8000 });
+    }
+
+    /** Jumlah koneksi dari badge "N koneksi" pada kartu langkah 1. */
+    async connectionCount(): Promise<number> {
+        const badge = this.page.locator('span').filter({ hasText: /^\s*\d+\s*koneksi\s*$/i }).first();
+        const txt = (await badge.textContent().catch(() => '')) || '';
+        const match = txt.match(/(\d+)/);
+        return match ? parseInt(match[1], 10) : 0;
+    }
+
+    /** Hapus kartu koneksi yang memuat teks tertentu (broker/base URL). Native confirm di-accept. */
+    async deleteConnectionByText(text: string) {
+        const card = this.page.locator('div').filter({ hasText: text }).filter({ has: this.page.locator('form[action*="connections"]') }).last();
+        this.page.once('dialog', dialog => dialog.accept());
+        await card.locator('button[title="Hapus koneksi"]').first().click({ force: true });
+        await this.page.waitForLoadState('networkidle').catch(() => { });
+    }
+
+    // ─── Aksi baris (edit/hapus) ───────────────────────────────────
+    /** Klik tombol hapus (form + native confirm) pada baris/kartu yang memuat teks tertentu. */
+    async deleteByText(text: string, titleRegex: RegExp = /Hapus/i) {
+        const container = this.page.locator('tr, div').filter({ hasText: text }).first();
+        const deleteBtn = container.locator('button[title]').filter({ has: this.page.locator('svg') })
+            .filter({ hasText: '' });
+        // Utamakan tombol dengan title Hapus di dalam form
+        const formBtn = container.locator('form button[type="submit"]').first();
+        this.page.once('dialog', dialog => dialog.accept());
+        if (await formBtn.count() > 0) {
+            await formBtn.click({ force: true });
+        } else {
+            await container.locator('button', { hasText: '' }).filter({ hasText: '' }).first().click({ force: true });
         }
+        await this.page.waitForTimeout(800);
+    }
 
-        await this.parametersTab.waitFor({ state: 'visible' });
-        await this.parametersTab.click();
-        const parametersPanel = this.page.locator('div[x-show="activeTab === \'parameters\'"]');
-
-        await expect(async () => {
-            if (!(await parametersPanel.isVisible())) {
-                await this.parametersTab.click();
-            }
-            expect(await parametersPanel.isVisible()).toBeTruthy();
-        }).toPass({ timeout: 10000 });
-
-        const addParamButton = parametersPanel.getByRole('button', { name: /Tambah/i });
-        await addParamButton.click({ force: true });
+    /** Hapus baris tabel (device/parameter) berdasarkan teks, tombol delete berupa <form> submit. */
+    async deleteRow(text: string) {
+        const row = this.page.locator('tr').filter({ hasText: text }).first();
+        const deleteForm = row.locator('form').last();
+        this.page.once('dialog', dialog => dialog.accept());
+        await deleteForm.locator('button[type="submit"]').first().click({ force: true });
         await this.page.waitForTimeout(1000);
-
-        await this.parameterCodeInput.waitFor({ state: 'visible', timeout: 15000 });
-        await this.parameterCodeInput.fill(paramCode);
-        await this.parameterNameInput.fill(paramName);
-
-        if (unit) {
-            await this.parameterUnitInput.fill(unit);
-        }
-
-        if (description) {
-            await this.parameterDescriptionInput.fill(description);
-        }
-
-        const paramForm = this.page.locator('form').filter({ has: this.page.locator('[name="parameterCode"]') }).first();
-        const submitBtn = paramForm.locator('button[type="submit"]').first();
-        await submitBtn.click({ force: true });
-
-        try {
-            await expect(this.page.getByRole('cell', { name: paramCode }).first()).toBeVisible({ timeout: 8000 });
-        } catch {
-            await expect(this.toastSuccess).toBeVisible({ timeout: 8000 });
-        }
-    }
-
-    async createCommodityParameter(commodityName: string, parameterName: string, minValue?: number, maxValue?: number) {
-        if (!this.page.url().includes('/iot/config')) {
-            await this.gotoConfig();
-            await this.expectToBeOnConfigPage();
-        }
-
-        await this.commodityParamsTab.waitFor({ state: 'visible' });
-        await this.commodityParamsTab.click();
-        const commodityPanel = this.page.locator('div[x-show="activeTab === \'commodity\'"]');
-
-        await expect(async () => {
-            if (!(await commodityPanel.isVisible())) {
-                await this.commodityParamsTab.click();
-            }
-            expect(await commodityPanel.isVisible()).toBeTruthy();
-        }).toPass({ timeout: 10000 });
-
-        const addButton = commodityPanel.getByRole('button', { name: /Tambah/i });
-        await addButton.click({ force: true });
-        await this.page.waitForTimeout(1000);
-
-        await this.commoditySelect.waitFor({ state: 'visible', timeout: 15000 });
-        await this.commoditySelect.selectOption({ label: commodityName });
-        await this.commodityParameterSelect.selectOption({ label: parameterName });
-
-        if (minValue !== undefined) {
-            await this.minValueInput.fill(minValue.toString());
-        }
-
-        if (maxValue !== undefined) {
-            await this.maxValueInput.fill(maxValue.toString());
-        }
-
-        const commForm = this.page.locator('form').filter({ has: this.page.locator('[name="commodityId"]') }).first();
-        const submitBtn = commForm.locator('button[type="submit"]').first();
-        await submitBtn.click({ force: true });
-        await expect(this.toastSuccess).toBeVisible({ timeout: 8000 });
-    }
-
-    async clickEditButtonInRow(entityName: string) {
-        try {
-            const row = this.page.locator('tr').filter({ hasText: entityName }).first();
-            const editBtn = row.locator('button[title="Edit"], button[title="Ubah"]').first();
-            await editBtn.waitFor({ state: 'visible', timeout: 5000 });
-            await editBtn.click();
-            await this.page.waitForTimeout(1000);
-        } catch {
-            // Edit button not available — skip
-        }
-    }
-
-    async clickDeleteButtonInRow(entityName: string) {
-        try {
-            const row = this.page.locator('tr').filter({ hasText: entityName }).first();
-            const deleteBtn = row.locator('button[title="Hapus"], button[title="Delete"]').first();
-            await deleteBtn.waitFor({ state: 'visible', timeout: 5000 });
-            this.page.once('dialog', dialog => dialog.accept());
-            await deleteBtn.click();
-            await this.page.waitForTimeout(1000);
-        } catch {
-            // Cleanup skip - entity may auto-cleanup or delete not available
-        }
     }
 }

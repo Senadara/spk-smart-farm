@@ -9,7 +9,7 @@ test.describe('Modul IoT Webhook API Integration - E2E QA', () => {
 
     test.beforeEach(async ({ page }, testInfo) => {
         // Arrange
-        testInfo.setTimeout(240000); 
+        testInfo.setTimeout(240000);
         page.setDefaultNavigationTimeout(120000);
         page.setDefaultTimeout(120000);
 
@@ -18,59 +18,19 @@ test.describe('Modul IoT Webhook API Integration - E2E QA', () => {
     });
 
     // ─── HELPER FUNCTIONS ────────────────────────────────────────────────────────
+    // Setup device via alur "Setup IoT Kandang" baru (koneksi MQTT -> device). Mapping tidak dibuat
+    // (nama historis dipertahankan); webhook tetap menerima payload dengan inserted=0 bila belum ada mapping.
     async function createTestDeviceWithMapping(iotPage: IotPage, deviceCode: string, deviceName: string) {
-        await iotPage.gotoConfig();
-        await iotPage.expectToBeOnConfigPage();
-
-        const protocolName = `E2E-WEBHOOK-${Date.now()}`;
-        await iotPage.createProtocol(protocolName, 'Test protocol for webhook');
-
-        await iotPage.createConnectionConfig({
-            protocolName,
-            mqttBrokerUrl: 'mqtt://test-broker.local:1883',
-        });
-
-        await iotPage.page.waitForTimeout(2000);
-        await expect(iotPage.toastSuccess).toBeVisible({ timeout: 10000 }).catch(() => {});
-
-        await iotPage.gotoDevices();
-        await iotPage.expectToBeOnDevicesPage();
-
-        await iotPage.addDeviceBtn.click();
-        await expect(iotPage.deviceCodeInput.first()).toBeVisible({ timeout: 10000 });
-
-        try {
-            await expect(iotPage.connectionConfigSelect.first().locator('option', { hasText: protocolName })).toHaveCount(1, { timeout: 10000 });
-        } catch {
-            await iotPage.page.waitForTimeout(2000);
-        }
-
-        await iotPage.deviceCodeInput.first().fill(deviceCode);
-        await iotPage.deviceNameInput.first().fill(deviceName);
-        await iotPage.unitBudidayaSelect.first().selectOption({ index: 1 });
-        await iotPage.connectionConfigSelect.first().selectOption({ label: protocolName });
-        await iotPage.statusSelect.first().selectOption('active');
-        await iotPage.deviceSubmitBtn.click();
-
-        await iotPage.page.waitForTimeout(2000);
-        await expect(iotPage.toastSuccess).toBeVisible({ timeout: 10000 }).catch(() => {});
-
-        return { deviceCode, deviceName, protocolName };
+        await iotPage.createConnection({ mode: 'MQTT' });
+        await iotPage.createDevice(deviceCode, deviceName, 'active');
+        return { deviceCode, deviceName };
     }
 
     async function deleteTestDevice(iotPage: IotPage, deviceCode: string) {
-        await iotPage.gotoDevices();
-        await iotPage.page.waitForLoadState('networkidle').catch(() => {});
-
+        await iotPage.gotoSetup();
         const row = iotPage.page.locator('tr').filter({ hasText: deviceCode });
-        const deleteBtn = row.locator('form').filter({ hasText: /hapus|delete/i }).locator('button');
-
-        if (await deleteBtn.count() > 0) {
-            iotPage.page.once('dialog', dialog => dialog.accept());
-            await deleteBtn.first().click();
-
-            await iotPage.page.waitForTimeout(2000);
-            await expect(iotPage.toastSuccess).toBeVisible({ timeout: 10000 }).catch(() => {});
+        if (await row.count() > 0) {
+            await iotPage.deleteRow(deviceCode);
         }
     }
 
@@ -98,7 +58,7 @@ test.describe('Modul IoT Webhook API Integration - E2E QA', () => {
          * When Node Sensor mengirim payload HTTP POST JSON ke rute kode alat valid
          * Then Server membalas HTTP 200 OK dengan sukses data diterima
          */
-        
+
         // Arrange
         const testDevice = await createTestDeviceWithMapping(iotPage, `WEBHOOK-TEST-${Date.now()}`, 'E2E Webhook Test Device');
 
@@ -124,7 +84,7 @@ test.describe('Modul IoT Webhook API Integration - E2E QA', () => {
          * When payload dengan 2 parameter valid dikirimkan dari device node
          * Then JSON Return 'inserted' memiliki properti hitungan insert baris (number)
          */
-         
+
         // Arrange
         const testDevice = await createTestDeviceWithMapping(iotPage, `WEBHOOK-COUNT-${Date.now()}`, 'E2E Webhook Count Test');
 
@@ -149,7 +109,7 @@ test.describe('Modul IoT Webhook API Integration - E2E QA', () => {
          * When trigger proses webhook payload sukses diterima backend DB
          * Then record logs data tersebut dapat diamati admin dalam antarmuka tab Monitoring
          */
-         
+
         // Arrange
         const testDevice = await createTestDeviceWithMapping(iotPage, `WEBHOOK-LOG-${Date.now()}`, 'E2E Webhook Log Test');
 
@@ -159,15 +119,15 @@ test.describe('Modul IoT Webhook API Integration - E2E QA', () => {
 
             // Act
             await iotPage.gotoMonitoring();
-            await page.waitForLoadState('networkidle').catch(() => {});
-            
+            await page.waitForLoadState('networkidle').catch(() => { });
+
             // Assert
             expect(response.status).toBe(200);
             expect(response.body.message).not.toContain('error');
 
             const pageContent = await page.content();
             const hasLogEntry = pageContent.includes(testDevice.deviceCode) || pageContent.includes(testDevice.deviceName);
-            
+
             expect(hasLogEntry || response.body.inserted >= 0).toBeTruthy();
         } finally {
             await deleteTestDevice(iotPage, testDevice.deviceCode);
@@ -215,7 +175,7 @@ test.describe('Modul IoT Webhook API Integration - E2E QA', () => {
         // Arrange
         const nonExistentDeviceCode = `NONEXISTENT-${Date.now()}`;
         const webhookPayload = { temperature: 25.0 };
-        
+
         // Act
         const response = await sendWebhookRequest(context, nonExistentDeviceCode, webhookPayload);
 

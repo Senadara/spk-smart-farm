@@ -1,131 +1,115 @@
 import { Page, Locator, expect } from '@playwright/test';
 
+/**
+ * Page Object — Dashboard Peternakan (/peternakan)
+ * Diselaraskan dengan implementasi terbaru Nanda (dashboard redesign):
+ *  - Heading: "Decision Support & Operations"
+ *  - Filter komoditas (satu-satunya <select> di header)
+ *  - KPI cards (HDP %, FCR, Egg Mass, Feed Intake, Mortality, Umur Biologis)
+ *  - Section "Barn Environment" (tombol kandang + sensor Suhu/Kelembapan/Amonia/Lux + "Lihat Detail Kandang")
+ *  - Section "Ringkasan SPK Hari Ini" (spider chart, indikator, "Buka Analisa SPK", "Lihat Penugasan")
+ *  - Section "Daftar Kandang (Unit Budidaya)" (kartu kandang link ke /peternakan/{id})
+ *  - Section "Daily Production Log" (tabel + input "Cari log...")
+ * CATATAN: tombol "Run Full Evaluation" & panel Fuzzy Decision Engine sudah TIDAK ada
+ * di dashboard ini (dipindah ke SPK Dashboard); lihat komponen fuzzy-decision-engine.
+ */
 export class PeternakanPage {
     readonly page: Page;
     readonly heading: Locator;
     readonly komoditasSelect: Locator;
-    readonly evaluateAllButton: Locator;
-    readonly evaluationTimeLabel: Locator;
-
-    readonly kpiAmmoniaCard: Locator;
-    readonly kpiSuhuCard: Locator;
-    readonly kpiEggQualCard: Locator;
-    readonly kpiStressCard: Locator;
-
-    readonly filterKandangSelect: Locator;
-    readonly spkResultLingkungan: Locator;
-    readonly spkResultAktivitas: Locator;
-
-    readonly chartKualitasTelurCanvas: Locator;
+    readonly barnButtons: Locator;
+    readonly detailLink: Locator;
+    readonly spkSummaryHeading: Locator;
+    readonly bukaSpkLink: Locator;
+    readonly daftarKandangHeading: Locator;
+    readonly kandangLinks: Locator;
+    readonly productionLogHeading: Locator;
+    readonly productionLogSearch: Locator;
+    readonly chartCanvas: Locator;
 
     constructor(page: Page) {
         this.page = page;
-        
-        this.heading = page.getByRole('heading', { name: /Decision Support/i });
-        this.komoditasSelect = page.locator('select.komoditas-dropdown, select[x-on\\:change="onKomoditasChange($event)"]');
-        this.evaluateAllButton = page.getByRole('button', { name: /Jalankan Evaluasi|Evaluate All/i });
-        this.evaluationTimeLabel = page.locator('span[x-text="evaluationTimeLabel"]');
-
-        this.kpiAmmoniaCard = page.locator('.kpi-card').filter({ hasText: /Rata-Rata Amonia|Ammonia/i });
-        this.kpiSuhuCard = page.locator('.kpi-card').filter({ hasText: /Rata-Rata Suhu|Temperature/i });
-        this.kpiEggQualCard = page.locator('.kpi-card').filter({ hasText: /Kualitas Telur|Egg Quality/i });
-        this.kpiStressCard = page.locator('.kpi-card').filter({ hasText: /Produktivitas|Productivity|Tingkat Stres/i });
-
-        this.filterKandangSelect = page.locator('select[x-model="fuzzyFilter"]');
-        
-        this.spkResultLingkungan = page.locator('.spk-result-card').filter({ hasText: /Kondisi Lingkungan/i });
-        this.spkResultAktivitas = page.locator('.spk-result-card').filter({ hasText: /Rekomendasi Aktivitas|Rekomendasi Evaluasi/i });
-
-        this.chartKualitasTelurCanvas = page.locator('canvas').first();
+        this.heading = page.getByRole('heading', { name: /Decision Support & Operations/i });
+        this.komoditasSelect = page.locator('select').first();
+        this.barnButtons = page.locator('button[title="Klik untuk melihat sensor kandang ini"]');
+        this.detailLink = page.getByRole('link', { name: /Lihat Detail Kandang/i });
+        this.spkSummaryHeading = page.getByRole('heading', { name: /Ringkasan SPK Hari Ini/i });
+        this.bukaSpkLink = page.getByRole('link', { name: /Buka Analisa SPK/i });
+        this.daftarKandangHeading = page.getByRole('heading', { name: /Daftar Kandang/i });
+        this.kandangLinks = page.locator('a[href*="/peternakan/"]');
+        this.productionLogHeading = page.getByRole('heading', { name: /Daily Production Log/i });
+        this.productionLogSearch = page.getByPlaceholder('Cari log...');
+        this.chartCanvas = page.locator('canvas');
     }
 
     async goto() {
-        await this.page.goto('/peternakan');
+        await this.page.goto('/peternakan', { waitUntil: 'domcontentloaded' });
+    }
+
+    async gotoWithInsahKomoditas() {
+        await this.page.goto('/peternakan?komoditas=tidakada', { waitUntil: 'domcontentloaded' });
     }
 
     async expectToBeOnPeternakanPage() {
         await expect(this.page).toHaveURL(/.*peternakan/);
-        await expect(this.heading.first()).toBeVisible();
-    }
-
-    async clickEvaluateAllButton() {
-        if (await this.evaluateAllButton.count() > 0) {
-            await this.evaluateAllButton.click();
-        }
-    }
-
-    async gotoWithInsahKomoditas() {
-        await this.page.goto('/peternakan?komoditas=tidakada');
+        await expect(this.heading).toBeVisible();
     }
 
     async expectNoKomoditasMessage() {
-        await expect(this.page.locator('body')).not.toContainText('Fatal error');
-        await expect(this.page.locator('body')).not.toContainText('Error 500');
+        const body = await this.page.locator('body').textContent() || '';
+        expect(body).not.toContain('Fatal error');
+        expect(body).not.toContain('Error 500');
+        expect(body).not.toContain('SQLSTATE');
     }
 
     async expectKpiTrendIndicators() {
-        const trend = this.page.locator('.trend-up, .trend-down, [class*="trend"], .kpi-card svg').first();
-        if (await trend.count() > 0) {
-            await expect(trend).toBeVisible();
-        }
+        // KPI cards dirender oleh komponen x-peternakan.kpi-card
+        const body = await this.page.locator('body').textContent() || '';
+        expect(body).toMatch(/HDP|FCR|Egg Mass|Feed Intake|Mortal/i);
     }
 
     async expectBarnEnvironmentSection() {
-        const section = this.page.locator('h2, h3, h4').filter({ hasText: /Lingkungan|Environment|Sensor|Kondisi/i }).first();
-        const bodyText = await this.page.locator('body').textContent() || '';
-        expect(bodyText).toBeTruthy();
+        await expect(this.page.getByRole('heading', { name: /Barn Environment/i })).toBeVisible();
     }
 
     async expectSensorLabels(labels: string[]) {
-        const bodyText = await this.page.locator('body').textContent() || '';
+        const body = await this.page.locator('body').textContent() || '';
         for (const label of labels) {
-            expect(bodyText).toContain(label);
+            expect(body).toContain(label);
         }
     }
 
     async expectDetailLink() {
-        const link = this.page.locator('a[href*="/peternakan/"]').first();
-        if (await link.count() > 0) {
-            await expect(link).toBeVisible();
-        }
+        await expect(this.detailLink.first()).toBeVisible();
     }
 
     async getBarnButtonCount(): Promise<number> {
-        return await this.page.locator('.kandang-card, .barn-card, button[class*="kandang"], [class*="barn-card"]').count();
+        return await this.barnButtons.count();
     }
 
     async expectFuzzySection() {
-        const bodyText = await this.page.locator('body').textContent() || '';
-        expect(bodyText).toMatch(/Decision|Fuzzy|SPK|Evaluasi|Kondisi|Optimal/i);
+        // Setelah redesign, ringkasan SPK di dashboard = "Ringkasan SPK Hari Ini"
+        await expect(this.spkSummaryHeading).toBeVisible();
     }
 
     async expectFuzzyGearLink() {
-        const gearLink = this.page.locator('a[href*="fuzzy"], a[href*="settings"], a[href*="pengaturan"]').first();
-        if (await gearLink.count() > 0) {
-            await expect(gearLink).toBeVisible();
-        }
+        // Link menuju konfigurasi SPK / analisa
+        await expect(this.bukaSpkLink).toBeVisible();
     }
 
     async expectBarnListSection() {
-        const bodyText = await this.page.locator('body').textContent() || '';
-        expect(bodyText).toMatch(/Kandang|Kandang/i);
+        await expect(this.daftarKandangHeading).toBeVisible();
     }
 
     async expectBarnCards() {
-        const cards = this.page.locator('.kandang-card, .barn-card, [class*="kandang-card"], [class*="barn-card"]');
-        const count = await cards.count();
-        expect(count).toBeGreaterThanOrEqual(0);
-        if (count > 0) {
-            await expect(cards.first()).toBeVisible();
-        }
+        await expect(this.kandangLinks.first()).toBeVisible();
+        const count = await this.kandangLinks.count();
+        expect(count).toBeGreaterThanOrEqual(1);
     }
 
     async searchProductionLog(query: string) {
-        const searchInput = this.page.locator('input[type="search"], input[placeholder*="cari"], input[placeholder*="Cari"]').first();
-        if (await searchInput.count() > 0) {
-            await searchInput.fill(query);
-            await this.page.waitForTimeout(500);
-        }
+        await expect(this.productionLogSearch).toBeVisible();
+        await this.productionLogSearch.fill(query);
+        await this.page.waitForTimeout(400);
     }
 }
-

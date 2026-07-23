@@ -1,294 +1,177 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { DataMasterPage } from '../pages/DataMasterPage.js';
+import { AuthPage } from '../pages/AuthPage.js';
 
-test.describe("Modul Data Master - Blok Kebun", () => {
-    let dataMasterPage: DataMasterPage;
+/**
+ * Modul Data Master Ternak — Form Konfigurasi (REWRITE)
+ * Menguji form "Konfigurasi Data Master Ternak" baru: parameter lingkungan/IoT
+ * (tambah/hapus baris), pilihan fungsi produktivitas, catatan, dan tombol Simpan.
+ * Menggantikan spec lama "Blok Kebun" yang sudah tidak ada di implementasi.
+ */
+test.describe('Data Master Ternak - Form Konfigurasi', () => {
+    let dm: DataMasterPage;
 
-    test.describe.configure({ mode: "serial" });
+    test.describe.configure({ mode: 'serial' });
 
     test.beforeEach(async ({ page }, testInfo) => {
-        testInfo.setTimeout(120000);
-        page.setDefaultNavigationTimeout(120000);
-        page.setDefaultTimeout(120000);
-        dataMasterPage = new DataMasterPage(page);
-        await dataMasterPage.goto();
-    });
-    /* ═══════════════════════════════════════════════════════════════════
-       TAB 2: BLOK KEBUN - DATA DISPLAY
-       ═══════════════════════════════════════════════════════════════════ */
-
-    test('Positif - Tab Blok Kebun menampilkan 5 dummy blok kebun', async () => {
-        /**
-         * Given: Dummy data has 5 blok kebun
-         * When: Kebun tab loaded
-         * Then: Table shows 5 rows
-         */
-
-        // Arrange & Act
-        await dataMasterPage.clickKebunTab();
-        const rowCount = await dataMasterPage.getVisibleKebunRowCount();
-
-        // Assert: 5 blok kebun displayed
-        expect(rowCount).toBeGreaterThanOrEqual(5);
+        testInfo.setTimeout(90000);
+        page.setDefaultTimeout(30000);
+        await page.route('**/:5173/**', route => route.abort());
+        await page.route(/.*:5173.*/, route => route.abort());
+        dm = new DataMasterPage(page);
+        await dm.goto();
+        await dm.selectFirstType();
     });
 
-    test('Positif - Blok Kebun table displays correct dummy data (Greenhouse A, B, C, D, Plot Pakcoy)', async ({ page }) => {
-        /**
-         * Given: Dummy kebun loaded
-         * When: Check table content
-         * Then: Known greenhouse names visible
-         */
-
-        // Arrange
-        await dataMasterPage.clickKebunTab();
-
-        // Assert: Known blok kebun exist
-        await expect(page.getByText('Greenhouse A')).toBeVisible();
-        await expect(page.getByText('Greenhouse B')).toBeVisible();
-        await expect(page.getByText('Plot Pakcoy Hidroponik')).toBeVisible();
+    test('Positif - Section "Parameter Lingkungan / IoT" & tombol "Tambah Parameter" tampil', async () => {
+        await expect(dm.envSectionHeading).toBeVisible();
+        await expect(dm.addParamButton).toBeVisible();
     });
 
-    test('Positif - Blok Kebun table menampilkan jenis budidaya (Melon, Pakcoy) dan nama latin', async ({ page }) => {
-        /**
-         * Given: Blok kebun have jenisBudidaya
-         * When: Check table content
-         * Then: Jenis budidaya dan nama latin visible
-         */
-
-        // Arrange
-        await dataMasterPage.clickKebunTab();
-
-        // Assert: Jenis budidaya displayed
-        await expect(page.locator('text=Melon').first()).toBeVisible();
-        await expect(page.locator('text=Pakcoy')).toBeVisible();
-
-        // Assert: Nama latin displayed
-        await expect(page.locator('text=Cucumis melo')).toBeVisible();
-        await expect(page.locator('text=Brassica rapa')).toBeVisible();
+    test('Positif - Klik "Tambah Parameter" menambah satu baris parameter', async () => {
+        const before = await dm.envCodeInputs.count();
+        await dm.addParamButton.click();
+        await expect(dm.envCodeInputs).toHaveCount(before + 1);
     });
 
-    test('Positif - Blok Kebun table menampilkan lokasi (Rooftop info)', async ({ page }) => {
-        /**
-         * Given: Blok kebun have locations
-         * When: Check table content
-         * Then: Lokasi column shows rooftop info
-         */
-
-        // Arrange
-        await dataMasterPage.clickKebunTab();
-
-        // Assert: Lokasi displayed
-        await expect(page.locator('text=Rooftop Gedung')).toBeVisible();
-        await expect(page.locator('text=Lantai').first()).toBeVisible();
-    });
-
-    test('Positif - Blok Kebun table menampilkan luas dan kapasitas', async ({ page }) => {
-        /**
-         * Given: Blok kebun have luas & kapasitas
-         * When: Check table content
-         * Then: Numeric values displayed
-         */
-
-        // Arrange
-        await dataMasterPage.clickKebunTab();
-
-        // Assert: Luas displayed (e.g., "120.5 m²")
-        const bodyContent = await page.locator('body').textContent();
-        expect(bodyContent).toMatch(/\d+\.\d+/); // Contains decimal numbers
-
-        // Assert: Kapasitas displayed (numbers)
-        expect(bodyContent).toMatch(/\d+/);
-    });
-
-    test('Positif - Blok Kebun menampilkan status badges (Aktif/Nonaktif)', async ({ page }) => {
-        /**
-         * Given: Greenhouse D has status=0 (Nonaktif)
-         * When: Check status column
-         * Then: Status badges displayed
-         */
-
-        // Arrange
-        await dataMasterPage.clickKebunTab();
-
-        // Assert: Status badges exist
-        const statusAktif = page.locator('text=Aktif').first();
-        await expect(statusAktif).toBeVisible();
-
-        // Note: Greenhouse D has status=0
-        const statusNonaktif = page.locator('text=Nonaktif, text=Renovasi');
-        const nonaktifCount = await statusNonaktif.count();
-        expect(nonaktifCount).toBeGreaterThanOrEqual(0); // May or may not be visible
-    });
-
-    /* ═══════════════════════════════════════════════════════════════════
-       TAB 2: BLOK KEBUN - SEARCH & FILTER
-       ═══════════════════════════════════════════════════════════════════ */
-
-    test('Positif - Search kebun by name filters correctly (case: "Greenhouse A")', async ({ page }) => {
-        /**
-         * Given: Kebun tab active
-         * When: Search "Greenhouse A"
-         * Then: Only Greenhouse A displayed
-         */
-
-        // Arrange
-        await dataMasterPage.clickKebunTab();
-
-        // Act
-        await dataMasterPage.searchKebun('Greenhouse A');
-
-        // Assert: 1 result
-        const rowCount = await dataMasterPage.getVisibleKebunRowCount();
-        expect(rowCount).toBe(1);
-        await expect(page.getByText('Greenhouse A')).toBeVisible();
-    });
-
-    test('Positif - Search kebun by jenis budidaya works (case: "Pakcoy")', async ({ page }) => {
-        /**
-         * Given: Kebun tab active
-         * When: Search "Pakcoy"
-         * Then: Plot Pakcoy displayed
-         */
-
-        // Arrange
-        await dataMasterPage.clickKebunTab();
-
-        // Act
-        await dataMasterPage.searchKebun('Pakcoy');
-
-        // Assert: 1 result
-        const rowCount = await dataMasterPage.getVisibleKebunRowCount();
-        expect(rowCount).toBeGreaterThanOrEqual(1);
-        await expect(page.getByText('Plot Pakcoy')).toBeVisible();
-    });
-
-    test('Negatif - Search kebun dengan invalid term shows empty state (case: "LokasiAntahBerantah123")', async ({ page }) => {
-        /**
-         * Given: Kebun tab active
-         * When: Search for non-existent location
-         * Then: 0 results, table tidak crash
-         */
-
-        // Arrange
-        await dataMasterPage.clickKebunTab();
-
-        // Act
-        await dataMasterPage.searchKebun('LokasiAntahBerantah123');
-
-        // Assert: 0 results
-        const rowCount = await dataMasterPage.getVisibleKebunRowCount();
-        expect(rowCount).toBe(0);
-
-        // Assert: Table tidak crash (still visible)
-        await expect(dataMasterPage.kebunTable).toBeVisible();
-    });
-
-    test('Positif - Kebun jenis budidaya filter works (if exists)', async ({ page }) => {
-        /**
-         * Given: Kebun tab active
-         * When: Filter by jenis budidaya (e.g., "Melon")
-         * Then: Only Melon greenhouses displayed
-         */
-
-        // Arrange
-        await dataMasterPage.clickKebunTab();
-
-        // Act: Check if filter exists
-        const jenisFilter = page.locator('select').filter({ hasText: /Jenis Budidaya/i });
-        const hasFilter = await jenisFilter.count();
-
-        if (hasFilter > 0) {
-            await jenisFilter.selectOption({ label: /Melon/i });
-            await page.waitForTimeout(500);
-
-            // Assert: Only Melon records (4 greenhouses)
-            const rowCount = await dataMasterPage.getVisibleKebunRowCount();
-            expect(rowCount).toBe(4);
+    test('Positif - Field parameter (Kode/Nama/Unit) dapat diisi', async ({ page }) => {
+        // Pastikan minimal ada satu baris
+        if (await dm.envCodeInputs.count() === 0) {
+            await dm.addParamButton.click();
         }
+        const codeInput = dm.envCodeInputs.first();
+        const nameInput = page.locator('input[name$="[parameter_name]"]').first();
+        const unitInput = page.locator('input[name$="[unit]"]').first();
+        await codeInput.fill('TEMP');
+        await nameInput.fill('Suhu kandang');
+        await unitInput.fill('C');
+        await expect(codeInput).toHaveValue('TEMP');
+        await expect(nameInput).toHaveValue('Suhu kandang');
+        await expect(unitInput).toHaveValue('C');
     });
 
-    /* ═══════════════════════════════════════════════════════════════════
-       EDGE CASES & PERFORMANCE
-       ═══════════════════════════════════════════════════════════════════ */
+    test('Positif - Section "Fungsi Produktivitas Tetap" tampil dengan daftar fungsi', async ({ page }) => {
+        await expect(dm.funcSectionHeading).toBeVisible();
+        const count = await dm.funcCheckboxes.count();
+        expect(count).toBeGreaterThanOrEqual(1);
+    });
 
-    test('Edge Case - Rapid tab switching tidak menyebabkan crash atau layout issues', async ({ page }) => {
-        /**
-         * Given: Data master loaded
-         * When: Rapidly switch between tabs
-         * Then: No crash, no layout issues
-         */
+    test('Positif - Checkbox fungsi produktivitas dapat di-toggle', async () => {
+        const cb = dm.funcCheckboxes.first();
+        const wasChecked = await cb.isChecked();
+        await cb.setChecked(!wasChecked);
+        await expect(cb).toBeChecked({ checked: !wasChecked });
+    });
 
-        // Act: Rapid tab switching
-        for (let i = 0; i < 5; i++) {
-            await dataMasterPage.clickKebunTab();
-            await page.waitForTimeout(100);
-            await dataMasterPage.clickUsersTab();
-            await page.waitForTimeout(100);
+    test('Positif - Textarea "Catatan konfigurasi" dapat diisi', async () => {
+        await expect(dm.notesTextarea).toBeVisible();
+        await dm.notesTextarea.fill('Catatan QA otomatis');
+        await expect(dm.notesTextarea).toHaveValue('Catatan QA otomatis');
+    });
+
+    test('Positif - Tombol "Simpan Konfigurasi" tersedia dan aktif (schema siap)', async () => {
+        await expect(dm.saveButton).toBeVisible();
+        await expect(dm.saveButton).toBeEnabled();
+    });
+
+    test('Negatif - Hapus baris parameter saat hanya satu baris tetap menyisakan satu baris', async () => {
+        // Reset ke satu baris: tambah lalu hapus hingga sisa 1, lalu hapus lagi
+        while (await dm.envCodeInputs.count() < 1) {
+            await dm.addParamButton.click();
         }
-
-        // Assert: No crash
-        const bodyContent = await page.locator('body').textContent();
-        expect(bodyContent).not.toMatch(/Error 500|Fatal|undefined/i);
+        // Kurangi hingga tepat 1 baris
+        let count = await dm.envCodeInputs.count();
+        while (count > 1) {
+            await dm.page.locator('button[title="Hapus parameter"]').first().click();
+            count = await dm.envCodeInputs.count();
+        }
+        // Hapus baris terakhir → guard mempertahankan minimal 1 baris kosong
+        await dm.page.locator('button[title="Hapus parameter"]').first().click();
+        await expect(dm.envCodeInputs).toHaveCount(1);
     });
+});
 
-    test('Edge Case - Search dengan special characters tidak crash (case: "@#$%")', async ({ page }) => {
-        /**
-         * Given: Users tab active
-         * When: Search with special characters
-         * Then: No crash, 0 or some results
-         */
+// ============================================================
+// Uji Fungsional Mendalam - digabung dari func-datamaster.spec.ts (sebelumnya section 26.3)
+// ============================================================
 
-        // Arrange
-        await dataMasterPage.clickUsersTab();
+const PW = 'Password123.';
 
-        // Act
-        await dataMasterPage.searchUsers('@#$%');
+async function cap(page: Page, path: string) {
+    try { await page.waitForLoadState('networkidle', { timeout: 10000 }); }
+    catch { await page.waitForLoadState('domcontentloaded').catch(() => { }); }
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `qa-evidence/${path}`, fullPage: true });
+}
+async function bodyText(page: Page): Promise<string> {
+    return (await page.locator('body').innerText().catch(() => '')) || '';
+}
 
-        // Assert: No crash
-        const rowCount = await dataMasterPage.getVisibleUserRowCount();
-        expect(rowCount).toBeGreaterThanOrEqual(0); // 0 or more results
-    });
-
-    test('Performance - Data Master page loads dalam waktu reasonable (<3 detik)', async ({ page }) => {
-        /**
-         * Given: Navigate to data master
-         * When: Measure load time
-         * Then: Page loads < 3 seconds
-         */
-
-        // Arrange
-        const startTime = Date.now();
-
-        // Act
+test.describe('FUNC Data Master (pjawab)', () => {
+    test.setTimeout(160000);
+    test.beforeEach(async ({ page }) => {
+        await page.route('**/:5173/**', (r) => r.abort());
+        await page.route(/.*:5173.*/, (r) => r.abort());
+        const auth = new AuthPage(page);
+        await auth.loginAndWaitForDashboard('pjawab@email.com', PW);
         await page.goto('/data-master', { waitUntil: 'domcontentloaded' });
-        await expect(page.getByRole('heading', { name: /Data Master/i })).toBeVisible();
-
-        const endTime = Date.now();
-        const loadTime = endTime - startTime;
-
-        // Assert: Performance < 3000ms
-        expect(loadTime).toBeLessThan(3000);
+        await page.waitForTimeout(800);
     });
 
-    test('Performance - Tab switching is instant (<500ms)', async ({ page }) => {
-        /**
-         * Given: Data master loaded
-         * When: Switch tabs and measure time
-         * Then: Switch completes < 500ms
-         */
+    test('DMF001 - Simpan Konfigurasi Data Master VALID -> tersimpan', async ({ page }) => {
+        // pastikan ada minimal 1 baris parameter + 1 fungsi tercentang
+        const codeCount = await page.locator('input[name$="[parameter_code]"]').count();
+        if (codeCount === 0) {
+            await page.getByRole('button', { name: /Tambah Parameter/i }).click();
+            await page.waitForTimeout(400);
+            await page.locator('input[name$="[parameter_code]"]').first().fill('QATEMP');
+            await page.locator('input[name$="[parameter_name]"]').first().fill('QA Suhu Uji');
+        }
+        // pastikan minimal 1 fungsi produktivitas tercentang
+        const funcs = page.locator('input[name="productivity_function_ids[]"]');
+        const fCount = await funcs.count();
+        let anyChecked = false;
+        for (let i = 0; i < fCount; i++) { if (await funcs.nth(i).isChecked()) { anyChecked = true; break; } }
+        if (!anyChecked && fCount > 0) await funcs.first().check().catch(() => { });
+        await page.getByRole('button', { name: /Simpan Konfigurasi/i }).click();
+        await page.waitForLoadState('domcontentloaded').catch(() => { });
+        await page.waitForTimeout(1500);
+        const body = await bodyText(page);
+        const ok = /Data Master ternak berhasil disimpan|berhasil disimpan/i.test(body);
+        console.log('DMF001:: simpanSukses=' + ok);
+        expect(ok).toBeTruthy();
+        await cap(page, 'MASTER/DMF001_simpan_valid.png');
+    });
 
-        // Arrange
-        await dataMasterPage.expectPageReady();
+    test('DMF002 - Simpan dengan MIN >= MAX -> ditolak (validasi)', async ({ page }) => {
+        const codeCount = await page.locator('input[name$="[parameter_code]"]').count();
+        expect(codeCount).toBeGreaterThan(0);
+        // set min > max pada baris pertama
+        await page.locator('input[name$="[min_value]"]').first().fill('999');
+        await page.locator('input[name$="[max_value]"]').first().fill('1');
+        await page.getByRole('button', { name: /Simpan Konfigurasi/i }).click();
+        await page.waitForLoadState('domcontentloaded').catch(() => { });
+        await page.waitForTimeout(1500);
+        const body = await bodyText(page);
+        const sukses = /Data Master ternak berhasil disimpan/i.test(body);
+        const adaError = /(minimum harus lebih kecil|min.*max|lebih kecil dari maksimum)/i.test(body);
+        console.log('DMF002:: sukses=' + sukses + ' adaErrorMinMax=' + adaError);
+        expect(sukses).toBeFalsy();
+        await cap(page, 'MASTER/DMF002_min_lebih_besar_max.png');
+    });
 
-        // Act
-        const startTime = Date.now();
-        await dataMasterPage.clickKebunTab();
-        await expect(dataMasterPage.kebunTable).toBeVisible();
-        const endTime = Date.now();
-
-        const switchTime = endTime - startTime;
-
-        // Assert: Switch < 500ms
-        expect(switchTime).toBeLessThan(500);
+    test('DMF003 - Simpan TANPA fungsi produktivitas -> ditolak (validasi)', async ({ page }) => {
+        const funcs = page.locator('input[name="productivity_function_ids[]"]');
+        const fCount = await funcs.count();
+        for (let i = 0; i < fCount; i++) { await funcs.nth(i).uncheck().catch(() => { }); }
+        await page.getByRole('button', { name: /Simpan Konfigurasi/i }).click();
+        await page.waitForLoadState('domcontentloaded').catch(() => { });
+        await page.waitForTimeout(1500);
+        const body = await bodyText(page);
+        const sukses = /Data Master ternak berhasil disimpan/i.test(body);
+        const adaError = /(minimal satu fungsi|fungsi produktivitas|Pilih minimal)/i.test(body);
+        console.log('DMF003:: sukses=' + sukses + ' adaErrorFungsi=' + adaError);
+        expect(sukses).toBeFalsy();
+        await cap(page, 'MASTER/DMF003_tanpa_fungsi.png');
     });
 });

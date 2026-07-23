@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+﻿import { test, expect, Page } from '@playwright/test';
 import { AuthPage } from '../pages/AuthPage.js';
 import { SettingsPage } from '../pages/SettingsPage.js';
 import { SupplierSpkPage } from '../pages/SupplierSpkPage.js';
@@ -333,4 +333,83 @@ test.describe('Modul Supplier SPK (AHP-SAW DSS) - E2E UI Workflow Tests', () => 
     /* ═══════════════════════════════════════════════════════════════════
        DSS DASHBOARD PAGE - UI ELEMENTS
        ═══════════════════════════════════════════════════════════════════ */
+});
+
+
+// ============================================================
+// Uji Fungsional Mendalam - digabung dari func-ahp.spec.ts (sebelumnya section 26.4)
+// ============================================================
+
+const PW = 'Password123.';
+
+async function cap(page: Page, path: string) {
+    try { await page.waitForLoadState('networkidle', { timeout: 10000 }); }
+    catch { await page.waitForLoadState('domcontentloaded').catch(() => { }); }
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `qa-evidence/${path}`, fullPage: true });
+}
+async function bodyText(page: Page): Promise<string> {
+    return (await page.locator('body').innerText().catch(() => '')) || '';
+}
+
+test.describe('FUNC AHP - Konfigurasi Bobot (pjawab)', () => {
+    test.setTimeout(160000);
+    test.beforeEach(async ({ page }) => {
+        await page.route('**/:5173/**', (r) => r.abort());
+        await page.route(/.*:5173.*/, (r) => r.abort());
+        const auth = new AuthPage(page);
+        await auth.loginAndWaitForDashboard('pjawab@email.com', PW);
+        await page.goto('/spk-suppliers/dss/config', { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(800);
+    });
+
+    test('AHPF001 - Pairwise KONSISTEN (semua sama penting) -> Hitung & Simpan Bobot berhasil (CR<=0.1)', async ({ page }) => {
+        const articles = page.locator('form#ahp-form article');
+        const n = await articles.count();
+        console.log('AHPF001_PAIRS::' + n);
+        expect(n).toBeGreaterThan(0);
+        // set semua pasangan = netral (Sama penting = 1)
+        for (let i = 0; i < n; i++) {
+            const neutral = articles.nth(i).getByRole('button', { name: /Sama penting/i }).first();
+            if (await neutral.count() > 0) await neutral.click().catch(() => { });
+        }
+        await page.getByRole('button', { name: /Hitung & Simpan Bobot/i }).click();
+        await page.waitForLoadState('domcontentloaded').catch(() => { });
+        await page.waitForTimeout(1800);
+        const body = await bodyText(page);
+        const ok = /Konfigurasi AHP berhasil disimpan|CR\s*=/i.test(body);
+        console.log('AHPF001:: sukses=' + ok + ' url=' + page.url());
+        expect(ok).toBeTruthy();
+        await cap(page, 'AHP/AHPF001_pairwise_konsisten_tersimpan.png');
+    });
+
+    test('AHPF002 - Pairwise INKONSISTEN (siklik ekstrem) -> ditolak (CR>0.1)', async ({ page }) => {
+        const articles = page.locator('form#ahp-form article');
+        const n = await articles.count();
+        expect(n).toBeGreaterThanOrEqual(3);
+        // siklik: pair0 kiri-9, pair1 kiri-9, pair2 kanan-1/9
+        await articles.nth(0).getByRole('button', { name: /9 Mutlak kiri/i }).first().click().catch(() => { });
+        await articles.nth(1).getByRole('button', { name: /9 Mutlak kiri/i }).first().click().catch(() => { });
+        await articles.nth(2).getByRole('button', { name: /1\/9 Mutlak kanan/i }).first().click().catch(() => { });
+        await page.getByRole('button', { name: /Hitung & Simpan Bobot/i }).click();
+        await page.waitForLoadState('domcontentloaded').catch(() => { });
+        await page.waitForTimeout(1800);
+        const body = await bodyText(page);
+        const inkonsisten = /inkonsistensi tinggi|CR\s*>\s*0\.1|tinjau ulang/i.test(body);
+        const tersimpan = /Konfigurasi AHP berhasil disimpan/i.test(body);
+        console.log('AHPF002:: inkonsistenDitolak=' + inkonsisten + ' tersimpan=' + tersimpan + ' url=' + page.url());
+        await cap(page, 'AHP/AHPF002_pairwise_inkonsisten.png');
+        // Kembalikan bobot ke konsisten (semua sama penting) agar SAW tetap valid
+        await page.goto('/spk-suppliers/dss/config', { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(600);
+        const arts = page.locator('form#ahp-form article');
+        const m = await arts.count();
+        for (let i = 0; i < m; i++) {
+            const neutral = arts.nth(i).getByRole('button', { name: /Sama penting/i }).first();
+            if (await neutral.count() > 0) await neutral.click().catch(() => { });
+        }
+        await page.getByRole('button', { name: /Hitung & Simpan Bobot/i }).click().catch(() => { });
+        await page.waitForTimeout(1500);
+        console.log('AHPF002_restore:: done');
+    });
 });

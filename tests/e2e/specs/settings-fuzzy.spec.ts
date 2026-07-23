@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+﻿import { test, expect, Page } from '@playwright/test';
 import { AuthPage } from '../pages/AuthPage.js';
 import { SettingsPage } from '../pages/SettingsPage.js';
 import { FuzzyConfigPage } from '../pages/FuzzyConfigPage.js';
@@ -70,8 +70,9 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
 
         // Arrange (Data Injection Parameter Set)
         const suffix = Math.random().toString(36).replace(/[^a-z]/g, '').slice(0, 6);
-        const variableName = `e2e_var_${suffix}`;
-        const setName = `e2e_set_${suffix}`;
+        // Nama variabel wajib lowercase + underscore saja (pattern [a-z_]+) — tanpa angka.
+        const variableName = `eqa_var_${suffix}`;
+        const setName = `eqa_set_${suffix}`;
 
         await settingsPage.clickFuzzyCard();
         await fuzzyPage.expectPageReady();
@@ -87,7 +88,7 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
         });
 
         // Assert 1
-        await expect(page.getByText('Variabel berhasil ditambahkan.')).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText('Variabel berhasil ditambahkan.').first()).toBeVisible({ timeout: 15000 });
         await fuzzyPage.expectVariableVisible(variableName);
 
         // Act 2: Membuat Child Membership Parameter (Relasi shape)
@@ -101,22 +102,22 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
         });
 
         // Assert 2
-        await expect(page.getByText('Membership function berhasil ditambahkan.')).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText('Membership function berhasil ditambahkan.').first()).toBeVisible({ timeout: 15000 });
         await fuzzyPage.expectVariableVisible(variableName);
 
         // Act 3: Tab Switching Verify
         await fuzzyPage.clickRulesTab();
-        await expect(page.getByRole('heading', { name: /Aturan Inferensi/i })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Rule IF-THEN/i })).toBeVisible();
 
         await fuzzyPage.clickSourcesTab();
-        await expect(page.getByRole('heading', { name: /Sumber Data Input/i })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Sumber Data/i }).first()).toBeVisible();
 
         // Act 4: Cleanup End of life Data / Penghancuran Variable
         await fuzzyPage.clickVariablesTab();
         await fuzzyPage.deleteVariable(variableName);
 
         // Assert Cleanup
-        await expect(page.getByText(/berhasil dihapus/i)).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText(/berhasil dihapus/i).first()).toBeVisible({ timeout: 15000 });
     });
 
     test('Positif - Membuat Variabel dengan Membership Function Trapezoid (4 Parameter)', async ({ page }) => {
@@ -128,8 +129,8 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
 
         // Arrange
         const suffix = Math.random().toString(36).replace(/[^a-z]/g, '').slice(0, 6);
-        const variableName = `e2e_trap_${suffix}`;
-        const setName = `e2e_trapset_${suffix}`;
+        const variableName = `eqa_trap_${suffix}`;
+        const setName = `eqa_trapset_${suffix}`;
 
         await settingsPage.clickFuzzyCard();
         await fuzzyPage.expectPageReady();
@@ -145,7 +146,7 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
         });
 
         // Assert 1
-        await expect(page.getByText('Variabel berhasil ditambahkan.')).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText('Variabel berhasil ditambahkan.').first()).toBeVisible({ timeout: 15000 });
 
         // Act 2: Buat membership function trapezoid
         await fuzzyPage.expandVariable(variableName);
@@ -159,11 +160,11 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
         });
 
         // Assert 2
-        await expect(page.getByText('Membership function berhasil ditambahkan.')).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText('Membership function berhasil ditambahkan.').first()).toBeVisible({ timeout: 15000 });
 
         // Cleanup
         await fuzzyPage.deleteVariable(variableName);
-        await expect(page.getByText(/berhasil dihapus/i)).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText(/berhasil dihapus/i).first()).toBeVisible({ timeout: 15000 });
     });
 
     test('Positif - Tab Navigation: Perpindahan antar tab Variabel, Rules, dan Sources berjalan lancar', async ({ page }) => {
@@ -183,12 +184,12 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
 
         // Act & Assert 2: Tab Rules
         await fuzzyPage.clickRulesTab();
-        await expect(page.getByRole('heading', { name: /Aturan Inferensi/i })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Rule IF-THEN/i })).toBeVisible();
         await expect(fuzzyPage.addRuleButton).toBeVisible();
 
         // Act & Assert 3: Tab Sources
         await fuzzyPage.clickSourcesTab();
-        await expect(page.getByRole('heading', { name: /Sumber Data Input/i })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Sumber Data/i }).first()).toBeVisible();
 
         // Act & Assert 4: Kembali ke Tab Variabel
         await fuzzyPage.clickVariablesTab();
@@ -243,7 +244,7 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
 
         // Arrange: Buat variabel dulu
         const suffix = Math.random().toString(36).replace(/[^a-z]/g, '').slice(0, 6);
-        const variableName = `e2e_invalid_${suffix}`;
+        const variableName = `eqa_invalid_${suffix}`;
 
         await settingsPage.clickFuzzyCard();
         await fuzzyPage.expectPageReady();
@@ -257,14 +258,14 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
             description: 'Test invalid MF',
         });
 
-        await expect(page.getByText('Variabel berhasil ditambahkan.')).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText('Variabel berhasil ditambahkan.').first()).toBeVisible({ timeout: 15000 });
 
         // Act: Coba buat MF dengan parameter invalid
         await fuzzyPage.expandVariable(variableName);
         const section = page.locator('[data-var-id]').filter({ hasText: variableName }).first();
-        await section.getByRole('button', { name: /\+ Tambah Set/i }).click();
+        await section.getByRole('button', { name: /Tambah Set/i }).click();
 
-        const modal = page.locator('h3', { hasText: 'Tambah Membership Function' })
+        const modal = page.locator('h3', { hasText: 'Tambah Himpunan Fuzzy' })
             .locator('xpath=ancestor::div[contains(@class,"fixed")][1]')
             .first();
 
@@ -287,7 +288,8 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
         expect(errorVisible || modalStillVisible).toBeTruthy();
 
         // Cleanup
-        await page.keyboard.press('Escape'); // Tutup modal jika masih terbuka
+        // Tutup modal set dulu (Alpine tidak menutup via Escape) agar backdrop tidak memblok klik hapus.
+        await modal.getByRole('button', { name: /Batal/i }).click().catch(() => { });
         await page.waitForTimeout(500);
         await fuzzyPage.deleteVariable(variableName);
     });
@@ -301,7 +303,7 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
 
         // Arrange: Buat variabel pertama
         const suffix = Math.random().toString(36).replace(/[^a-z]/g, '').slice(0, 6);
-        const variableName = `e2e_dup_${suffix}`;
+        const variableName = `eqa_dup_${suffix}`;
 
         await settingsPage.clickFuzzyCard();
         await fuzzyPage.expectPageReady();
@@ -315,7 +317,7 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
             description: 'Variabel pertama',
         });
 
-        await expect(page.getByText('Variabel berhasil ditambahkan.')).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText('Variabel berhasil ditambahkan.').first()).toBeVisible({ timeout: 15000 });
 
         // Act: Coba buat variabel kedua dengan nama sama DAN group sama
         await fuzzyPage.createVariable({
@@ -371,7 +373,7 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
 
         // Arrange
         const suffix = Math.random().toString(36).replace(/[^a-z]/g, '').slice(0, 4);
-        const variableName = `e2e_special_${suffix}`;
+        const variableName = `eqa_special_${suffix}`;
 
         await settingsPage.clickFuzzyCard();
         await fuzzyPage.expectPageReady();
@@ -387,7 +389,7 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
         });
 
         // Assert: Biarkan sistem menentukan - jika berhasil, variabel muncul; jika gagal, ada error
-        const successToast = page.getByText('Variabel berhasil ditambahkan.');
+        const successToast = page.getByText('Variabel berhasil ditambahkan.').first();
         const errorToast = page.locator('.toast-error, [role="alert"]').first();
 
         const successVisible = await successToast.isVisible({ timeout: 10000 }).catch(() => false);
@@ -411,8 +413,8 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
 
         // Arrange
         const suffix = Math.random().toString(36).replace(/[^a-z]/g, '').slice(0, 6);
-        const variableName = `e2e_extreme_${suffix}`;
-        const setName = `e2e_extremeset_${suffix}`;
+        const variableName = `eqa_extreme_${suffix}`;
+        const setName = `eqa_extremeset_${suffix}`;
 
         await settingsPage.clickFuzzyCard();
         await fuzzyPage.expectPageReady();
@@ -426,7 +428,7 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
             description: 'Test extreme values',
         });
 
-        await expect(page.getByText('Variabel berhasil ditambahkan.')).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText('Variabel berhasil ditambahkan.').first()).toBeVisible({ timeout: 15000 });
 
         // Act: Buat MF dengan nilai ekstrem
         await fuzzyPage.expandVariable(variableName);
@@ -439,7 +441,7 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
         });
 
         // Assert: Sistem harus handle (berhasil atau error yang jelas)
-        const successToast = page.getByText('Membership function berhasil ditambahkan.');
+        const successToast = page.getByText('Membership function berhasil ditambahkan.').first();
         const errorToast = page.locator('.toast-error, [role="alert"]').first();
 
         const successVisible = await successToast.isVisible({ timeout: 10000 }).catch(() => false);
@@ -460,7 +462,7 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
 
         // Arrange
         const suffix = Math.random().toString(36).replace(/[^a-z]/g, '').slice(0, 6);
-        const variableName = `e2e_persist_${suffix}`;
+        const variableName = `eqa_persist_${suffix}`;
 
         await settingsPage.clickFuzzyCard();
         await fuzzyPage.expectPageReady();
@@ -475,7 +477,7 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
             description: 'Test persistence',
         });
 
-        await expect(page.getByText('Variabel berhasil ditambahkan.')).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText('Variabel berhasil ditambahkan.').first()).toBeVisible({ timeout: 15000 });
         await fuzzyPage.expectVariableVisible(variableName);
 
         // Act 2: Refresh halaman
@@ -502,19 +504,27 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
         await fuzzyPage.expectPageReady();
         await fuzzyPage.clickVariablesTab();
 
-        // Act: Coba buat variabel dengan nama kapital
-        await fuzzyPage.createVariable({
-            name: 'InvalidCapitalName', // Melanggar regex
-            group: 'lingkungan',
-            type: 'input',
-            unit: 'test',
-            description: 'Test invalid name',
-        });
+        // Act: isi nama kapital (melanggar pattern [a-z_]+). Tidak pakai helper createVariable
+        // karena submit diblok HTML5 (modal tidak tertutup).
+        await fuzzyPage.addVariableButton.click();
+        const modal = page.locator('h3', { hasText: 'Tambah Variabel' })
+            .locator('xpath=ancestor::div[contains(@class,"fixed")][1]').first();
+        await expect(modal).toBeVisible({ timeout: 10000 });
+        await modal.locator('input[name="name"]').fill('InvalidCapitalName');
+        await modal.locator('select[name="group"]').selectOption('lingkungan');
+        await modal.locator('select[name="type"]').selectOption('input');
+        await modal.locator('input[name="unit"]').fill('test');
+        await modal.locator('input[name="description"]').fill('Test invalid name');
+        await modal.getByRole('button', { name: /Simpan/i }).click();
 
-        // Assert: Harus ada pesan error validasi
-        const errorMessage = page.locator('.bg-red-50, .toast-error, [role="alert"]').first();
-        await expect(errorMessage).toBeVisible({ timeout: 10000 });
-        await expect(errorMessage).toContainText(/lowercase|huruf kecil/i);
+        // Assert: pattern [a-z_]+ memblokir submit (client-side) → input invalid & modal tetap terbuka.
+        // (Backend juga menolak dengan pesan "lowercase/huruf kecil" bila client-side dilewati.)
+        const nameInput = modal.locator('input[name="name"]');
+        const isInvalid = await nameInput.evaluate((el: HTMLInputElement) => !el.checkValidity()).catch(() => false);
+        const modalStillVisible = await modal.isVisible({ timeout: 3000 }).catch(() => false);
+        const backendError = await page.locator('.bg-red-50, .toast-error, [role="alert"]').first()
+            .isVisible({ timeout: 2000 }).catch(() => false);
+        expect(isInvalid || modalStillVisible || backendError).toBeTruthy();
     });
 
     test('Negatif - Membuat variabel dengan nama mengandung spasi harus ditolak', async ({ page }) => {
@@ -531,19 +541,25 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
         await fuzzyPage.expectPageReady();
         await fuzzyPage.clickVariablesTab();
 
-        // Act: Coba buat variabel dengan spasi
-        await fuzzyPage.createVariable({
-            name: `invalid name ${suffix}`, // Melanggar regex (ada spasi)
-            group: 'lingkungan',
-            type: 'input',
-            unit: 'test',
-            description: 'Test invalid name with space',
-        });
+        // Act: isi nama dengan spasi (melanggar pattern [a-z_]+). Submit diblok HTML5.
+        await fuzzyPage.addVariableButton.click();
+        const modal = page.locator('h3', { hasText: 'Tambah Variabel' })
+            .locator('xpath=ancestor::div[contains(@class,"fixed")][1]').first();
+        await expect(modal).toBeVisible({ timeout: 10000 });
+        await modal.locator('input[name="name"]').fill(`invalid name ${suffix}`);
+        await modal.locator('select[name="group"]').selectOption('lingkungan');
+        await modal.locator('select[name="type"]').selectOption('input');
+        await modal.locator('input[name="unit"]').fill('test');
+        await modal.locator('input[name="description"]').fill('Test invalid name with space');
+        await modal.getByRole('button', { name: /Simpan/i }).click();
 
-        // Assert: Harus ada pesan error validasi
-        const errorMessage = page.locator('.bg-red-50, .toast-error, [role="alert"]').first();
-        await expect(errorMessage).toBeVisible({ timeout: 10000 });
-        await expect(errorMessage).toContainText(/lowercase|huruf kecil|underscore/i);
+        // Assert: pattern [a-z_]+ memblokir submit (client-side) → input invalid & modal tetap terbuka.
+        const nameInput = modal.locator('input[name="name"]');
+        const isInvalid = await nameInput.evaluate((el: HTMLInputElement) => !el.checkValidity()).catch(() => false);
+        const modalStillVisible = await modal.isVisible({ timeout: 3000 }).catch(() => false);
+        const backendError = await page.locator('.bg-red-50, .toast-error, [role="alert"]').first()
+            .isVisible({ timeout: 2000 }).catch(() => false);
+        expect(isInvalid || modalStillVisible || backendError).toBeTruthy();
     });
 
     test('Negatif - Membuat Membership Function trapezoid tanpa parameter d harus ditolak', async ({ page }) => {
@@ -555,7 +571,7 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
 
         // Arrange: Buat variabel dulu
         const suffix = Math.random().toString(36).replace(/[^a-z]/g, '').slice(0, 6);
-        const variableName = `e2e_trapnod_${suffix}`;
+        const variableName = `eqa_trapnod_${suffix}`;
 
         await settingsPage.clickFuzzyCard();
         await fuzzyPage.expectPageReady();
@@ -569,14 +585,14 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
             description: 'Test trapezoid without d',
         });
 
-        await expect(page.getByText('Variabel berhasil ditambahkan.')).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText('Variabel berhasil ditambahkan.').first()).toBeVisible({ timeout: 15000 });
 
         // Act: Coba buat MF trapezoid tanpa parameter d
         await fuzzyPage.expandVariable(variableName);
         const section = page.locator('[data-var-id]').filter({ hasText: variableName }).first();
-        await section.getByRole('button', { name: /\+ Tambah Set/i }).click();
+        await section.getByRole('button', { name: /Tambah Set/i }).click();
 
-        const modal = page.locator('h3', { hasText: 'Tambah Membership Function' })
+        const modal = page.locator('h3', { hasText: 'Tambah Himpunan Fuzzy' })
             .locator('xpath=ancestor::div[contains(@class,"fixed")][1]')
             .first();
 
@@ -597,9 +613,203 @@ test.describe.serial('Modul Dashboard Konfigurasi Logic Fuzzy - E2E Pjwb QA', ()
 
         expect(errorVisible || modalStillVisible).toBeTruthy();
 
-        // Cleanup
-        await page.keyboard.press('Escape');
+        // Cleanup — tutup modal set (Alpine tidak menutup via Escape) lalu hapus variabel
+        await modal.getByRole('button', { name: /Batal/i }).click().catch(() => { });
         await page.waitForTimeout(500);
         await fuzzyPage.deleteVariable(variableName);
+    });
+});
+
+
+// ============================================================
+// Uji Fungsional Mendalam - digabung dari func-fuzzy.spec.ts (sebelumnya section 26.2 - Rule & Set)
+// ============================================================
+
+const PW = 'Password123.';
+
+async function cap(page: Page, path: string) {
+    try { await page.waitForLoadState('networkidle', { timeout: 10000 }); }
+    catch { await page.waitForLoadState('domcontentloaded').catch(() => { }); }
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `qa-evidence/${path}`, fullPage: true });
+}
+function rid() { return Math.random().toString(36).replace(/[^a-z]/g, '').slice(0, 5) || 'abcde'; }
+
+test.describe('FUNC Fuzzy - Konfigurasi Fuzzy (pjawab)', () => {
+    let fuzzy: FuzzyConfigPage;
+    test.setTimeout(180000);
+    test.beforeEach(async ({ page }) => {
+        await page.route('**/:5173/**', (r) => r.abort());
+        await page.route(/.*:5173.*/, (r) => r.abort());
+        const auth = new AuthPage(page);
+        fuzzy = new FuzzyConfigPage(page);
+        await auth.loginAndWaitForDashboard('pjawab@email.com', PW);
+        await fuzzy.goto();
+        await fuzzy.expectPageReady();
+    });
+
+    test('FUZVF001 - Edit Rule (ubah diagnosis) submit VALID -> tersimpan, lalu dikembalikan', async ({ page }) => {
+        await fuzzy.clickRulesTab();
+        await page.locator('button[title="Edit rule"]').first().click();
+        const modal = page.locator('h3', { hasText: 'Edit Rule IF-THEN' }).locator('xpath=ancestor::div[contains(@class,"fixed")][1]').first();
+        await expect(modal).toBeVisible({ timeout: 10000 });
+        const diag = modal.locator('input[name="diagnosis"]');
+        const original = await diag.inputValue();
+        const baru = (original + ' [QA]').slice(0, 120);
+        await diag.fill(baru);
+        await modal.getByRole('button', { name: /^Simpan$/i }).click();
+        await page.waitForTimeout(1500);
+        let body = await page.locator('body').innerText();
+        const ok = /Rule berhasil diperbarui/i.test(body);
+        console.log('FUZVF001:: editSukses=' + ok + ' original="' + original + '"');
+        expect(ok).toBeTruthy();
+        await cap(page, 'RULE/RULEF001_edit_rule_submit.png');
+        // Revert ke diagnosis semula
+        await fuzzy.clickRulesTab().catch(() => { });
+        await page.locator('button[title="Edit rule"]').first().click();
+        const modal2 = page.locator('h3', { hasText: 'Edit Rule IF-THEN' }).locator('xpath=ancestor::div[contains(@class,"fixed")][1]').first();
+        await expect(modal2).toBeVisible({ timeout: 10000 });
+        await modal2.locator('input[name="diagnosis"]').fill(original);
+        await modal2.getByRole('button', { name: /^Simpan$/i }).click();
+        await page.waitForTimeout(1200);
+        body = await page.locator('body').innerText();
+        console.log('FUZVF001_revert:: ok=' + /Rule berhasil diperbarui/i.test(body));
+    });
+
+    test('FUZVF002 - Edit Set/Membership submit VALID -> tersimpan', async ({ page }) => {
+        const name = `qa_editset_${rid()}`;
+        await fuzzy.clickVariablesTab();
+        await fuzzy.createVariable({ name, group: 'lingkungan', type: 'input', unit: 'C', description: 'var edit set func' });
+        await expect(page.getByText('Variabel berhasil ditambahkan.').first()).toBeVisible({ timeout: 15000 });
+        await fuzzy.expandVariable(name);
+        await fuzzy.createSetForVariable(name, { name: 'qa_set1', shape: 'triangle', a: '10', b: '15', c: '20' });
+        await expect(page.getByText('Membership function berhasil ditambahkan.').first()).toBeVisible({ timeout: 15000 });
+        await fuzzy.expandVariable(name);
+        const section = page.locator('[data-var-id]').filter({ hasText: name }).first();
+        const editBtn = section.locator('button[title="Edit set"]').first();
+        await editBtn.waitFor({ state: 'visible', timeout: 15000 });
+        await editBtn.click();
+        const modal = page.locator('h3', { hasText: /Edit Himpunan Fuzzy/i }).locator('xpath=ancestor::div[contains(@class,"fixed")][1]').first();
+        await expect(modal).toBeVisible({ timeout: 10000 });
+        // ubah parameter c (tetap valid: a<=b<=c) 20 -> 22
+        await modal.locator('input[name="c"]').fill('22');
+        await modal.getByRole('button', { name: /^Simpan$/i }).click();
+        await page.waitForTimeout(1500);
+        const body = await page.locator('body').innerText();
+        const ok = /Membership function berhasil diperbarui/i.test(body);
+        console.log('FUZVF002:: editSetSukses=' + ok);
+        expect(ok).toBeTruthy();
+        await cap(page, 'FUZV/FUZVF002_edit_set_submit.png');
+        await fuzzy.deleteVariable(name).catch(() => { });
+    });
+
+    test('FUZVF003 - Tambah Rule VALID (submit) lalu Hapus Rule (cleanup) + verifikasi', async ({ page }) => {
+        await fuzzy.clickRulesTab();
+        const diagText = 'QA rule func ' + rid();
+        await page.getByRole('button', { name: /Tambah Rule/i }).first().click();
+        const modal = page.locator('h3', { hasText: 'Tambah Rule IF-THEN' }).locator('xpath=ancestor::div[contains(@class,"fixed")][1]').first();
+        await expect(modal).toBeVisible({ timeout: 10000 });
+        await modal.locator('select[name="group"]').selectOption('lingkungan');
+        await modal.locator('select[name="operator"]').selectOption('AND');
+        await modal.locator('select[name="output_set_id"]').selectOption({ index: 1 });
+        await modal.locator('input[name="diagnosis"]').fill(diagText);
+        // Kondisi 0
+        const var0 = modal.locator('select[name="conditions[0][variable_id]"]');
+        await var0.selectOption({ index: 1 });
+        await page.waitForTimeout(500);
+        await modal.locator('select[name="conditions[0][set_id]"]').selectOption({ index: 1 });
+        // Kondisi 1 (variabel berbeda)
+        const var1 = modal.locator('select[name="conditions[1][variable_id]"]');
+        await var1.selectOption({ index: 2 });
+        await page.waitForTimeout(500);
+        await modal.locator('select[name="conditions[1][set_id]"]').selectOption({ index: 1 });
+        await modal.getByRole('button', { name: /Simpan Rule/i }).click();
+        await page.waitForTimeout(1800);
+        let body = await page.locator('body').innerText();
+        const createOk = /Rule berhasil ditambahkan/i.test(body);
+        const appears = body.includes(diagText);
+        console.log('FUZVF003_create:: sukses=' + createOk + ' tampil=' + appears);
+        await cap(page, 'RULE/RULEF003_tambah_rule_submit.png');
+        expect(createOk).toBeTruthy();
+        // Cleanup: cari baris rule dgn diagnosis tsb lalu hapus
+        await fuzzy.clickRulesTab().catch(() => { });
+        await page.locator('input[x-model="ruleSearch"]').fill(diagText).catch(() => { });
+        await page.waitForTimeout(600);
+        const ruleRow = page.locator('div,tr', { hasText: diagText }).filter({ has: page.locator('button[title="Hapus rule"]') }).first();
+        const delBtn = ruleRow.locator('button[title="Hapus rule"]').first();
+        if (await delBtn.count() > 0) {
+            page.once('dialog', (d) => d.accept());
+            await delBtn.click();
+            await page.waitForTimeout(1500);
+            body = await page.locator('body').innerText();
+            console.log('FUZVF003_delete:: hapusSukses=' + /Rule berhasil dihapus/i.test(body));
+        } else {
+            console.log('FUZVF003_delete:: tombol hapus rule qa tidak ditemukan (cleanup manual mungkin perlu)');
+        }
+    });
+});
+
+// ============================================================
+// Diagnostik BUG #21 - digabung dari func-fuzzy-diag.spec.ts (PW dari blok di atas dipakai ulang)
+// ============================================================
+
+async function bodyTextDiag(page: Page): Promise<string> {
+    return (await page.locator('body').innerText().catch(() => '')) || '';
+}
+
+test.describe('DIAG Fuzzy edit rule', () => {
+    let fuzzy: FuzzyConfigPage;
+    test.setTimeout(150000);
+    test.beforeEach(async ({ page }) => {
+        await page.route('**/:5173/**', (r) => r.abort());
+        await page.route(/.*:5173.*/, (r) => r.abort());
+        const auth = new AuthPage(page);
+        fuzzy = new FuzzyConfigPage(page);
+        await auth.loginAndWaitForDashboard('pjawab@email.com', PW);
+        await fuzzy.goto();
+        await fuzzy.expectPageReady();
+        await fuzzy.clickRulesTab();
+    });
+
+    test('DIAG-A: buka edit rule, submit TANPA ubah apa pun', async ({ page }) => {
+        await page.locator('button[title="Edit rule"]').first().click();
+        const modal = page.locator('h3', { hasText: 'Edit Rule IF-THEN' }).locator('xpath=ancestor::div[contains(@class,"fixed")][1]').first();
+        await modal.waitFor({ state: 'visible', timeout: 10000 });
+        // baca nilai select kondisi sebelum submit
+        const c0v = await modal.locator('select[name="conditions[0][variable_id]"]').inputValue().catch(() => 'N/A');
+        const c0s = await modal.locator('select[name="conditions[0][set_id]"]').inputValue().catch(() => 'N/A');
+        const outv = await modal.locator('select[name="output_set_id"]').inputValue().catch(() => 'N/A');
+        console.log('DIAGA_PRE:: cond0_var=' + c0v + ' cond0_set=' + c0s + ' output=' + outv);
+        await modal.getByRole('button', { name: /^Simpan$/i }).click();
+        await page.waitForTimeout(1500);
+        const body = await bodyTextDiag(page);
+        const ok = /Rule berhasil diperbarui/i.test(body);
+        const errKondisi = /kondisi wajib|Set kondisi|Variabel kondisi|minimal 2 kondisi|profile fuzzy yang sama|duplikat/i.test(body);
+        console.log('DIAGA_POST:: sukses=' + ok + ' adaErrorKondisi=' + errKondisi);
+        await page.screenshot({ path: 'qa-evidence/RULE/DIAG_A_edit_tanpa_ubah.png', fullPage: true });
+    });
+
+    test('DIAG-B: buka edit rule, RE-SELECT set tiap kondisi, lalu submit', async ({ page }) => {
+        await page.locator('button[title="Edit rule"]').first().click();
+        const modal = page.locator('h3', { hasText: 'Edit Rule IF-THEN' }).locator('xpath=ancestor::div[contains(@class,"fixed")][1]').first();
+        await modal.waitFor({ state: 'visible', timeout: 10000 });
+        // re-trigger x-model dengan memilih ulang variable lalu set pada tiap kondisi
+        const condVars = modal.locator('select[name^="conditions"][name$="[variable_id]"]');
+        const n = await condVars.count();
+        console.log('DIAGB_COND_COUNT::' + n);
+        for (let i = 0; i < n; i++) {
+            const vSel = modal.locator(`select[name="conditions[${i}][variable_id]"]`);
+            const curV = await vSel.inputValue().catch(() => '');
+            if (curV) { await vSel.selectOption(curV).catch(() => { }); await page.waitForTimeout(300); }
+            const sSel = modal.locator(`select[name="conditions[${i}][set_id]"]`);
+            // pilih opsi set pertama yang non-empty
+            await sSel.selectOption({ index: 1 }).catch(() => { });
+        }
+        await modal.getByRole('button', { name: /^Simpan$/i }).click();
+        await page.waitForTimeout(1500);
+        const body = await bodyTextDiag(page);
+        const ok = /Rule berhasil diperbarui/i.test(body);
+        console.log('DIAGB_POST:: sukses=' + ok);
+        await page.screenshot({ path: 'qa-evidence/RULE/DIAG_B_edit_reselect.png', fullPage: true });
     });
 });

@@ -41,7 +41,7 @@ test.describe('Modul IoT Monitoring - Filter & Data Display E2E', () => {
           await iotPage.gotoMonitoring();
 
           // Assert
-          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensorData\'"]');
+          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensor\'"]');
           await expect(sensorDataPanel).toBeVisible({ timeout: 8000 });
 
           // Verify ada tabel data sensor
@@ -65,7 +65,7 @@ test.describe('Modul IoT Monitoring - Filter & Data Display E2E', () => {
           await page.waitForTimeout(500);
 
           // Assert
-          const logsPanel = page.locator('div[x-show="activeTab === \'deviceLogs\'"]');
+          const logsPanel = page.locator('div[x-show="activeTab === \'logs\'"]');
           await expect(logsPanel).toBeVisible({ timeout: 5000 });
 
           // Verify ada tabel device logs
@@ -82,7 +82,7 @@ test.describe('Modul IoT Monitoring - Filter & Data Display E2E', () => {
 
           // Arrange
           await iotPage.gotoMonitoring();
-          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensorData\'"]');
+          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensor\'"]');
 
           // Act
           const deviceFilter = sensorDataPanel.locator('select[name="sensor_device_id"]');
@@ -119,7 +119,7 @@ test.describe('Modul IoT Monitoring - Filter & Data Display E2E', () => {
 
           // Arrange
           await iotPage.gotoMonitoring();
-          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensorData\'"]');
+          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensor\'"]');
 
           // Act
           const parameterFilter = sensorDataPanel.locator('select[name="sensor_parameter_id"]');
@@ -153,7 +153,7 @@ test.describe('Modul IoT Monitoring - Filter & Data Display E2E', () => {
 
           // Arrange
           await iotPage.gotoMonitoring();
-          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensorData\'"]');
+          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensor\'"]');
 
           // Act
           const dateFromInput = sensorDataPanel.locator('input[name="sensor_date_from"]');
@@ -197,7 +197,7 @@ test.describe('Modul IoT Monitoring - Filter & Data Display E2E', () => {
 
           // Arrange
           await iotPage.gotoMonitoring();
-          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensorData\'"]');
+          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensor\'"]');
 
           // Act - Kombinasi filter
           const deviceFilter = sensorDataPanel.locator('select[name="sensor_device_id"]');
@@ -242,7 +242,7 @@ test.describe('Modul IoT Monitoring - Filter & Data Display E2E', () => {
 
           // Arrange
           await iotPage.gotoMonitoring();
-          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensorData\'"]');
+          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensor\'"]');
 
           const deviceFilter = sensorDataPanel.locator('select[name="sensor_device_id"]');
           await deviceFilter.waitFor({ state: 'visible', timeout: 8000 });
@@ -283,7 +283,7 @@ test.describe('Modul IoT Monitoring - Filter & Data Display E2E', () => {
           await iotPage.deviceLogsTab.click();
           await page.waitForTimeout(500);
 
-          const logsPanel = page.locator('div[x-show="activeTab === \'deviceLogs\'"]');
+          const logsPanel = page.locator('div[x-show="activeTab === \'logs\'"]');
 
           // Act
           const deviceFilter = logsPanel.locator('select[name="log_device_id"]');
@@ -320,7 +320,7 @@ test.describe('Modul IoT Monitoring - Filter & Data Display E2E', () => {
           await iotPage.deviceLogsTab.click();
           await page.waitForTimeout(500);
 
-          const logsPanel = page.locator('div[x-show="activeTab === \'deviceLogs\'"]');
+          const logsPanel = page.locator('div[x-show="activeTab === \'logs\'"]');
 
           // Act
           const typeFilter = logsPanel.locator('select[name="log_type"]');
@@ -358,7 +358,7 @@ test.describe('Modul IoT Monitoring - Filter & Data Display E2E', () => {
           await iotPage.deviceLogsTab.click();
           await page.waitForTimeout(500);
 
-          const logsPanel = page.locator('div[x-show="activeTab === \'deviceLogs\'"]');
+          const logsPanel = page.locator('div[x-show="activeTab === \'logs\'"]');
 
           // Act
           const dateInput = logsPanel.locator('input[name="log_date"]');
@@ -398,7 +398,7 @@ test.describe('Modul IoT Monitoring - Filter & Data Display E2E', () => {
           await iotPage.deviceLogsTab.click();
           await page.waitForTimeout(500);
 
-          const logsPanel = page.locator('div[x-show="activeTab === \'deviceLogs\'"]');
+          const logsPanel = page.locator('div[x-show="activeTab === \'logs\'"]');
 
           // Assert
           const table = logsPanel.locator('table');
@@ -418,7 +418,7 @@ test.describe('Modul IoT Monitoring - Filter & Data Display E2E', () => {
 
           // Arrange
           await iotPage.gotoMonitoring();
-          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensorData\'"]');
+          const sensorDataPanel = page.locator('div[x-show="activeTab === \'sensor\'"]');
 
           // Assert
           const table = sensorDataPanel.locator('table');

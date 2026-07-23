@@ -1,5 +1,6 @@
-﻿import { test, expect } from '@playwright/test';
+﻿import { test, expect, Page } from '@playwright/test';
 import { ProfilePage } from '../pages/ProfilePage.js';
+import { AuthPage } from '../pages/AuthPage.js';
 
 test.describe('Modul Halaman Konfigurasi Profil - E2E Tests', () => {
     test.describe.configure({ mode: 'serial' });
@@ -481,5 +482,49 @@ test.describe('Modul Halaman Konfigurasi Profil - E2E Tests', () => {
 
         // Assert: Load time < 5000ms
         expect(loadTime).toBeLessThan(5000);
+    });
+});
+
+
+// ============================================================
+// Uji Fungsional Mendalam - Profil simpan lokasi (digabung dari func-misc.spec.ts, sebelumnya section 26.9)
+// ============================================================
+
+const PW_Prof = 'Password123.';
+
+async function capProf(page: Page, path: string) {
+    try { await page.waitForLoadState('networkidle', { timeout: 10000 }); }
+    catch { await page.waitForLoadState('domcontentloaded').catch(() => { }); }
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `qa-evidence/${path}`, fullPage: true });
+}
+async function bodyTextProf(page: Page): Promise<string> {
+    return (await page.locator('body').innerText().catch(() => '')) || '';
+}
+
+test.describe('FUNC Profil - Simpan Lokasi Peternakan (pjawab)', () => {
+    test.setTimeout(160000);
+    test.beforeEach(async ({ page }) => {
+        await page.route(/.*:5173.*/, (r) => r.abort());
+        const auth = new AuthPage(page);
+        await auth.loginAndWaitForDashboard('pjawab@email.com', PW_Prof);
+    });
+
+    test('PROF001 - Profil simpan lokasi peternakan VALID', async ({ page }) => {
+        await page.goto('/profil', { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(800);
+        const addr = page.locator('input[name="address"]');
+        const ada = await addr.count();
+        console.log('PROF001_formAda::' + ada);
+        expect(ada).toBeGreaterThan(0);
+        await addr.fill('Jl. QA Peternakan No. 10, Ngantang, Malang');
+        await page.getByRole('button', { name: /Simpan Lokasi/i }).click();
+        await page.waitForLoadState('domcontentloaded').catch(() => { });
+        await page.waitForTimeout(1500);
+        const body = await bodyTextProf(page);
+        const saved = /Lokasi peternakan berhasil diperbarui/i.test(body);
+        console.log('PROF001:: saved=' + saved);
+        expect(saved).toBeTruthy();
+        await capProf(page, 'MISC/PROF001_lokasi_valid.png');
     });
 });

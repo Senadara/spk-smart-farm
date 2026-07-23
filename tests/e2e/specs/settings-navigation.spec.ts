@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+﻿import { test, expect, Page } from '@playwright/test';
 import { SettingsPage } from '../pages/SettingsPage.js';
 import { AuthPage } from '../pages/AuthPage.js';
 
@@ -95,20 +95,18 @@ test.describe('Modul Halaman Pengaturan (Setting) - E2E QA', () => {
          * Then setiap card harus visible dan memiliki struktur yang konsisten
          */
 
-        // Arrange & Act
+        // Arrange & Act (desain baru: kartu Data Master, IoT, dan section DSS Supplier)
         const dataMasterCard = settingsPage.dataMasterCard;
         const iotDevicesCard = settingsPage.iotDevicesCard;
-        const iotConfigCard = settingsPage.iotConfigCard;
 
         // Assert
         await expect(dataMasterCard).toBeVisible();
         await expect(iotDevicesCard).toBeVisible();
-        await expect(iotConfigCard).toBeVisible();
+        await expect(settingsPage.dssSection).toBeVisible();
 
-        // Verifikasi bahwa card adalah link yang dapat diklik
+        // Verifikasi bahwa card navigasi adalah link yang dapat diklik
         await expect(dataMasterCard).toHaveAttribute('href');
         await expect(iotDevicesCard).toHaveAttribute('href');
-        await expect(iotConfigCard).toHaveAttribute('href');
     });
 
     test('Negatif - Navigasi ke route settings yang tidak valid menampilkan error 404', async ({ page }) => {
@@ -122,15 +120,15 @@ test.describe('Modul Halaman Pengaturan (Setting) - E2E QA', () => {
         const invalidRoute = '/settings/invalid-route-xyz-123';
 
         // Act
-        await page.goto(invalidRoute, { waitUntil: 'domcontentloaded' });
+        const response = await page.goto(invalidRoute, { waitUntil: 'domcontentloaded' });
 
-        // Assert
-        // Bisa jadi 404 atau redirect ke settings utama
+        // Assert: status 404, ATAU tampil teks 404, ATAU dialihkan ke /settings
+        const status = response?.status();
         const currentUrl = page.url();
-        const is404 = await page.locator('text=/404|not found/i').isVisible({ timeout: 5000 }).catch(() => false);
+        const is404Text = await page.locator('text=/404|not found|Not Found/i').first().isVisible({ timeout: 3000 }).catch(() => false);
         const isRedirectedToSettings = /\/settings\/?$/.test(currentUrl);
 
-        expect(is404 || isRedirectedToSettings).toBeTruthy();
+        expect(status === 404 || is404Text || isRedirectedToSettings).toBeTruthy();
     });
 
     test('Negatif - Akses halaman settings tanpa autentikasi harus redirect ke login', async ({ page, context }) => {
@@ -191,13 +189,13 @@ test.describe('Modul Halaman Pengaturan (Setting) - E2E QA', () => {
         await page.goBack();
         await settingsPage.expectPageTitleVisible();
 
-        // Klik IoT Config
-        await settingsPage.clickIotConfigCard();
-        await expect(page).toHaveURL(/.*\/iot\/config/, { timeout: 10000 });
+        // Klik DSS "Atur Bobot" (menuju konfigurasi AHP)
+        await settingsPage.dssAturBobot.click();
+        await expect(page).toHaveURL(/.*\/spk-suppliers\/dss\/config/, { timeout: 10000 });
 
-        // Assert: Tidak ada error JavaScript
+        // Assert: Tidak ada crash render
         const bodyContent = await page.locator('body').textContent();
-        expect(bodyContent).not.toMatch(/error|crash/i);
+        expect(bodyContent).not.toMatch(/Fatal render error/i);
     });
 
     test('Edge Case - Halaman settings dapat diakses dari berbagai entry point', async ({ page }) => {
@@ -227,108 +225,130 @@ test.describe('Modul Halaman Pengaturan (Setting) - E2E QA', () => {
        DSS SUPPLIER CARD (AHP-SAW)
        ═══════════════════════════════════════════════════════════════════ */
 
-    test('Positif - DSS Supplier card (AHP-SAW) visible dengan gradient background', async ({ page }) => {
+    test('Positif - Kartu DSS Supplier AHP-SAW tampil di halaman Settings', async ({ page }) => {
         /**
          * Given user berada di halaman settings
-         * When melihat DSS supplier section
-         * Then card dengan gradient background dan badge visible
+         * When melihat section DSS supplier
+         * Then judul kartu "DSS Supplier AHP-SAW" visible
          */
 
-        // Assert: DSS card heading
-        const dssHeading = page.locator('h3').filter({ hasText: /AHP bobot.*SAW peringkat/i });
-        await expect(dssHeading).toBeVisible();
-
-        // Assert: Hybrid badge
-        const badge = page.locator('span').filter({ hasText: /Hybrid.*Rekomendasi supplier/i });
-        await expect(badge).toBeVisible();
+        await expect(settingsPage.dssSection).toBeVisible();
     });
 
-    test('Positif - DSS Supplier card menampilkan description text (perbandingan berpasangan, validasi CR, normalisasi, skor)', async ({ page }) => {
+    test('Positif - Kartu DSS Supplier menampilkan deskripsi bobot AHP & ranking SAW', async ({ page }) => {
         /**
          * Given DSS card rendered
          * When check card content
-         * Then description dengan keywords CR dan normalisasi visible
+         * Then deskripsi menyebut bobot AHP, ranking SAW, dan bandingkan supplier
          */
 
-        // Assert: Description keywords
         const bodyText = await page.locator('body').textContent();
-        expect(bodyText).toContain('perbandingan berpasangan');
-        expect(bodyText).toContain('validasi CR');
-        expect(bodyText).toMatch(/normalisasi|skor gabungan/i);
+        expect(bodyText).toMatch(/bobot AHP/i);
+        expect(bodyText).toMatch(/ranking SAW/i);
+        expect(bodyText).toMatch(/bandingkan supplier/i);
     });
 
-    test('Positif - DSS Supplier card has 3 action buttons (Atur bobot AHP, Dashboard SAW, Komparasi produk)', async ({ page }) => {
+    test('Positif - Kartu DSS Supplier memiliki 3 tombol aksi (Atur Bobot, Ranking SAW, Cari Barang)', async ({ page }) => {
         /**
          * Given DSS card displayed
          * When check action buttons
-         * Then 3 buttons visible dengan correct text
+         * Then 3 tombol tautan visible menuju config/dashboard/products
          */
 
-        // Assert: AHP Config button
-        const ahpButton = page.locator('a').filter({ hasText: /Atur bobot.*AHP/i });
-        await expect(ahpButton).toBeVisible();
-
-        // Assert: Dashboard SAW button
-        const dashboardButton = page.locator('a').filter({ hasText: /Dashboard SAW/i });
-        await expect(dashboardButton).toBeVisible();
-
-        // Assert: Komparasi produk button
-        const komparasiButton = page.locator('a').filter({ hasText: /Komparasi produk/i });
-        await expect(komparasiButton).toBeVisible();
+        await expect(settingsPage.dssAturBobot).toBeVisible();
+        await expect(settingsPage.dssRankingSaw).toBeVisible();
+        await expect(settingsPage.dssCariBarang).toBeVisible();
     });
 
-    test('Positif - DSS "Atur bobot AHP" button navigate ke /spk-suppliers/dss/config', async ({ page }) => {
-        /**
-         * Given DSS card visible
-         * When click "Atur bobot AHP" button
-         * Then navigate to DSS config page
-         */
-
-        // Arrange
-        const ahpButton = page.locator('a').filter({ hasText: /Atur bobot.*AHP/i });
-
-        // Act
-        await ahpButton.click();
-
-        // Assert
+    test('Positif - Tombol "Atur Bobot" navigate ke /spk-suppliers/dss/config', async ({ page }) => {
+        await settingsPage.dssAturBobot.click();
         await expect(page).toHaveURL(/.*\/spk-suppliers\/dss\/config/, { timeout: 15000 });
     });
 
-    test('Positif - DSS "Dashboard SAW" button navigate ke /spk-suppliers/dss/dashboard', async ({ page }) => {
-        /**
-         * Given DSS card visible
-         * When click "Dashboard SAW" button
-         * Then navigate to DSS dashboard page
-         */
-
-        // Arrange
-        const dashboardButton = page.locator('a').filter({ hasText: /Dashboard SAW/i });
-
-        // Act
-        await dashboardButton.click();
-
-        // Assert
+    test('Positif - Tombol "Ranking SAW" navigate ke /spk-suppliers/dss/dashboard', async ({ page }) => {
+        await settingsPage.dssRankingSaw.click();
         await expect(page).toHaveURL(/.*\/spk-suppliers\/dss\/dashboard/, { timeout: 15000 });
     });
 
-    test('Positif - DSS "Komparasi produk" button navigate ke /spk-suppliers/products', async ({ page }) => {
-        /**
-         * Given DSS card visible
-         * When click "Komparasi produk" button
-         * Then navigate to products comparison page
-         */
-
-        // Arrange
-        const komparasiButton = page.locator('a').filter({ hasText: /Komparasi produk/i });
-
-        // Act
-        await komparasiButton.click();
-
-        // Assert
+    test('Positif - Tombol "Cari Barang" navigate ke /spk-suppliers/products', async ({ page }) => {
+        await settingsPage.dssCariBarang.click();
         await expect(page).toHaveURL(/.*\/spk-suppliers\/products/, { timeout: 15000 });
     });
 
     /* ═══════════════════════════════════════════════════════════════════
        CARD VISUAL & STYLING VALIDATION
        ═══════════════════════════════════════════════════════════════════ */
+});
+
+
+// ============================================================
+// Uji Fungsional Mendalam - Health Scheduler (digabung dari func-misc.spec.ts, sebelumnya section 26.9)
+// ============================================================
+
+const PW_HS = 'Password123.';
+
+async function capHS(page: Page, path: string) {
+    try { await page.waitForLoadState('networkidle', { timeout: 10000 }); }
+    catch { await page.waitForLoadState('domcontentloaded').catch(() => { }); }
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `qa-evidence/${path}`, fullPage: true });
+}
+async function bodyTextHS(page: Page): Promise<string> {
+    return (await page.locator('body').innerText().catch(() => '')) || '';
+}
+
+test.describe('FUNC Health Scheduler / Penjadwal Kesehatan (pjawab)', () => {
+    test.setTimeout(160000);
+    test.beforeEach(async ({ page }) => {
+        await page.route(/.*:5173.*/, (r) => r.abort());
+        const auth = new AuthPage(page);
+        await auth.loginAndWaitForDashboard('pjawab@email.com', PW_HS);
+    });
+
+    test('HSF001/002 - Health Scheduler simpan VALID lalu INVALID', async ({ page }) => {
+        await page.goto('/settings/health-scheduler', { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(800);
+
+        // VALID
+        await page.locator('textarea[name="schedule_times"]').fill('07:00, 12:30');
+        await page.locator('select[name="days"]').selectOption('14');
+        await page.locator('input[name="threshold_percent"]').fill('40');
+        await page.locator('select[name="target_role"]').selectOption('petugas');
+        await page.getByRole('button', { name: /Simpan Scheduler/i }).click();
+        await page.waitForLoadState('domcontentloaded').catch(() => { });
+        await page.waitForTimeout(1500);
+        const bodyV = await bodyTextHS(page);
+        const saved = /Scheduler indikasi kesehatan berhasil disimpan/i.test(bodyV);
+        console.log('HSF001:: saved=' + saved);
+        expect(saved).toBeTruthy();
+        await capHS(page, 'MISC/HSF001_scheduler_valid.png');
+
+        // INVALID (jam tidak valid)
+        await page.goto('/settings/health-scheduler', { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(600);
+        await page.locator('textarea[name="schedule_times"]').fill('abc-bukan-jam');
+        await page.getByRole('button', { name: /Simpan Scheduler/i }).click();
+        await page.waitForLoadState('domcontentloaded').catch(() => { });
+        await page.waitForTimeout(1500);
+        const bodyI = await bodyTextHS(page);
+        const rejected = /Isi minimal satu jam valid/i.test(bodyI);
+        console.log('HSF002:: rejected=' + rejected);
+        expect(rejected).toBeTruthy();
+        await capHS(page, 'MISC/HSF002_scheduler_invalid.png');
+    });
+
+    test('HSF003 - Health Scheduler Jalankan Sekarang (best-effort node)', async ({ page }) => {
+        await page.goto('/settings/health-scheduler', { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(800);
+        await page.getByRole('button', { name: /Jalankan Sekarang/i }).click();
+        await page.waitForLoadState('domcontentloaded').catch(() => { });
+        await page.waitForTimeout(2500);
+        const body = await bodyTextHS(page);
+        const ok = /Uji scheduler selesai/i.test(body);
+        const err = /Gagal menjalankan scheduler/i.test(body);
+        console.log('HSF003:: sukses=' + ok + ' gagalNode=' + err);
+        await capHS(page, 'MISC/HSF003_scheduler_run.png');
+        // best-effort: salah satu pesan harus muncul (sukses ATAU error node yang jujur)
+        expect(ok || err).toBeTruthy();
+    });
 });

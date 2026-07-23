@@ -10,16 +10,15 @@ export class BarnDetailPage {
         this.peternakan = new PeternakanPage(page);
     }
 
+    /** Navigasi tegas ke detail kandang pertama; gagal bila tidak ada kandang. */
     async navigateToFirstBarn() {
         await this.peternakan.goto();
-        await this.page.waitForTimeout(2000);
         const link = this.page.locator('a[href*="/peternakan/"]').first();
-        if (await link.isVisible().catch(() => false)) {
-            await link.click();
-            await this.page.waitForTimeout(2000);
-            return true;
-        }
-        return false;
+        await expect(link).toBeVisible({ timeout: 30000 });
+        await link.click();
+        await expect(this.page).toHaveURL(/.*\/peternakan\/[^/]+/, { timeout: 30000 });
+        await this.page.waitForLoadState('domcontentloaded');
+        return true;
     }
 
     async expectHeader() {
@@ -103,8 +102,10 @@ export class BarnDetailPage {
     }
 
     async expectExportButton() {
-        const btn = this.page.locator('button, a').filter({ hasText: /Export|Ekspor|Unduh/i }).first();
-        const count = await btn.count();
-        if (count > 0) expect(btn).toBeVisible();
+        // Tombol export produktivitas di header detail kandang berlabel "Settlement / PDF"
+        // (link ke route peternakan.settlement → PDF), hanya tampil untuk role pjawab/owner/admin.
+        const btn = this.page.locator('a[href*="settlement"], button, a')
+            .filter({ hasText: /Settlement|PDF|Export|Ekspor|Unduh/i }).first();
+        await expect(btn).toBeVisible();
     }
 }

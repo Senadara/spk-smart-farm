@@ -89,18 +89,25 @@ export class UsersPage {
         await modal.getByRole('button', { name: /Simpan Perubahan/i }).click();
     }
 
-    async deleteUser(name: string) {
+    // Catatan implementasi nyata: aksi "destroy" adalah SOFT-DELETE (nonaktifkan).
+    // User di-set isActive=false, baris TETAP ada di tabel sebagai "Nonaktif".
+    // Tombolnya berjudul "Nonaktifkan" (bukan "Hapus"); konfirmasi "Nonaktifkan akun petugas ini?".
+    async deleteUser(name: string, options: { autoConfirm?: boolean } = {}) {
+        const { autoConfirm = true } = options;
         const row = this.rowByText(name);
+        await row.scrollIntoViewIfNeeded();
         await row.hover();
 
-        // Wait for buttons to appear
+        // Wait for buttons to appear (opacity transition group-hover)
         await this.page.waitForTimeout(300);
 
-        // Click delete button - it's inside a form with onsubmit confirm
-        const deleteBtn = row.locator('button[title="Hapus"]');
+        // Tombol destroy = "Nonaktifkan" (form dengan onsubmit confirm)
+        const deleteBtn = row.locator('button[title="Nonaktifkan"]');
 
-        // Handle the JavaScript confirm dialog
-        this.page.once('dialog', dialog => dialog.accept());
+        // Handle the JavaScript confirm dialog (kecuali test ingin meng-assert dialog sendiri)
+        if (autoConfirm) {
+            this.page.once('dialog', dialog => dialog.accept());
+        }
 
         await deleteBtn.click();
     }
@@ -111,5 +118,12 @@ export class UsersPage {
 
     async expectRowHidden(name: string) {
         await expect(this.rowByText(name)).toHaveCount(0);
+    }
+
+    // Setelah soft-delete, baris tetap tampil dengan status "Nonaktif".
+    async expectRowDeactivated(name: string) {
+        const row = this.rowByText(name);
+        await expect(row).toBeVisible();
+        await expect(row).toContainText(/Nonaktif/i);
     }
 }

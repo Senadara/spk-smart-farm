@@ -36,11 +36,11 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
             await page.waitForTimeout(500);
         }
 
-        // Assert: Check priority badges
-        await expect(page.getByText('Urgent', { exact: true }).first()).toBeVisible();
-        await expect(page.getByText('Tinggi', { exact: true }).first()).toBeVisible();
-        await expect(page.getByText('Sedang', { exact: true }).first()).toBeVisible();
-        await expect(page.getByText('Rendah', { exact: true }).first()).toBeVisible();
+        // Assert: Check priority badges (batasi ke <span> badge kartu, bukan <option> dropdown filter)
+        await expect(page.getByText('Urgent', { exact: true }).and(page.locator('span')).first()).toBeVisible();
+        await expect(page.getByText('Tinggi', { exact: true }).and(page.locator('span')).first()).toBeVisible();
+        await expect(page.getByText('Sedang', { exact: true }).and(page.locator('span')).first()).toBeVisible();
+        await expect(page.getByText('Rendah', { exact: true }).and(page.locator('span')).first()).toBeVisible();
     });
 
 
@@ -72,21 +72,23 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
         await page.getByRole('button', { name: /Mulai Kerjakan/i }).click();
         await expect(page.getByText('Status tugas diperbarui.')).toBeVisible({ timeout: 10000 });
 
-        // Act: Submit report
-        await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await expect(page.getByRole('heading', { name: /Kirim Laporan Pengerjaan/i })).toBeVisible();
+        // Act: Submit report (scope ke MODAL laporan; halaman detail juga punya textarea[name=description] di form edit)
+        await penugasanPage.submitReport({
+            description: 'Progress report: Sudah dikerjakan 50%',
+            statusUpdate: 'in_progress',
+        });
 
-        await page.locator('textarea[name="description"]').first().first().fill('Progress report: Sudah dikerjakan 50%');
-        await page.locator('select[name="status_update"]').selectOption('in_progress');
-        await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
-
-        // Assert: Success
+        // Assert: Success — controller report() redirect ke INDEX board (bukan tetap di detail)
         await expect(page.getByText('Laporan pengerjaan berhasil disubmit.')).toBeVisible({ timeout: 10000 });
 
-        // Assert: Task masih IN_PROGRESS
-        await expect(page.getByText('Dikerjakan', { exact: false })).toBeVisible();
+        // Task masih IN_PROGRESS → masih di papan aktif. Buka lagi detailnya untuk verifikasi timeline.
+        await page.getByText(taskTitle).first().click();
+        await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
 
-        // Assert: Report muncul di timeline
+        // Assert: Task masih IN_PROGRESS (badge status di detail, exact — bedakan dari <option>Masih Dikerjakan</option>)
+        await expect(page.getByText('Dikerjakan', { exact: true }).first()).toBeVisible();
+
+        // Assert: Report muncul di timeline detail
         await expect(page.getByText('Sudah dikerjakan 50%')).toBeVisible();
     });
 
@@ -114,21 +116,20 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
         await page.getByRole('button', { name: /Mulai Kerjakan/i }).click();
         await expect(page.getByText('Status tugas diperbarui.')).toBeVisible({ timeout: 10000 });
 
-        // Act: Submit report dengan done
-        await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').first().first().fill('Pekerjaan selesai 100%');
-        await page.locator('select[name="status_update"]').selectOption('done');
-        await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
+        // Act: Submit report dengan done (scope ke MODAL laporan)
+        await penugasanPage.submitReport({
+            description: 'Pekerjaan selesai 100%',
+            statusUpdate: 'done',
+        });
 
-        // Assert: Success
+        // Assert: Success (redirect ke index board dengan toast)
         await expect(page.getByText('Laporan pengerjaan berhasil disubmit.')).toBeVisible({ timeout: 10000 });
 
-        // Assert: Task status DONE
-        await expect(page.getByText('Selesai', { exact: false })).toBeVisible();
-
-        // Assert: Muncul di History tab
+        // Assert: Task status DONE → pindah ke History tab
         await page.goto('/penugasan?tab=history');
         await expect(page.getByText(taskTitle)).toBeVisible();
+        // Baris history menampilkan status "Selesai"
+        await expect(page.locator('tbody tr').filter({ hasText: taskTitle }).first()).toContainText('Selesai');
     });
 
     test('Positif - Submit Report dengan Photo URL', async ({ page }) => {
@@ -154,19 +155,26 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
         await page.getByRole('button', { name: /Mulai Kerjakan/i }).click();
         await expect(page.getByText('Status tugas diperbarui.')).toBeVisible({ timeout: 10000 });
 
-        // Act: Submit report dengan photo
-        await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').first().first().fill('Laporan dengan foto bukti');
-        await page.locator('input[name="photo"]').fill('https://example.com/photo.jpg');
-        await page.locator('select[name="status_update"]').selectOption('done');
-        await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
+        // Act: Submit report dengan upload foto bukti (file, bukan URL) — scope ke MODAL laporan
+        await penugasanPage.submitReport({
+            description: 'Laporan dengan foto bukti',
+            photo: 'bukti-laporan.png',
+            statusUpdate: 'done',
+        });
 
-        // Assert: Success
+        // Assert: Success (redirect ke index board)
         await expect(page.getByText('Laporan pengerjaan berhasil disubmit.')).toBeVisible({ timeout: 10000 });
 
-        // Assert: Photo link visible
-        await expect(page.getByRole('link', { name: /Lihat Bukti Foto/i })).toBeVisible();
-        await expect(page.getByRole('link', { name: /Lihat Bukti Foto/i })).toHaveAttribute('href', 'https://example.com/photo.jpg');
+        // DONE → buka detail via History untuk verifikasi link foto di timeline.
+        await page.goto('/penugasan?tab=history');
+        await page.locator('tbody tr').filter({ hasText: taskTitle }).first()
+            .getByRole('link', { name: /Detail/i }).click();
+        await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
+
+        // Assert: Photo link visible di timeline detail; foto disimpan ke disk public (storage/spk-reports/...)
+        const fotoLink = page.getByRole('link', { name: /Lihat Bukti Foto/i });
+        await expect(fotoLink).toBeVisible();
+        await expect(fotoLink).toHaveAttribute('href', /\/storage\/spk-reports\/.+\.(png|jpe?g|webp)$/i);
     });
 
     test('Positif - Multiple Reports pada satu Task', async ({ page }) => {
@@ -192,21 +200,31 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
         await page.getByRole('button', { name: /Mulai Kerjakan/i }).click();
         await expect(page.getByText('Status tugas diperbarui.')).toBeVisible({ timeout: 10000 });
 
-        // Act: Submit report 1
-        await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').first().first().fill('Laporan pertama - Progress 30%');
-        await page.locator('select[name="status_update"]').selectOption('in_progress');
-        await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
+        // Act: Submit report 1 (in_progress). Report submit redirect ke index board.
+        await penugasanPage.submitReport({
+            description: 'Laporan pertama - Progress 30%',
+            statusUpdate: 'in_progress',
+        });
         await expect(page.getByText('Laporan pengerjaan berhasil disubmit.')).toBeVisible({ timeout: 10000 });
 
-        // Act: Submit report 2
-        await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').first().first().fill('Laporan kedua - Selesai 100%');
-        await page.locator('select[name="status_update"]').selectOption('done');
-        await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
+        // Task masih IN_PROGRESS → buka lagi detailnya sebelum submit report ke-2.
+        await page.getByText(taskTitle).first().click();
+        await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
+
+        // Act: Submit report 2 (done)
+        await penugasanPage.submitReport({
+            description: 'Laporan kedua - Selesai 100%',
+            statusUpdate: 'done',
+        });
         await expect(page.getByText('Laporan pengerjaan berhasil disubmit.')).toBeVisible({ timeout: 10000 });
 
-        // Assert: Kedua laporan muncul
+        // DONE → buka detail via History, verifikasi kedua laporan di timeline.
+        await page.goto('/penugasan?tab=history');
+        await page.locator('tbody tr').filter({ hasText: taskTitle }).first()
+            .getByRole('link', { name: /Detail/i }).click();
+        await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
+
+        // Assert: Kedua laporan muncul di timeline
         await expect(page.getByText('Laporan pertama - Progress 30%')).toBeVisible();
         await expect(page.getByText('Laporan kedua - Selesai 100%')).toBeVisible();
     });
@@ -233,21 +251,24 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
         await page.getByRole('button', { name: /Mulai Kerjakan/i }).click();
         await expect(page.getByText('Status tugas diperbarui.')).toBeVisible({ timeout: 10000 });
 
-        // Submit first report
-        await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').first().first().fill('Report A');
-        await page.locator('select[name="status_update"]').selectOption('in_progress');
-        await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
+        // Submit first report (in_progress) → redirect ke index board
+        await penugasanPage.submitReport({ description: 'Report A', statusUpdate: 'in_progress' });
         await expect(page.getByText('Laporan pengerjaan berhasil disubmit.')).toBeVisible({ timeout: 10000 });
 
+        // Buka lagi detail (masih IN_PROGRESS) sebelum report ke-2
+        await page.getByText(taskTitle).first().click();
+        await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
         await page.waitForTimeout(1000);
 
-        // Submit second report
-        await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').first().first().fill('Report B (Terbaru)');
-        await page.locator('select[name="status_update"]').selectOption('done');
-        await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
+        // Submit second report (done)
+        await penugasanPage.submitReport({ description: 'Report B (Terbaru)', statusUpdate: 'done' });
         await expect(page.getByText('Laporan pengerjaan berhasil disubmit.')).toBeVisible({ timeout: 10000 });
+
+        // DONE → buka detail via History untuk verifikasi timeline
+        await page.goto('/penugasan?tab=history');
+        await page.locator('tbody tr').filter({ hasText: taskTitle }).first()
+            .getByRole('link', { name: /Detail/i }).click();
+        await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
 
         // Assert: Timeline heading visible
         await expect(page.getByText('Timeline Laporan Pengerjaan')).toBeVisible();
@@ -273,39 +294,55 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
         const taskTitle = `Task Detail Meta ${timestamp}`;
 
         await penugasanPage.createButton.click();
-        await page.locator('input[name="title"]').first().first().fill(taskTitle);
-        await page.locator('textarea[name="description"]').first().first().fill('Task dengan metadata lengkap');
-        await page.locator('select[name="priority"]').first().first().selectOption('high');
+        await page.waitForTimeout(1000);
+        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).toBeVisible({ timeout: 10000 });
 
-        // Pilih assignee
-        const assigneeSelect = page.locator('select[name="assigned_to"]').first().first();
-        const firstUser = await assigneeSelect.locator('option').nth(1).getAttribute('value');
-        if (firstUser) {
-            await assigneeSelect.selectOption(firstUser);
+        // Scope ke MODAL (select[name=priority] juga dipakai oleh filter board di halaman).
+        const modal = page.locator('h3', { hasText: 'Buat Tugas Baru' })
+            .locator('xpath=ancestor::div[contains(@class,"fixed")][1]')
+            .first();
+
+        await modal.locator('input[name="title"]').first().fill(taskTitle);
+        await modal.locator('textarea[name="description"]').first().fill('Task dengan metadata lengkap');
+        await modal.locator('select[name="priority"]').first().selectOption('high');
+
+        // Pilih assignee (guard opsi seed-dependent)
+        const assigneeSelect = modal.locator('select[name="assigned_to"]').first();
+        if (await assigneeSelect.count() > 0 && await assigneeSelect.locator('option').count() > 1) {
+            const firstUser = await assigneeSelect.locator('option').nth(1).getAttribute('value');
+            if (firstUser) {
+                await assigneeSelect.selectOption(firstUser);
+            }
         }
 
-        // Pilih barn
-        const barnSelect = page.locator('select[name="unit_budidaya_id"]').first().first();
-        const firstBarn = await barnSelect.locator('option').nth(1).getAttribute('value');
-        if (firstBarn) {
-            await barnSelect.selectOption(firstBarn);
+        // Pilih barn (guard opsi seed-dependent)
+        const barnSelect = modal.locator('select[name="unit_budidaya_id"]').first();
+        if (await barnSelect.count() > 0 && await barnSelect.locator('option').count() > 1) {
+            const firstBarn = await barnSelect.locator('option').nth(1).getAttribute('value');
+            if (firstBarn) {
+                await barnSelect.selectOption(firstBarn);
+            }
         }
 
         // Due date
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const dueDateStr = tomorrow.toISOString().split('T')[0];
-        await page.locator('input[name="due_date"]').first().first().fill(dueDateStr);
+        const dueDateInput = modal.locator('input[name="due_date"]').first();
+        if (await dueDateInput.count() > 0) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const dueDateStr = tomorrow.toISOString().split('T')[0];
+            await dueDateInput.fill(dueDateStr);
+        }
 
-        await page.locator('button[type="submit"]').filter({ hasText: /Simpan|Buat/i }).click();
+        await modal.locator('button[type="submit"]').filter({ hasText: /Simpan|Buat/i }).first().click();
         await expect(page.getByText('Tugas berhasil dibuat.')).toBeVisible({ timeout: 10000 });
 
         // Act: Go to detail
         await page.getByText(taskTitle).first().click();
 
-        // Assert: Metadata sections visible
+        // Assert: Metadata sections visible (panel "Informasi Tugas").
+        // Catatan: label "Ditugaskan Kepada" muncul juga di form Edit Tugas → pakai .first() (panel info lebih dulu di DOM).
         await expect(page.getByText('Informasi Tugas')).toBeVisible();
-        await expect(page.getByText('Ditugaskan Kepada')).toBeVisible();
+        await expect(page.getByText('Ditugaskan Kepada').first()).toBeVisible();
         await expect(page.getByText('Dibuat Oleh')).toBeVisible();
         await expect(page.getByText('Kandang Target')).toBeVisible();
         await expect(page.getByText('Tenggat Waktu')).toBeVisible();
@@ -354,14 +391,19 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
         await page.getByText(taskTitle).first().click();
         await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
 
-        // Assert: Form fields pre-filled
-        const titleInput = page.locator('input[name="title"]').first().first();
+        // Assert: Form fields pre-filled — scope ke form "Edit Tugas"
+        // (halaman detail juga punya textarea[name=description] milik form Kirim Laporan).
+        const editForm = page.locator('form').filter({
+            has: page.getByRole('button', { name: /Simpan Perubahan/i }),
+        }).first();
+
+        const titleInput = editForm.locator('input[name="title"]');
         await expect(titleInput).toHaveValue(taskTitle);
 
-        const descTextarea = page.locator('textarea[name="description"]').first().first();
+        const descTextarea = editForm.locator('textarea[name="description"]');
         await expect(descTextarea).toHaveValue('Deskripsi asli');
 
-        const prioritySelect = page.locator('select[name="priority"]').first().first();
+        const prioritySelect = editForm.locator('select[name="priority"]');
         await expect(prioritySelect).toHaveValue('medium');
     });
 
@@ -393,19 +435,16 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
         await page.getByRole('button', { name: /Mulai Kerjakan/i }).click();
         await expect(page.getByText('Status tugas diperbarui.')).toBeVisible({ timeout: 10000 });
 
-        await page.getByRole('button', { name: /Kirim Laporan/i }).click();
-        await page.locator('textarea[name="description"]').first().first().fill('Selesai');
-        await page.locator('select[name="status_update"]').selectOption('done');
-        await page.locator('button[type="submit"]').filter({ hasText: /Kirim Laporan/i }).click();
+        await penugasanPage.submitReport({ description: 'Selesai', statusUpdate: 'done' });
         await expect(page.getByText('Laporan pengerjaan berhasil disubmit.')).toBeVisible({ timeout: 10000 });
 
         // Act: Go to History tab
         await page.goto('/penugasan?tab=history');
         await expect(penugasanPage.historyHeading).toBeVisible();
 
-        // Assert: Task visible in history table
+        // Assert: Task visible in history table dengan status "Selesai" (scope ke baris, hindari <option> filter)
         await expect(page.getByText(taskTitle)).toBeVisible();
-        await expect(page.getByText('Selesai', { exact: true })).toBeVisible();
+        await expect(page.locator('tbody tr').filter({ hasText: taskTitle }).first()).toContainText('Selesai');
     });
 
     test('Positif - History Table pagination berfungsi jika data > 15', async ({ page }) => {
@@ -598,12 +637,20 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
         const taskTitle = `Task SPK Link ${timestamp}`;
 
         await penugasanPage.createButton.click();
-        await page.locator('input[name="title"]').first().first().fill(taskTitle);
-        await page.locator('select[name="priority"]').first().first().selectOption('medium');
+        await page.waitForTimeout(1000);
+        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).toBeVisible({ timeout: 10000 });
+
+        // Scope ke MODAL (hindari collision select[name=priority] filter board).
+        const modal = page.locator('h3', { hasText: 'Buat Tugas Baru' })
+            .locator('xpath=ancestor::div[contains(@class,"fixed")][1]')
+            .first();
+
+        await modal.locator('input[name="title"]').first().fill(taskTitle);
+        await modal.locator('select[name="priority"]').first().selectOption('medium');
 
         // Select SPK if available
-        const spkSelect = page.locator('select[name="spk_fuzzy_log_id"]');
-        const spkCount = await spkSelect.locator('option').count();
+        const spkSelect = modal.locator('select[name="spk_fuzzy_log_id"]').first();
+        const spkCount = await spkSelect.count() > 0 ? await spkSelect.locator('option').count() : 0;
 
         let hasSpk = false;
         if (spkCount > 1) {
@@ -614,7 +661,7 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
             }
         }
 
-        await page.locator('button[type="submit"]').filter({ hasText: /Simpan|Buat/i }).click();
+        await modal.locator('button[type="submit"]').filter({ hasText: /Simpan|Buat/i }).first().click();
         await expect(page.getByText('Tugas berhasil dibuat.')).toBeVisible({ timeout: 10000 });
 
         // Act: Go to detail
@@ -635,24 +682,30 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
 
         // Act: Open modal
         await penugasanPage.createButton.click();
-        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).toBeVisible();
+        await page.waitForTimeout(600);
+        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).toBeVisible({ timeout: 10000 });
 
-        // Act: Click X button
-        const closeBtn = page.locator('button').filter({ has: page.locator('svg') }).filter({ hasText: '' }).first();
-        await closeBtn.click();
+        // Scope ke modal; tombol X ada di header (tombol pertama dalam modal).
+        const modal = page.locator('h3', { hasText: 'Buat Tugas Baru' })
+            .locator('xpath=ancestor::div[contains(@class,"fixed")][1]')
+            .first();
+
+        // Act: Click tombol X (header) → menutup modal (@click="showCreateModal = false")
+        await modal.locator('button').first().click();
 
         // Assert: Modal closed
-        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).not.toBeVisible({ timeout: 2000 });
+        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).not.toBeVisible({ timeout: 5000 });
 
-        // Act: Open again dan click outside
+        // Act: Open again dan klik area backdrop (@click.self menutup modal)
         await penugasanPage.createButton.click();
-        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).toBeVisible();
+        await page.waitForTimeout(600);
+        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).toBeVisible({ timeout: 10000 });
 
-        // Click outside (pada backdrop)
-        await page.locator('.fixed.inset-0').click({ position: { x: 10, y: 10 } });
+        // Klik pojok kiri-atas backdrop (jauh dari panel modal yang center) → @click.self
+        await page.locator('.fixed.inset-0.z-50').first().click({ position: { x: 5, y: 5 } });
 
         // Assert: Modal closed
-        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).not.toBeVisible({ timeout: 2000 });
+        await expect(page.getByRole('heading', { name: /Buat Tugas Baru/i })).not.toBeVisible({ timeout: 5000 });
     });
 });
 

@@ -11,12 +11,12 @@ export class SupplierSpkPage {
 
     constructor(page: Page) {
         this.page = page;
-        this.catalogHeading = page.getByRole('heading', { name: /Cari toko, pilih barang, pantau pesanan|Katalog Supplier Peternakan/i });
-        this.productsHeading = page.getByRole('heading', { name: /Cari Barang|Perbandingan Produk Supplier/i });
-        this.dssConfigHeading = page.getByRole('heading', { name: /Atur Bobot Kriteria Supplier|Bobot Kriteria \(AHP\)/i });
-        this.dssDashboardHeading = page.getByRole('heading', { name: /Ranking supplier - SAW/i });
+        this.catalogHeading = page.getByRole('heading', { name: /Cari toko, pilih barang, pantau pesanan/i });
+        this.productsHeading = page.getByRole('heading', { name: /^\s*Cari Barang\s*$/i });
+        this.dssConfigHeading = page.getByRole('heading', { name: /Atur Bobot Kriteria Supplier/i });
+        this.dssDashboardHeading = page.getByRole('heading', { name: /Ranking Supplier dengan SAW/i });
         this.configForm = page.locator('#ahp-form');
-        this.rankingTable = page.getByRole('table').filter({ has: page.getByText('Peringkat Supplier (SAW)') });
+        this.rankingTable = page.getByRole('heading', { name: /Ranking Supplier/i });
     }
 
     async gotoCatalog() {
@@ -53,13 +53,17 @@ export class SupplierSpkPage {
     }
 
     async submitDefaultAhpConfig() {
-        await this.page.getByRole('button', { name: /Hitung bobot & Validasi konsistensi/i }).click();
+        // Tombol submit form AHP: "Hitung & Simpan Bobot" (hanya tampil bila user resolved & >=2 kriteria).
+        const btn = this.page.getByRole('button', { name: /Hitung.*Simpan Bobot/i });
+        if (await btn.count() === 0) return false;
+        await btn.first().click();
+        return true;
     }
 
     async expectDssDashboardReady() {
         await expect(this.dssDashboardHeading).toBeVisible();
-        await expect(this.page.locator('#weightsPie')).toBeVisible();
-        await expect(this.page.locator('#weightsRadar')).toBeVisible();
+        // Dashboard SAW baru: pemilih produk selalu ada (tidak lagi chart pie/radar).
+        await expect(this.page.locator('select[name="produk_id"]')).toBeVisible();
     }
 
     async openFirstSupplierFromProducts() {

@@ -12,9 +12,10 @@ export class FuzzyConfigPage {
     constructor(page: Page) {
         this.page = page;
         this.pageTitle = page.getByRole('heading', { name: /Konfigurasi Fuzzy Mamdani/i });
-        this.variablesTab = page.getByRole('button', { name: /Variabel & MF/i });
-        this.rulesTab = page.getByRole('button', { name: /Aturan \(Rules\)/i });
-        this.sourcesTab = page.getByRole('button', { name: /Sumber Data/i });
+        // Tab navigasi memakai role="tab" (mis. "1 Variabel & Set 11 variabel"), bukan <button>.
+        this.variablesTab = page.getByRole('tab', { name: /Variabel & Set/i });
+        this.rulesTab = page.getByRole('tab', { name: /Rule IF-THEN/i });
+        this.sourcesTab = page.getByRole('tab', { name: /Sumber Data/i });
         this.addVariableButton = page.getByRole('button', { name: /Tambah Variabel/i });
         this.addRuleButton = page.getByRole('button', { name: /Tambah Rule/i });
     }
@@ -84,10 +85,10 @@ export class FuzzyConfigPage {
 
     async createSetForVariable(variableName: string, params: { name: string; shape: 'triangle' | 'trapezoid'; a: string; b: string; c: string; d?: string; }) {
         const section = this.variableSection(variableName);
-        await section.getByRole('button', { name: /\+ Tambah Set/i }).click();
+        await section.getByRole('button', { name: /Tambah Set/i }).click();
 
-        // Wait for modal to be fully visible
-        const modal = this.modalByHeading('Tambah Membership Function');
+        // Modal set memakai heading "Tambah Himpunan Fuzzy"
+        const modal = this.modalByHeading('Tambah Himpunan Fuzzy');
         await expect(modal).toBeVisible({ timeout: 10000 });
 
         await modal.locator('input[name="name"]').fill(params.name);
@@ -111,6 +112,8 @@ export class FuzzyConfigPage {
 
     async deleteVariable(variableName: string) {
         const section = this.variableSection(variableName);
+        // Tombol hapus ada di dalam <form onsubmit="return confirm(...)"> → terima dialog konfirmasi.
+        this.page.once('dialog', dialog => dialog.accept());
         await section.getByRole('button', { name: /Hapus variabel/i }).click();
     }
 
