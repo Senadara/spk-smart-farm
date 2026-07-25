@@ -52,39 +52,34 @@ if ($role !== 'supplier') {
                 'title' => 'IoT '.($log->logType === 'ERROR' ? 'Error' : 'Warning'),
                 'message' => ($log->device?->deviceName ?? $log->device?->deviceCode ?? 'Device').' - '.\Illuminate\Support\Str::limit($log->message, 90),
                 'type' => $log->logType === 'ERROR' ? 'danger' : 'warning',
-                'read_at' => null,
+                'read_at' => now(),
                 'created_at' => $log->createdAt?->diffForHumans() ?? '-',
                 'sort_key' => $log->createdAt?->timestamp ?? 0,
                 'url' => route('iot.monitoring'),
+                'mark_read_url' => null,
+                'mark_unread_url' => null,
             ])
         : collect();
 
-    $spkNotifications = \Illuminate\Support\Facades\Schema::hasTable('spk_fuzzy_logs')
-        ? \App\Models\SpkFuzzyLog::query()
-            ->where('createdAt', '>=', now()->subDays(3))
-            ->where(function ($query) {
-                $query->whereIn('status_lingkungan', ['Waspada', 'Buruk'])
-                    ->orWhereIn('status_kesehatan', ['Waspada', 'Buruk'])
-                    ->orWhere('output_value', '<', 70);
-            })
+    $spkNotifications = \Illuminate\Support\Facades\Schema::hasTable('spk_alert_events')
+        ? \App\Models\SpkAlertEvent::query()
+            ->whereIn('alert_type', ['environment', 'livestock_cycle'])
+            ->where('createdAt', '>=', now()->subDays(7))
             ->latest('createdAt')
-            ->take(5)
+            ->take(8)
             ->get()
             ->toBase()
-            ->map(fn ($log) => [
-                'id' => 'spk-'.$log->id,
-                'title' => 'SPK Perlu Tindakan',
-                'message' => \Illuminate\Support\Str::limit(
-                    \App\Services\Fuzzy\NarrativeGenerator::sanitizePlainText($log->recommendation)
-                        ?: \App\Services\Fuzzy\NarrativeGenerator::sanitizePlainText($log->narrative)
-                        ?: ($log->diagnosis_kausalitas ?: 'Tinjau hasil SPK terbaru.'),
-                    100
-                ),
-                'type' => ((float) $log->output_value < 55 || $log->status_lingkungan === 'Buruk') ? 'danger' : 'warning',
-                'read_at' => null,
-                'created_at' => $log->createdAt?->diffForHumans() ?? '-',
-                'sort_key' => $log->createdAt?->timestamp ?? 0,
-                'url' => route('spk.dashboard', array_filter(['history_id' => $log->id, 'coop_id' => $log->unit_budidaya_id])),
+            ->map(fn ($event) => [
+                'id' => 'alert-'.$event->id,
+                'title' => $event->title ?: 'Notifikasi SPK',
+                'message' => \Illuminate\Support\Str::limit($event->body ?: 'Ada kondisi yang perlu ditinjau.', 100),
+                'type' => $event->severity === 'critical' ? 'danger' : 'warning',
+                'read_at' => $event->read_at,
+                'created_at' => $event->createdAt?->diffForHumans() ?? '-',
+                'sort_key' => $event->createdAt?->timestamp ?? 0,
+                'url' => data_get($event->data_json, 'backoffice_url') ?: route('dashboard'),
+                'mark_read_url' => route('notifications.read', $event->id),
+                'mark_unread_url' => route('notifications.unread', $event->id),
             ])
         : collect();
 
@@ -127,6 +122,8 @@ $icons = [
         </nav>
     </div>
     <div class="flex items-center gap-3">
+        <x-dashboard-hint-toggle />
+
         {{-- User Info --}}
         <div x-data="{ showProfileMenu: false }" class="relative flex items-center gap-3">
             <div class="text-right hidden sm:block">
@@ -186,56 +183,71 @@ $icons = [
                 x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1"
                 x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150"
                 x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 translate-y-1"
-                class="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden"
+                class="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-lg shadow-gray-200/60 border border-gray-100 z-50 overflow-hidden"
                 style="display: none;">
-                <div class="px-4 py-3 border-b flex items-center justify-between bg-gray-50">
+                <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50/80">
                     <h3 class="font-semibold text-gray-800">Notifikasi</h3>
                     <span class="text-xs text-gray-500">{{ $notifications->count() }} Terkini</span>
                 </div>
 
-                <div class="max-h-[60vh] overflow-y-auto">
+                <div class="max-h-[60vh] overflow-y-auto p-2">
                     @forelse($notifications as $notif)
-                        <a href="{{ $notif['url'] ?? route('dashboard') }}"
-                            class="block p-4 border-b hover:bg-gray-50 transition-colors {{ !$notif['read_at'] ? 'bg-blue-50/50' : '' }}"
-                            style="text-decoration:none;">
+                        @php
+                            $isUnread = empty($notif['read_at']);
+                        @endphp
+                        <div class="rounded-lg px-3 py-3 transition-colors {{ $isUnread ? 'bg-sky-50/70 ring-1 ring-sky-100' : 'hover:bg-gray-50' }}">
                             <div class="flex gap-3">
-                                <div class="mt-1 shrink-0">
-                                    @if($notif['type'] == 'danger')
-                                        <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-                                            <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor"
-                                                viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                            </svg>
-                                        </div>
-                                    @elseif($notif['type'] == 'warning')
-                                        <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
-                                            <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor"
-                                                viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
-                                    @else
-                                        <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor"
-                                                viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
-                                    @endif
-                                </div>
-                                <div>
-                                    <p
-                                        class="text-sm font-semibold text-gray-900 {{ !$notif['read_at'] ? 'font-bold' : '' }}">
-                                        {{ $notif['title'] }}
-                                    </p>
-                                    <p class="text-xs text-gray-600 mt-0.5">{{ $notif['message'] }}</p>
-                                    <p class="text-[10px] text-gray-400 mt-1">{{ $notif['created_at'] }}</p>
-                                </div>
+                                <a href="{{ $notif['url'] ?? route('dashboard') }}"
+                                    class="flex min-w-0 flex-1 gap-3"
+                                    style="text-decoration:none;">
+                                    <div class="mt-1 shrink-0">
+                                        @if($notif['type'] == 'danger')
+                                            <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+                                                <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                            </div>
+                                        @elseif($notif['type'] == 'warning')
+                                            <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                                                <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                            </div>
+                                        @else
+                                            <div class="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center">
+                                                <svg class="w-4 h-4 text-sky-600" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                            </div>
+                                        @endif
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p
+                                            class="text-sm font-semibold text-gray-900 {{ $isUnread ? 'font-bold' : '' }}">
+                                            {{ $notif['title'] }}
+                                        </p>
+                                        <p class="text-xs text-gray-600 mt-0.5">{{ $notif['message'] }}</p>
+                                        <p class="text-[10px] text-gray-400 mt-1">{{ $notif['created_at'] }}</p>
+                                    </div>
+                                </a>
+
+                                @if(!empty($notif['mark_read_url']) && !empty($notif['mark_unread_url']))
+                                    <form method="POST" action="{{ $isUnread ? $notif['mark_read_url'] : $notif['mark_unread_url'] }}" class="shrink-0">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" title="{{ $isUnread ? 'Tandai dibaca' : 'Tandai belum dibaca' }}" class="rounded-full border border-gray-200 bg-white px-2 py-1 text-[10px] font-bold text-gray-500 hover:border-emerald-200 hover:text-emerald-700">
+                                            {{ $isUnread ? 'Dibaca' : 'Belum' }}
+                                        </button>
+                                    </form>
+                                @endif
                             </div>
-                        </a>
+                        </div>
                     @empty
                         <div class="p-8 text-center text-gray-500">
                             <p class="text-sm">Belum ada notifikasi</p>
@@ -243,9 +255,10 @@ $icons = [
                     @endforelse
                 </div>
 
-                <div class="p-2 border-t bg-gray-50 text-center">
-                    <a href="{{ route('dashboard') }}" class="text-xs font-medium text-emerald-600 hover:text-emerald-700">Lihat
-                        Semua History</a>
+                <div class="p-2 border-t border-gray-100 bg-gray-50/80 text-center">
+                    <a href="{{ route('notifications.index') }}" class="text-xs font-medium text-emerald-600 hover:text-emerald-700">
+                        Lihat semua histori notifikasi
+                    </a>
                 </div>
             </div>
         </div>

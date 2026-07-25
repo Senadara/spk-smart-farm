@@ -5,348 +5,280 @@
 
 @section('content')
     @php
-        $canAccessSuppliers = in_array(session('user.role'), ['pjawab', 'owner', 'admin'], true);
+        $toneClasses = [
+            'emerald' => 'border-emerald-100 bg-emerald-50 text-emerald-800',
+            'blue' => 'border-blue-100 bg-blue-50 text-blue-800',
+            'amber' => 'border-amber-100 bg-amber-50 text-amber-800',
+            'red' => 'border-red-100 bg-red-50 text-red-800',
+            'gray' => 'border-gray-100 bg-gray-50 text-gray-700',
+        ];
+        $taskUrl = $selectedLog ? route('spk.tasks.index', [
+            'create_task' => 1,
+            'spk_id' => $selectedLog->id,
+            'coop_id' => $selectedLog->unit_budidaya_id,
+            'title' => 'Tindak lanjut SPK - ' . ($activeHistory['barn'] ?? 'Kandang'),
+            'desc' => data_get($fuzzyData, 'results.gabungan.recommendation') ?: data_get($fuzzyData, 'results.gabungan.description'),
+        ]) : null;
+        $isConfigured = (bool) data_get($masterConfigStatus, 'spk_configured', false);
     @endphp
 
-    <div x-data="spkDashboard()" class="max-w-full space-y-6" x-cloak>
+    <div x-data="spkDashboard()" class="max-w-full space-y-5">
+        <section class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+            <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div class="min-w-0">
+                    <h1 class="text-xl font-semibold text-gray-950">Analisa SPK Fuzzy Mamdani</h1>
+                    <p class="mt-1 text-sm text-gray-500">Pantau diagnosis kandang, kualitas input, riwayat evaluasi, dan tindak lanjut operasional.</p>
+                </div>
 
-        {{-- HEADER & FILTERS --}}
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white px-5 py-4 rounded-xl border border-gray-100 shadow-sm">
-            <div>
-                <h1 class="text-xl font-bold text-gray-900">Pusat Analisis & SPK</h1>
-                <p class="text-xs text-gray-400 mt-0.5">Diagnosa Fuzzy 3-Mode, tren sensor lingkungan, dan logistik</p>
+                <div class="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:justify-end">
+                    <form id="spkFilterForm" method="GET" action="{{ route('spk.dashboard') }}" class="grid grid-cols-1 gap-2 rounded-xl border border-gray-100 bg-gray-50/80 p-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:justify-end">
+                        <label class="min-w-[190px] text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                            Jenis ternak
+                            <select name="jenis_budidaya_id" class="mt-1 w-full cursor-pointer rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-gray-800 shadow-sm transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-50" onchange="document.getElementById('spkFilterForm').submit()">
+                                @foreach ($filterOptions['jenis_ternak'] as $val => $label)
+                                    <option value="{{ $val }}" {{ (string) $jenisBudidayaId === (string) $val ? 'selected' : '' }}>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+
+                        <label class="min-w-[200px] text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                            Kandang
+                            <select name="coop_id" class="mt-1 w-full cursor-pointer rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-gray-800 shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-50" onchange="document.getElementById('spkFilterForm').submit()">
+                                @foreach ($barnsOption as $barn)
+                                    <option value="{{ $barn['id'] }}" {{ (string) $coopId === (string) $barn['id'] ? 'selected' : '' }}>{{ $barn['name'] }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                    </form>
+
+                    <div class="flex flex-wrap gap-2">
+                        <a href="{{ route('spk.simulation.index') }}" class="inline-flex items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100" style="text-decoration:none;">
+                            Simulasi
+                        </a>
+                        <button type="button" @click="runFullEvaluation()" :disabled="evaluating || !@js($isConfigured)"
+                            class="inline-flex items-center justify-center rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50">
+                            <svg x-show="!evaluating" class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168 11.555 9.036A1 1 0 0 0 10 9.87v4.263a1 1 0 0 0 1.555.832l3.197-2.132a1 1 0 0 0 0-1.664z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12A9 9 0 1 1 3 12a9 9 0 0 1 18 0z" />
+                            </svg>
+                            <svg x-show="evaluating" class="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z"></path>
+                            </svg>
+                            <span x-text="evaluating ? 'Mengevaluasi...' : (@js($coopId) ? 'Evaluasi Kandang' : 'Evaluasi Semua')"></span>
+                        </button>
+                    </div>
+                </div>
             </div>
-            
-            <div class="flex w-full flex-col gap-3 md:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                
-                {{-- Histori Navigasi dipindahkan ke komponen Fuzzy Logic --}}
-                <a href="{{ route('spk.simulation.index') }}" class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:w-auto">
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M3 9h2m-2 6h2m14-6h2m-2 6h2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                    </svg>
-                    Buka Simulasi SPK
-                </a>
 
-                <form id="spkFilterForm" method="GET" action="{{ route('spk.dashboard') }}" class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
-                    {{-- Komoditas --}}
-                    <select name="komoditas" class="w-full cursor-pointer rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs text-gray-600 focus:border-emerald-400 focus:outline-none sm:w-auto" onchange="document.getElementById('spkFilterForm').submit()">
-                        @foreach ($filterOptions['komoditas'] as $val => $label)
-                            <option value="{{ $val }}" {{ $komoditas === $val ? 'selected' : '' }}>{{ $label }}</option>
-                        @endforeach
-                    </select>
+            <p x-show="evalMessage" class="mt-4 rounded-lg border px-3 py-2 text-sm font-medium"
+                :class="evalSuccess ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-red-100 bg-red-50 text-red-700'"
+                x-text="evalMessage"></p>
+        </section>
 
-                    {{-- Lokasi / Kandang --}}
-                    <select name="coop_id" class="w-full cursor-pointer rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs text-gray-600 focus:border-emerald-400 focus:outline-none sm:w-auto" onchange="document.getElementById('spkFilterForm').submit()">
-                        @foreach ($barnsOption as $barn)
-                            <option value="{{ $barn['id'] }}" {{ $coopId == $barn['id'] ? 'selected' : '' }}>{{ $barn['name'] }}</option>
-                        @endforeach
-                    </select>
+        @if(! $isConfigured)
+            <section class="rounded-xl border border-amber-100 bg-amber-50 p-4 text-amber-900 shadow-sm sm:p-5">
+                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h2 class="text-base font-semibold">{{ data_get($masterConfigStatus, 'spk_title', 'Konfigurasi SPK belum lengkap') }}</h2>
+                        <p class="mt-1 text-sm leading-6">{{ data_get($masterConfigStatus, 'spk_message', 'Lengkapi Data Master dan Pengaturan Fuzzy sebelum menjalankan Analisa SPK.') }}</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <a href="{{ data_get($masterConfigStatus, 'data_master_url', '#') }}" class="inline-flex items-center justify-center rounded-lg border border-white/70 bg-white px-3 py-2 text-sm font-semibold text-amber-800" style="text-decoration:none;">Data Master</a>
+                        <a href="{{ data_get($masterConfigStatus, 'spk_config_url', '#') }}" class="inline-flex items-center justify-center rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white" style="text-decoration:none;">Pengaturan SPK</a>
+                    </div>
+                </div>
+            </section>
+        @endif
 
-                    {{-- Mode SPK (Fuzzy Logic) Dihapus sesuai permintaan karena membingungkan variabel --}}
-                </form>
-            </div>
-        </div>
+        @if($kpi)
+            <section class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                @foreach($kpi as $item)
+                    @php $tone = $item['tone'] ?? 'gray'; @endphp
+                    <div class="rounded-xl border p-4 shadow-sm {{ $toneClasses[$tone] ?? $toneClasses['gray'] }}">
+                        <p class="text-xs font-medium opacity-80">{{ $item['label'] }}</p>
+                        <p class="mt-2 text-2xl font-semibold text-gray-950">{{ $item['value'] }}</p>
+                    </div>
+                @endforeach
+            </section>
+        @endif
 
-        {{-- 2. CARD FUZZY LOGIC (Full Width) --}}
-        <x-fuzzy-decision-engine 
-            :barns="$barnsOption" 
-            :indicators="$fuzzyData['indicators']" 
+        @if($overviewCards)
+            <section class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+                <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <h2 class="text-base font-semibold text-gray-950">Overview SPK Per Kandang</h2>
+                        <p class="text-sm text-gray-500">Mode semua kandang menampilkan status masing-masing kandang tanpa menggabungkan diagnosis.</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    @foreach($overviewCards as $card)
+                        @php $tone = $card['tone'] ?? 'gray'; @endphp
+                        <a href="{{ $card['url'] }}" class="rounded-xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md {{ $toneClasses[$tone] ?? $toneClasses['gray'] }}" style="text-decoration:none;">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-semibold text-gray-950" title="{{ $card['name'] }}">{{ $card['name'] }}</p>
+                                    <p class="mt-1 text-xs opacity-75">{{ $card['time'] }}</p>
+                                </div>
+                                <span class="rounded-lg border border-white/70 bg-white/80 px-2 py-1 text-xs font-semibold text-gray-700">{{ $card['score'] !== null ? number_format((float) $card['score'], 1) : '-' }}</span>
+                            </div>
+                            <p class="mt-3 text-sm font-medium text-gray-800">{{ $card['status'] }}</p>
+                            <p class="mt-1 line-clamp-2 text-xs leading-5 opacity-80">{{ $card['description'] }}</p>
+                        </a>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
+        <x-fuzzy-decision-engine
+            :indicators="$fuzzyData['indicators']"
+            :spider="$fuzzyData['spider']"
             :spkResults="$fuzzyData['results']"
-            :hideBarnFilter="true"
-            :showReportButton="false"
-            :evaluationTime="$activeHistory['date'] . ', ' . $activeHistory['time'] . ' - Mode: ' . $activeHistory['mode']"
+            :environmentSensors="$fuzzyData['sensors']['lingkungan']"
+            :evaluationTime="$activeHistory['date'] . ', ' . $activeHistory['time']"
+            :masterConfigStatus="$masterConfigStatus"
+            :inputQuality="$inputQuality"
+            :calculationDetail="$calculationDetail"
+            :selectedLog="$selectedLog"
+            :canCreateTask="$canCreateTask"
+            :taskUrl="$taskUrl"
         />
 
-        {{-- 3. TODO LIST / ACTION TRACKER (Full Width) --}}
-        <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-            <div class="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                    <h3 class="text-sm font-bold text-gray-800 flex items-center gap-2">
-                        <svg class="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        Penugasan Action Tracker (Hasil SPK {{ $activeHistory['id'] }})
-                    </h3>
-                    <p class="text-[11px] text-gray-400 mt-0.5">Daftar tugas rekomendasi yang belum dan sudah dikerjakan berdasarkan analisa ini.</p>
-                </div>
-                @if(session('user') && isset(session('user')['role']) && session('user')['role'] === 'pjawab')
-                <a href="{{ route('spk.tasks.index', ['create_task' => 1, 'spk_id' => $activeHistory['id'], 'coop_id' => $coopId !== 'all' ? $coopId : '', 'desc' => $activeHistory['verdict']]) }}" class="text-xs font-semibold text-purple-600 bg-purple-50 px-3 py-1.5 rounded-lg hover:bg-purple-100 transition whitespace-nowrap">
-                    + Buat Tugas SPK
-                </a>
-                @endif
-            </div>
+        <section class="grid grid-cols-1 gap-5 xl:grid-cols-12">
+            <div class="space-y-5 xl:col-span-8">
+                <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                    <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                        <div class="mb-4">
+                            <h2 class="text-sm font-semibold text-gray-950">Tren HDP vs Standar</h2>
+                            <p class="text-xs text-gray-500">Ditampilkan jika parameter HDP tersedia pada log kandang.</p>
+                        </div>
+                        @if($chartData['hasHdp'])
+                            <div class="h-[230px]">
+                                <canvas x-ref="hdpCanvas"></canvas>
+                            </div>
+                        @else
+                            <div class="flex h-[230px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-center text-sm text-gray-500">
+                                Parameter HDP belum tersedia untuk grafik ini.
+                            </div>
+                        @endif
+                    </div>
 
-            {{-- Kanban Mini Board --}}
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {{-- Column: TO DO --}}
-                <div class="bg-gray-50 rounded-xl p-3 border border-gray-100 min-h-[180px] shadow-inner flex flex-col gap-2.5">
-                    <h4 class="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-1 py-1 flex items-center justify-between">
-                        To Do
-                        <span class="bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded h-5 min-w-[20px] text-center leading-4">{{ count(array_filter($actionTickets, fn($t) => $t['status'] === 'To Do')) }}</span>
-                    </h4>
-                    @foreach ($actionTickets as $ticket)
-                        @if ($ticket['status'] === 'To Do') <x-spk-ticket-card :ticket="$ticket" /> @endif
-                    @endforeach
-                </div>
-
-                {{-- Column: IN PROGRESS --}}
-                <div class="bg-blue-50/40 rounded-xl p-3 border border-blue-50 min-h-[180px] shadow-inner flex flex-col gap-2.5">
-                    <h4 class="text-[10px] font-bold text-blue-600 uppercase tracking-widest px-1 py-1 flex items-center justify-between">
-                        In Progress
-                        <span class="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded h-5 min-w-[20px] text-center leading-4">{{ count(array_filter($actionTickets, fn($t) => $t['status'] === 'In Progress')) }}</span>
-                    </h4>
-                    @foreach ($actionTickets as $ticket)
-                        @if ($ticket['status'] === 'In Progress') <x-spk-ticket-card :ticket="$ticket" /> @endif
-                    @endforeach
+                    <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                        <div class="mb-4">
+                            <h2 class="text-sm font-semibold text-gray-950">Tren Parameter Lingkungan</h2>
+                            <p class="text-xs text-gray-500">Mengikuti parameter lingkungan aktif pada konfigurasi SPK.</p>
+                        </div>
+                        @if($chartData['hasEnvironment'])
+                            <div class="h-[230px]">
+                                <canvas x-ref="environmentCanvas"></canvas>
+                            </div>
+                        @else
+                            <div class="flex h-[230px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-center text-sm text-gray-500">
+                                Pilih kandang dengan log SPK untuk melihat tren lingkungan.
+                            </div>
+                        @endif
+                    </div>
                 </div>
 
-                {{-- Column: DONE --}}
-                <div class="bg-emerald-50/40 rounded-xl p-3 border border-emerald-50 min-h-[180px] shadow-inner flex flex-col gap-2.5">
-                    <h4 class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest px-1 py-1 flex items-center justify-between">
-                        Done
-                        <span class="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded h-5 min-w-[20px] text-center leading-4">{{ count(array_filter($actionTickets, fn($t) => $t['status'] === 'Done')) }}</span>
-                    </h4>
-                    @foreach ($actionTickets as $ticket)
-                        @if ($ticket['status'] === 'Done') <x-spk-ticket-card :ticket="$ticket" /> @endif
-                    @endforeach
-                </div>
-            </div>
-        </div>
-
-        {{-- 4. DATA MENTAH + GRAFIK / RIWAYAT SPK (Side-by-Side) --}}
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-
-            {{-- LEFT: Data Mentah + Grafik + KPI (8/12) --}}
-            <div class="lg:col-span-8 space-y-4 order-2 lg:order-1">
-
-                {{-- Raw Data Snapshot Card --}}
-                <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                    <div class="flex items-center justify-between mb-4">
+                <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+                    <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <h4 class="text-sm font-bold text-gray-800 flex items-center gap-2">
-                                <svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                Data Snapshot Parameter
-                            </h4>
-                            <p class="text-[11px] text-gray-400 mt-0.5">Nilai parameter yang digunakan pada analisa <span class="font-bold text-gray-600">#{{ $activeHistory['id'] }}</span></p>
+                            <h2 class="text-sm font-semibold text-gray-950">Tindak Lanjut Hasil SPK</h2>
+                            <p class="text-xs text-gray-500">Tugas yang dibuat dari log SPK terpilih.</p>
                         </div>
-                        <span class="text-[10px] font-medium bg-gray-50 px-2.5 py-1 rounded-md text-gray-500">{{ $activeHistory['date'] }}, {{ $activeHistory['time'] }}</span>
+                        @if($selectedLog)
+                            <a href="{{ route('spk.tasks.index', ['spk_id' => $selectedLog->id]) }}" class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Lihat Penugasan</a>
+                        @endif
                     </div>
-                    <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                        @foreach($activeHistory['raw'] as $key => $val)
-                            <div class="text-center p-3 rounded-xl border {{ $val !== '-' ? 'border-emerald-100 bg-emerald-50/30' : 'border-gray-50 bg-gray-50/50' }} transition-all hover:shadow-md">
-                                <p class="text-[9px] uppercase font-bold tracking-wider text-gray-400 mb-1">{{ $key }}</p>
-                                <p class="text-base font-black {{ $val !== '-' ? 'text-gray-800' : 'text-gray-300' }}">{{ $val }}</p>
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        @forelse($actionTickets as $ticket)
+                            <a href="{{ route('spk.tasks.show', $ticket['id']) }}" class="rounded-lg border border-gray-100 bg-gray-50 p-3 transition hover:border-emerald-100 hover:bg-emerald-50" style="text-decoration:none;">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <p class="truncate text-sm font-semibold text-gray-900">{{ $ticket['title'] }}</p>
+                                        <p class="mt-1 text-xs text-gray-500">{{ $ticket['assignee'] }}</p>
+                                    </div>
+                                    <span class="rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-gray-600">{{ $ticket['status'] }}</span>
+                                </div>
+                                <p class="mt-2 text-[11px] font-medium text-gray-500">#{{ $ticket['code'] }} - {{ $ticket['priority'] }}</p>
+                            </a>
+                        @empty
+                            <div class="md:col-span-2 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500">
+                                Belum ada tugas yang terhubung dengan hasil SPK ini.
                             </div>
-                        @endforeach
+                        @endforelse
                     </div>
-                </div>
-
-                {{-- Charts Row --}}
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    {{-- Chart 1: HDP vs Standard --}}
-                    <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                        <div class="flex justify-between items-center mb-4">
-                            <div>
-                                <h3 class="text-sm font-bold text-gray-800">Kurva Produksi (HDP) vs Standar</h3>
-                                <p class="text-[11px] text-gray-400">Referensi: Strain Lohmann Brown Classic</p>
-                            </div>
-                        </div>
-                        <div style="height: 220px;">
-                            <canvas x-ref="hdpCanvas"></canvas>
-                        </div>
-                    </div>
-
-                    {{-- Chart 2: Multi-Sensor Environment Trend --}}
-                    <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                        <div class="flex justify-between items-center mb-4">
-                            <div>
-                                <h3 class="text-sm font-bold text-gray-800">Tren Multi-Sensor Lingkungan</h3>
-                                <p class="text-[11px] text-gray-400">Suhu, kelembapan, dan amonia dari log analisa terbaru</p>
-                            </div>
-                        </div>
-                        <div style="height: 220px;">
-                            <canvas x-ref="causalityCanvas"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- KPI Mini Row --}}
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    @foreach ($kpi as $m)
-                        <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex flex-col justify-center">
-                            <span class="text-[10px] uppercase font-semibold text-gray-400 mb-1 line-clamp-1" title="{{ $m['label'] }}">{{ $m['label'] }}</span>
-                            <div class="flex items-end justify-between">
-                                <span class="text-lg font-black text-gray-900">{{ $m['value'] }}</span>
-                                @if($m['trend']['status'] !== 'neutral')
-                                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded {{ $m['trend']['status'] == 'positive' ? 'bg-emerald-50 text-emerald-600' : ($m['trend']['status'] == 'warning' ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600') }} flex items-center">
-                                        {{ $m['trend']['direction'] == 'up' ? 'Naik' : 'Turun' }} {{ $m['trend']['value'] }}
-                                    </span>
-                                @endif
-                            </div>
-                        </div>
-                    @endforeach
                 </div>
             </div>
 
-            {{-- RIGHT: Riwayat Analisa SPK (4/12) --}}
-            <div class="lg:col-span-4 order-1 lg:order-2 relative h-[500px] lg:h-auto">
-                <div class="absolute inset-0 bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden flex flex-col">
-                    {{-- Header --}}
-                    <div class="px-4 pt-4 pb-3 border-b border-gray-100">
-                        <div class="flex items-center justify-between mb-2">
-                            <h3 class="text-sm font-bold text-gray-800">Riwayat Analisa SPK</h3>
-                            <button type="button" @click="historyDate = ''; historySearch = ''" class="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition whitespace-nowrap">
-                                Reset Filter
+            <aside class="xl:col-span-4">
+                <div class="sticky top-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div class="border-b border-gray-100 p-4">
+                        <div class="flex items-center justify-between gap-3">
+                            <h2 class="text-sm font-semibold text-gray-950">Riwayat Analisa</h2>
+                            <button type="button" @click="historyDate = ''; historySearch = ''" class="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">
+                                Reset
                             </button>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <input x-model="historyDate" type="date" class="flex-1 text-[10px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-400 text-gray-500">
-                            <div class="relative flex-1">
-                                <svg class="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                                <input x-model="historySearch" type="text" placeholder="Cari ID/kandang..." class="w-full text-[10px] border border-gray-200 rounded-lg pl-7 pr-2 py-1.5 focus:outline-none focus:border-emerald-400 text-gray-500">
-                            </div>
+                        <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                            <input x-model="historyDate" type="date" class="rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-600 focus:border-emerald-400 focus:outline-none">
+                            <input x-model="historySearch" type="text" placeholder="Cari kandang/status" class="rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-600 focus:border-emerald-400 focus:outline-none">
                         </div>
                     </div>
-
-                    {{-- Scrollable List --}}
-                    <div class="flex-1 overflow-y-auto px-3 py-3 space-y-1">
-                        @php $currentDate = ''; @endphp
+                    <div class="max-h-[520px] overflow-y-auto p-3">
                         @foreach($spkHistory as $hist)
-                            @if($hist['date'] !== $currentDate)
-                                @php $currentDate = $hist['date']; @endphp
-                                <p class="text-[9px] font-bold uppercase tracking-wider text-gray-400 px-1 pt-2 pb-1">{{ $currentDate }}</p>
-                            @endif
-
                             @php
-                                $isActive = $activeHistory['id'] === $hist['id'];
-                                $statusDotColors = [
-                                    'red' => 'bg-red-500', 'amber' => 'bg-amber-500',
-                                    'emerald' => 'bg-emerald-500', 'blue' => 'bg-blue-500',
-                                ];
-                                $modeBgColors = [
-                                    'blue' => 'bg-blue-100 text-blue-700',
-                                    'amber' => 'bg-amber-100 text-amber-700',
-                                    'purple' => 'bg-purple-100 text-purple-700',
-                                ];
+                                $isActive = ($activeHistory['id'] ?? null) === $hist['id'];
+                                $tone = $hist['color'] ?? 'gray';
+                                $url = $hist['id'] !== 'N/A'
+                                    ? route('spk.dashboard', array_filter([
+                                        'jenis_budidaya_id' => $jenisBudidayaId,
+                                        'coop_id' => $coopId,
+                                        'history_id' => $hist['id'],
+                                    ]))
+                                    : '#';
                             @endphp
-                            <a href="?komoditas={{ $komoditas }}&coop_id={{ $coopId }}&history_id={{ $hist['id'] }}"
+                            <a href="{{ $url }}"
                                x-show="historyMatches(@js($hist['search'] ?? ''), @js($hist['dateKey'] ?? ''))"
-                               class="block rounded-lg p-3 transition-all cursor-pointer {{ $isActive ? 'bg-gray-800 text-white shadow-md ring-2 ring-gray-700' : 'bg-gray-50 hover:bg-gray-100 border border-gray-100' }}">
-                                
-                                {{-- Top row: ID + Mode Badge + Time --}}
-                                <div class="flex items-center justify-between mb-1.5">
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="w-2 h-2 rounded-full {{ $statusDotColors[$hist['color']] ?? 'bg-gray-400' }}"></span>
-                                        <span class="text-[11px] font-bold">{{ $hist['id'] }}</span>
-                                        <span class="text-[8px] font-bold px-1.5 py-0.5 rounded {{ $isActive ? 'bg-white/20 text-white' : ($modeBgColors[$hist['modeColor']] ?? 'bg-gray-100 text-gray-600') }}">{{ $hist['mode'] }}</span>
+                               class="mb-2 block rounded-lg border p-3 transition {{ $isActive ? 'border-gray-900 bg-gray-900 text-white' : (($toneClasses[$tone] ?? $toneClasses['gray']) . ' hover:shadow-sm') }}"
+                               style="text-decoration:none;">
+                                <div class="flex items-center justify-between gap-3">
+                                    <p class="truncate text-xs font-semibold">{{ $hist['barn'] }}</p>
+                                    <span class="text-[10px] opacity-75">{{ $hist['time'] }}</span>
+                                </div>
+                                <p class="mt-2 text-sm font-semibold">{{ $hist['status'] }}</p>
+                                <p class="mt-1 line-clamp-2 text-xs leading-5 opacity-80">{{ $hist['verdict'] }}</p>
+                                @if(($hist['id'] ?? 'N/A') !== 'N/A')
+                                    <div class="mt-2 flex flex-wrap gap-1">
+                                        @foreach(($hist['raw'] ?? []) as $key => $value)
+                                            @if($loop->index < 4)
+                                                <span class="rounded-full border border-white/30 bg-white/30 px-1.5 py-0.5 text-[10px]">{{ strtoupper($key) }}: {{ $value }}</span>
+                                            @endif
+                                        @endforeach
                                     </div>
-                                    <span class="text-[9px] {{ $isActive ? 'text-gray-300' : 'text-gray-400' }}">{{ $hist['time'] }}</span>
-                                </div>
-
-                                {{-- Status + Barn --}}
-                                <p class="text-[10px] font-semibold {{ $isActive ? 'text-white' : 'text-gray-700' }} mb-0.5">
-                                    {{ $hist['status'] }} / <span class="{{ $isActive ? 'text-gray-300' : 'text-gray-400' }} font-normal">{{ $hist['barn'] }}</span>
-                                </p>
-                                
-                                {{-- Verdict --}}
-                                <p class="text-[9px] {{ $isActive ? 'text-gray-400' : 'text-gray-500' }} line-clamp-2 mb-2">{{ $hist['verdict'] }}</p>
-
-                                {{-- Raw Data Mini Badges --}}
-                                <div class="flex flex-wrap gap-1">
-                                    @foreach($hist['raw'] as $key => $val)
-                                        @if($val !== '-')
-                                            <span class="text-[8px] font-medium px-1.5 py-0.5 rounded {{ $isActive ? 'bg-white/10 text-gray-300' : 'bg-gray-100 text-gray-500' }}">
-                                                {{ strtoupper($key) }}: {{ $val }}
-                                            </span>
-                                        @endif
-                                    @endforeach
-                                </div>
+                                @endif
                             </a>
                         @endforeach
                     </div>
                 </div>
-            </div>
-        </div>
-
-        {{-- 5. AHP-SAW SUPPLIER (Standalone Full Width) --}}
-        @if($canAccessSuppliers)
-        <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-            <div class="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-                <div>
-                    <h3 class="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                        <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-                        Rekomendasi Restock Supplier (AHP-SAW)
-                    </h3>
-                    <p class="text-[10px] text-gray-400 mt-0.5">Analisa Kriteria Harga, Waktu, & Kualitas</p>
-                </div>
-                <a href="{{ route('spk.suppliers.index') }}" class="text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded transition" style="text-decoration: none;">
-                    Lihat Marketplace
-                </a>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                @foreach ($recommendedSuppliers as $supplier)
-                    @php
-                        $isTop = $supplier['rank'] === 1;
-                        $border = $isTop ? 'border-blue-200 bg-blue-50/20' : 'border-gray-100 bg-white hover:border-gray-200';
-                    @endphp
-                    <div class="border {{ $border }} rounded-lg p-4 transition-colors">
-                        <div class="flex items-start justify-between">
-                            <div class="flex items-center gap-2">
-                                <div class="flex items-center justify-center w-6 h-6 rounded {{ $isTop ? 'bg-blue-500 text-white shadow-sm' : 'bg-gray-100 text-gray-600' }} text-[10px] font-black">
-                                    #{{ $supplier['rank'] }}
-                                </div>
-                                <div>
-                                    <h4 class="text-xs font-bold text-gray-900">{{ $supplier['name'] }}</h4>
-                                    <span class="text-[9px] text-gray-400">{{ $supplier['category'] }}</span>
-                                </div>
-                            </div>
-                            <span class="text-lg font-black {{ $isTop ? 'text-blue-600' : 'text-gray-900' }}">{{ number_format($supplier['score'], 1) }}</span>
-                        </div>
-                        
-                        <div class="grid grid-cols-3 gap-2 mt-3 pt-2 border-t {{ $isTop ? 'border-blue-100' : 'border-gray-50' }} text-[9px]">
-                            <div class="text-center">
-                                <span class="block text-gray-400 mb-0.5">Harga</span>
-                                <span class="font-bold text-gray-700">{{ $supplier['price_rating'] }}</span>
-                            </div>
-                            <div class="text-center">
-                                <span class="block text-gray-400 mb-0.5">Lead Time</span>
-                                <span class="font-bold text-gray-700">{{ $supplier['lead_time'] }}</span>
-                            </div>
-                            <div class="text-center">
-                                <span class="block text-gray-400 mb-0.5">Kualitas</span>
-                                <span class="font-bold text-emerald-600">{{ $supplier['quality'] }}</span>
-                            </div>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-        @endif
-
-
-
+            </aside>
+        </section>
     </div>
 @endsection
 
 @push('scripts')
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('spkDashboard', () => ({
-                fuzzyFilter: 'all',
-                fuzzySensors: {
-                    lingkungan: @js($fuzzyData['sensors']['lingkungan']),
-                    produktivitas: @js($fuzzyData['sensors']['produktivitas'])
-                },
-                activeIndicators: @js($fuzzyData['indicators']),
-                activeSpider: @js($fuzzyData['spider']),
-                activeSpkResults: @js($fuzzyData['results']),
-                evaluationTimeLabel: @js($activeHistory['date'] . ', ' . $activeHistory['time']),
+        window.spkDashboard = function () {
+            return {
                 evaluating: false,
                 evalMessage: '',
                 evalSuccess: false,
                 historySearch: '',
                 historyDate: '',
-                onFuzzyBarnChange() {},
+                _hdpChart: null,
+                _environmentChart: null,
+                _spiderChart: null,
                 historyMatches(searchText, dateKey) {
                     const q = (this.historySearch || '').toLowerCase().trim();
                     const dateOk = !this.historyDate || dateKey === this.historyDate;
@@ -366,22 +298,17 @@
                                 'Accept': 'application/json',
                             },
                             body: JSON.stringify({
-                                komoditas: @js($komoditas),
+                                jenis_budidaya_id: @js($jenisBudidayaId),
+                                komoditas: @js($activeKomoditasId),
                                 coop_id: @js($coopId),
                             }),
                         });
                         const data = await res.json();
-
                         this.evalSuccess = Boolean(data.success);
-                        if (data.success) {
-                            this.evalMessage = 'Evaluasi selesai (' + data.processed + ' log tersimpan). Memuat ulang...';
-                            if (data.evaluation_time) {
-                                this.evaluationTimeLabel = data.evaluation_time;
-                            }
-                            setTimeout(() => window.location.reload(), 1200);
-                        } else {
-                            this.evalMessage = 'Evaluasi belum berhasil. Periksa data input laporan dan sensor.';
-                        }
+                        this.evalMessage = data.success
+                            ? 'Evaluasi selesai. ' + data.processed + ' log SPK tersimpan.'
+                            : 'Evaluasi belum berhasil. Periksa data input dan konfigurasi.';
+                        setTimeout(() => window.location.reload(), data.success ? 900 : 1800);
                     } catch (e) {
                         this.evalSuccess = false;
                         this.evalMessage = 'Gagal menjalankan evaluasi SPK.';
@@ -389,93 +316,101 @@
                         this.evaluating = false;
                     }
                 },
-                _hdpChart: null,
-                _causalityChart: null,
-                _spiderChart: null,
-
                 init() {
                     if (typeof Chart === 'undefined') {
-                        setTimeout(() => this.init(), 100);
+                        this.removeRootCloak();
                         return;
                     }
+
+                    this.removeRootCloak();
                     this.$nextTick(() => {
                         this.renderSpiderChart();
                         this.renderHdpChart();
-                        this.renderCausalityChart();
+                        this.renderEnvironmentChart();
                     });
                 },
-
+                removeRootCloak() {
+                    this.$root?.removeAttribute('x-cloak');
+                },
+                chartOptions() {
+                    return {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: { usePointStyle: true, boxWidth: 6, font: { size: 10, family: 'Inter' } },
+                            },
+                            tooltip: {
+                                titleFont: { size: 11, family: 'Inter' },
+                                bodyFont: { size: 11, family: 'Inter' },
+                            },
+                        },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { font: { size: 10, family: 'Inter' }, color: '#94A3B8' } },
+                            y: { grid: { color: 'rgba(148, 163, 184, 0.18)' }, ticks: { font: { size: 10, family: 'Inter' }, color: '#94A3B8' } },
+                        },
+                    };
+                },
                 renderSpiderChart() {
+                    if (typeof Chart === 'undefined') {
+                        return;
+                    }
                     const ctx = this.$refs.spiderCanvas;
-                    if (!ctx || typeof Chart === 'undefined') return;
-
-                    const activeSpkColor = '{{ $fuzzyData['color'] }}';
-                    let activeSpiderData = this.activeSpider ?? @js($fuzzyData['spider']);
+                    if (!ctx) return;
                     if (this._spiderChart) this._spiderChart.destroy();
-                    
-                    // Fallback if data is unexpectedly a flat array of 6 variables from old cache
-                    if (Array.isArray(activeSpiderData)) {
-                        activeSpiderData = {
-                            labels: ['HDP', 'Umur Biologis', 'Feed Consumption', 'Mortalitas'],
-                            values: activeSpiderData.slice(0, 4)
-                        };
-                    }
-                    
-                    let strokeColor = '#10B981'; // emerald
-                    let fillColor = 'rgba(16, 185, 129, 0.2)';
-                    
-                    if(activeSpkColor === 'amber') {
-                        strokeColor = '#F59E0B';
-                        fillColor = 'rgba(245, 158, 11, 0.2)';
-                    } else if (activeSpkColor === 'red') {
-                        strokeColor = '#EF4444';
-                        fillColor = 'rgba(239, 68, 68, 0.2)';
-                    } else if (activeSpkColor === 'blue') {
-                        strokeColor = '#3B82F6';
-                        fillColor = 'rgba(59, 130, 246, 0.18)';
-                    }
+
+                    const spider = @js($fuzzyData['spider']);
+                    const color = @js($fuzzyData['color'] ?? 'emerald');
+                    const colorMap = {
+                        emerald: ['#059669', 'rgba(5, 150, 105, 0.18)'],
+                        blue: ['#2563EB', 'rgba(37, 99, 235, 0.16)'],
+                        amber: ['#D97706', 'rgba(217, 119, 6, 0.18)'],
+                        red: ['#DC2626', 'rgba(220, 38, 38, 0.16)'],
+                        gray: ['#64748B', 'rgba(100, 116, 139, 0.14)'],
+                    };
+                    const [stroke, fill] = colorMap[color] || colorMap.emerald;
 
                     this._spiderChart = new Chart(ctx, {
                         type: 'radar',
                         data: {
-                            labels: activeSpiderData.labels ?? ['HDP', 'Umur Biologis', 'Feed Consumption', 'Mortalitas'],
+                            labels: spider.labels || [],
                             datasets: [{
                                 label: 'Status (%)',
-                                data: activeSpiderData.values ?? [0, 0, 0, 0],
-                                backgroundColor: fillColor,
-                                borderColor: strokeColor,
-                                pointBackgroundColor: strokeColor,
+                                data: spider.values || [],
+                                backgroundColor: fill,
+                                borderColor: stroke,
+                                pointBackgroundColor: stroke,
                                 pointBorderColor: '#fff',
-                                pointHoverBackgroundColor: '#fff',
-                                pointHoverBorderColor: strokeColor,
-                                borderWidth: 1.5,
+                                borderWidth: 1.8,
                                 pointRadius: 2,
-                            }]
+                            }],
                         },
                         options: {
-                            responsive: true, maintainAspectRatio: false,
-                            plugins: { legend: { display: false }, tooltip: {
-                                callbacks: {
-                                    label: function(context) { return context.raw + '% Impact'; }
-                                }
-                            } },
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
                             scales: {
                                 r: {
-                                    angleLines: { color: 'rgba(0,0,0,0.05)' },
-                                    grid: { color: 'rgba(0,0,0,0.05)' },
-                                    pointLabels: { font: { size: 8, family: 'Inter' }, color: '#9CA3AF' },
-                                    ticks: { display: false, min: 0, max: 100, stepSize: 25 }
-                                }
-                            }
-                        }
+                                    min: 0,
+                                    max: 100,
+                                    ticks: { display: false, stepSize: 25 },
+                                    angleLines: { color: 'rgba(148, 163, 184, 0.22)' },
+                                    grid: { color: 'rgba(148, 163, 184, 0.22)' },
+                                    pointLabels: { font: { size: 10, family: 'Inter' }, color: '#64748B' },
+                                },
+                            },
+                        },
                     });
                 },
-
                 renderHdpChart() {
+                    if (typeof Chart === 'undefined') {
+                        return;
+                    }
                     const ctx = this.$refs.hdpCanvas;
-                    if (!ctx || typeof Chart === 'undefined') return;
+                    if (!ctx) return;
                     if (this._hdpChart) this._hdpChart.destroy();
-
                     const data = @js($chartData['hdpComparison']);
 
                     this._hdpChart = new Chart(ctx, {
@@ -484,127 +419,66 @@
                             labels: data.labels,
                             datasets: [
                                 {
-                                    label: 'Aktual Kandang (%)',
+                                    label: 'Aktual (%)',
                                     data: data.actual,
-                                    borderColor: '#10B981', // Emerald
-                                    backgroundColor: '#10B981',
-                                    borderWidth: 2.5,
-                                    tension: 0.4,
-                                    pointRadius: 3,
-                                    pointBackgroundColor: '#fff',
-                                    pointBorderWidth: 2,
-                                    fill: false
+                                    borderColor: '#059669',
+                                    backgroundColor: '#059669',
+                                    borderWidth: 2,
+                                    tension: 0.35,
+                                    pointRadius: 2,
+                                    fill: false,
                                 },
                                 {
-                                    label: 'Standar Lohmann Brown (%)',
+                                    label: 'Standar (%)',
                                     data: data.standard,
-                                    borderColor: '#9CA3AF', // Gray
-                                    borderWidth: 2,
+                                    borderColor: '#94A3B8',
                                     borderDash: [5, 5],
-                                    tension: 0.4,
+                                    borderWidth: 2,
+                                    tension: 0.35,
                                     pointRadius: 0,
-                                    fill: false
-                                }
-                            ]
-                        },
-                        options: {
-                            responsive: true, maintainAspectRatio: false,
-                            interaction: { mode: 'index', intersect: false },
-                            plugins: {
-                                legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 6, font: { size: 10, family: 'Inter' } } }
-                            },
-                            scales: {
-                                x: { grid: { display: false }, ticks: { font: { size: 9, family: 'Inter' }, color: '#9CA3AF' } },
-                                y: { 
-                                    grid: { color: 'rgba(0,0,0,0.04)' }, 
-                                    ticks: { font: { size: 9, family: 'Inter' }, color: '#9CA3AF' },
-                                    suggestedMin: 50,
-                                    suggestedMax: 100
+                                    fill: false,
                                 },
-                            },
-                        }
+                            ],
+                        },
+                        options: this.chartOptions()
                     });
                 },
+                renderEnvironmentChart() {
+                    if (typeof Chart === 'undefined') {
+                        return;
+                    }
+                    const ctx = this.$refs.environmentCanvas;
+                    if (!ctx) return;
+                    if (this._environmentChart) this._environmentChart.destroy();
+                    const data = @js($chartData['environment']);
 
-                renderCausalityChart() {
-                    const ctx = this.$refs.causalityCanvas;
-                    if (!ctx || typeof Chart === 'undefined') return;
-                    if (this._causalityChart) this._causalityChart.destroy();
-
-                    const data = @js($chartData['causality']);
-
-                    this._causalityChart = new Chart(ctx, {
+                    this._environmentChart = new Chart(ctx, {
                         type: 'line',
                         data: {
                             labels: data.labels,
-                            datasets: [
-                                {
-                                    label: 'Suhu Rata-rata (C)',
-                                    data: data.suhu,
-                                    borderColor: '#F59E0B',
-                                    backgroundColor: '#F59E0B18',
-                                    borderWidth: 2,
-                                    tension: 0.4,
-                                    pointRadius: 2,
-                                    yAxisID: 'ySuhu',
-                                    order: 1
-                                },
-                                {
-                                    label: 'Amonia (ppm)',
-                                    data: data.amonia,
-                                    borderColor: '#EF4444',
-                                    borderWidth: 2,
-                                    borderDash: [5, 5],
-                                    tension: 0.4,
-                                    pointRadius: 2,
-                                    yAxisID: 'yAmonia',
-                                    order: 2
-                                },
-                                {
-                                    label: 'Kelembapan (%)',
-                                    type: 'bar',
-                                    data: data.kelembaban,
-                                    backgroundColor: 'rgba(14, 165, 233, 0.16)',
-                                    borderColor: 'transparent',
-                                    borderWidth: 0,
-                                    yAxisID: 'yKelembaban',
-                                    order: 3
-                                }
-                            ]
+                            datasets: (data.series || []).map((serie) => ({
+                                label: serie.label,
+                                data: serie.data,
+                                borderColor: serie.color,
+                                backgroundColor: serie.color,
+                                borderWidth: 2,
+                                tension: 0.35,
+                                pointRadius: 2,
+                                fill: false,
+                            })),
                         },
-                        options: {
-                            responsive: true, maintainAspectRatio: false,
-                            interaction: { mode: 'index', intersect: false },
-                            plugins: {
-                                legend: { position: 'top', align: 'center', labels: { usePointStyle: true, boxWidth: 6, font: { size: 9, family: 'Inter' } } },
-                                tooltip: { titleFont: { size: 10, family: 'Inter' }, bodyFont: { size: 10, family: 'Inter' } }
-                            },
-                            scales: {
-                                x: { grid: { display: false }, ticks: { font: { size: 9, family: 'Inter' }, color: '#9CA3AF' } },
-                                
-                                ySuhu: {
-                                    type: 'linear', display: true, position: 'left',
-                                    grid: { color: 'rgba(0,0,0,0.04)' },
-                                    title: { display: true, text: 'Suhu (C)', font: { size: 9 }, color: '#F59E0B' },
-                                    ticks: { font: { size: 9, family: 'Inter' }, color: '#F59E0B' },
-                                    suggestedMin: 20, suggestedMax: 40
-                                },
-                                yAmonia: {
-                                    type: 'linear', display: true, position: 'right',
-                                    grid: { drawOnChartArea: false },
-                                    title: { display: true, text: 'Amonia (ppm)', font: { size: 9 }, color: '#EF4444' },
-                                    ticks: { font: { size: 9, family: 'Inter' }, color: '#EF4444' },
-                                    suggestedMin: 0, suggestedMax: 50
-                                },
-                                yKelembaban: {
-                                    type: 'linear', display: false, position: 'right',
-                                    suggestedMin: 0, suggestedMax: 100
-                                }
-                            },
-                        }
+                        options: this.chartOptions()
                     });
-                }
-            }));
-        });
+                },
+            };
+        };
+
+        if (window.Alpine) {
+            window.Alpine.data('spkDashboard', window.spkDashboard);
+        } else {
+            document.addEventListener('alpine:init', () => {
+                Alpine.data('spkDashboard', window.spkDashboard);
+            });
+        }
     </script>
 @endpush

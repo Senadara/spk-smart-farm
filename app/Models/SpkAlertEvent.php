@@ -36,6 +36,8 @@ class SpkAlertEvent extends Model
         'send_status',
         'response_json',
         'sent_at',
+        'read_at',
+        'read_by',
     ];
 
     protected $casts = [
@@ -43,6 +45,7 @@ class SpkAlertEvent extends Model
         'response_json' => 'array',
         'output_value' => 'float',
         'sent_at' => 'datetime',
+        'read_at' => 'datetime',
     ];
 
     public function spkFuzzyLog()

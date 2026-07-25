@@ -35,8 +35,8 @@ class DataMasterController extends Controller
         $productUnits = $this->productUnits();
         $dataMasterSources = [
             'sensor_parameters' => Schema::hasTable('iot_parameter') ? 'web' : 'missing',
-            'stock_categories' => Schema::hasTable('supplier_product_categories') ? 'web' : (Schema::hasTable('kategoriInventaris') ? 'mobile' : 'default'),
-            'product_units' => Schema::hasTable('product_units') ? 'web' : (Schema::hasTable('satuan') ? 'mobile' : 'default'),
+            'stock_categories' => Schema::hasTable('kategoriInventaris') ? 'shared' : (Schema::hasTable('supplier_product_categories') ? 'web-legacy' : 'default'),
+            'product_units' => Schema::hasTable('satuan') ? 'shared' : (Schema::hasTable('product_units') ? 'web-legacy' : 'default'),
         ];
         $users = $this->getDummyUsers();
         $blokKebun = $this->getDummyBlokKebun();
@@ -94,6 +94,9 @@ class DataMasterController extends Controller
             'jenis_budidaya_id' => 'required|string|exists:jenisBudidaya,id',
             'commodity_id' => 'nullable|string|exists:komoditas,id',
             'notes' => 'nullable|string|max:1000',
+            'afkir_label' => 'nullable|string|max:80',
+            'afkir_target_weeks' => 'nullable|integer|min:1|max:520',
+            'afkir_warning_weeks' => 'nullable|integer|min:0|max:52',
             'environment_parameters' => 'required|array|min:1',
             'environment_parameters.*.parameter_code' => ['nullable', 'string', 'max:50', 'exists:iot_parameter,parameterCode'],
             'environment_parameters.*.parameter_name' => 'nullable|string|max:150',
@@ -229,6 +232,33 @@ class DataMasterController extends Controller
 
     public function storeStockCategory(Request $request)
     {
+        if (Schema::hasTable('kategoriInventaris')) {
+            $validated = $request->validate([
+                'name' => 'required|string|max:80',
+                'description' => 'nullable|string|max:255',
+            ]);
+
+            $name = $this->normalizeMasterDisplayName($validated['name']);
+            $existing = $this->findSharedStockCategoryByName($name);
+            $payload = array_merge([
+                'nama' => $name,
+            ], $this->softDeletePayload('kategoriInventaris', false), $this->timestampPayload('kategoriInventaris', false));
+
+            if ($existing) {
+                DB::table('kategoriInventaris')
+                    ->where('id', $existing->id)
+                    ->update($payload);
+            } else {
+                DB::table('kategoriInventaris')->insert(array_merge([
+                    'id' => (string) Str::uuid(),
+                ], $payload, $this->timestampPayload('kategoriInventaris', true)));
+            }
+
+            return redirect()
+                ->route('data-master.index', ['tab' => 'stock-categories'])
+                ->with('success', $existing ? 'Kategori stok sudah ada dan diaktifkan kembali.' : 'Kategori stok berhasil disimpan ke master bersama.');
+        }
+
         $this->ensureTableReady('supplier_product_categories', 'Tabel kategori stok belum tersedia.');
 
         $validated = $request->validate([
@@ -251,15 +281,45 @@ class DataMasterController extends Controller
             ->with('success', 'Kategori stok berhasil disimpan.');
     }
 
-    public function updateStockCategory(Request $request, SupplierProductCategory $category)
+    public function updateStockCategory(Request $request, string $category)
     {
+        if (Schema::hasTable('kategoriInventaris')) {
+            $current = DB::table('kategoriInventaris')->where('id', $category)->first();
+            abort_if(! $current, 404);
+
+            $validated = $request->validate([
+                'name' => 'required|string|max:80',
+                'description' => 'nullable|string|max:255',
+                'is_active' => 'nullable|boolean',
+            ]);
+
+            $name = $this->normalizeMasterDisplayName($validated['name']);
+            $duplicate = $this->findSharedStockCategoryByName($name, $category);
+            if ($duplicate) {
+                throw ValidationException::withMessages([
+                    'name' => 'Nama kategori sudah digunakan di master bersama.',
+                ]);
+            }
+
+            DB::table('kategoriInventaris')
+                ->where('id', $category)
+                ->update(array_merge([
+                    'nama' => $name,
+                ], $this->softDeletePayload('kategoriInventaris', ! $request->boolean('is_active')), $this->timestampPayload('kategoriInventaris', false)));
+
+            return redirect()
+                ->route('data-master.index', ['tab' => 'stock-categories'])
+                ->with('success', 'Kategori stok berhasil diperbarui di master bersama.');
+        }
+
+        $categoryModel = SupplierProductCategory::query()->findOrFail($category);
         $validated = $request->validate([
             'name' => 'required|string|max:80',
             'description' => 'nullable|string|max:255',
             'is_active' => 'nullable|boolean',
         ]);
 
-        $category->update([
+        $categoryModel->update([
             'name' => $validated['name'],
             'slug' => Str::slug($validated['name']),
             'description' => $validated['description'] ?? null,
@@ -273,6 +333,46 @@ class DataMasterController extends Controller
 
     public function storeProductUnit(Request $request)
     {
+        if (Schema::hasTable('satuan')) {
+            $validated = $request->validate([
+                'name' => 'required|string|max:80',
+                'symbol' => 'required|string|max:30',
+                'description' => 'nullable|string|max:255',
+            ]);
+
+            $name = $this->normalizeMasterDisplayName($validated['name']);
+            $symbol = $this->normalizeUnitSymbol($validated['symbol']);
+            $existing = $this->findSharedProductUnit($name, $symbol);
+
+            if ($existing && (
+                $this->normalizeMasterKey($existing->nama ?? '') !== $this->normalizeMasterKey($name)
+                || $this->normalizeMasterKey($existing->lambang ?? '') !== $this->normalizeMasterKey($symbol)
+            )) {
+                throw ValidationException::withMessages([
+                    'symbol' => 'Nama atau simbol satuan sudah digunakan untuk satuan lain.',
+                ]);
+            }
+
+            $payload = array_merge([
+                'nama' => $name,
+                'lambang' => $symbol,
+            ], $this->softDeletePayload('satuan', false), $this->timestampPayload('satuan', false));
+
+            if ($existing) {
+                DB::table('satuan')
+                    ->where('id', $existing->id)
+                    ->update($payload);
+            } else {
+                DB::table('satuan')->insert(array_merge([
+                    'id' => (string) Str::uuid(),
+                ], $payload, $this->timestampPayload('satuan', true)));
+            }
+
+            return redirect()
+                ->route('data-master.index', ['tab' => 'product-units'])
+                ->with('success', $existing ? 'Satuan produk sudah ada dan diaktifkan kembali.' : 'Satuan produk berhasil disimpan ke master bersama.');
+        }
+
         $this->ensureTableReady('product_units', 'Tabel satuan produk belum tersedia.');
 
         $validated = $request->validate([
@@ -296,8 +396,41 @@ class DataMasterController extends Controller
             ->with('success', 'Satuan produk berhasil disimpan.');
     }
 
-    public function updateProductUnit(Request $request, ProductUnit $unit)
+    public function updateProductUnit(Request $request, string $unit)
     {
+        if (Schema::hasTable('satuan')) {
+            $current = DB::table('satuan')->where('id', $unit)->first();
+            abort_if(! $current, 404);
+
+            $validated = $request->validate([
+                'name' => 'required|string|max:80',
+                'symbol' => 'required|string|max:30',
+                'description' => 'nullable|string|max:255',
+                'is_active' => 'nullable|boolean',
+            ]);
+
+            $name = $this->normalizeMasterDisplayName($validated['name']);
+            $symbol = $this->normalizeUnitSymbol($validated['symbol']);
+            $duplicate = $this->findSharedProductUnit($name, $symbol, $unit);
+            if ($duplicate) {
+                throw ValidationException::withMessages([
+                    'symbol' => 'Nama atau simbol satuan sudah digunakan untuk satuan lain.',
+                ]);
+            }
+
+            DB::table('satuan')
+                ->where('id', $unit)
+                ->update(array_merge([
+                    'nama' => $name,
+                    'lambang' => $symbol,
+                ], $this->softDeletePayload('satuan', ! $request->boolean('is_active')), $this->timestampPayload('satuan', false)));
+
+            return redirect()
+                ->route('data-master.index', ['tab' => 'product-units'])
+                ->with('success', 'Satuan produk berhasil diperbarui di master bersama.');
+        }
+
+        $unitModel = ProductUnit::query()->findOrFail($unit);
         $validated = $request->validate([
             'name' => 'required|string|max:80',
             'symbol' => 'required|string|max:30',
@@ -305,7 +438,7 @@ class DataMasterController extends Controller
             'is_active' => 'nullable|boolean',
         ]);
 
-        $unit->update([
+        $unitModel->update([
             'name' => $validated['name'],
             'symbol' => $validated['symbol'],
             'description' => $validated['description'] ?? null,
@@ -416,19 +549,6 @@ class DataMasterController extends Controller
 
     private function stockCategories(): Collection
     {
-        if (Schema::hasTable('supplier_product_categories')) {
-            return SupplierProductCategory::query()
-                ->orderBy('sort_order')
-                ->orderBy('name')
-                ->get()
-                ->map(function ($row) {
-                    $row->source = 'web';
-                    $row->editable = true;
-
-                    return $row;
-                });
-        }
-
         if (Schema::hasTable('kategoriInventaris')) {
             $hasDeletedFlag = Schema::hasColumn('kategoriInventaris', 'isDeleted');
             $query = DB::table('kategoriInventaris')
@@ -437,7 +557,6 @@ class DataMasterController extends Controller
 
             if ($hasDeletedFlag) {
                 $query->addSelect('isDeleted');
-                $query->where('isDeleted', false);
             }
 
             return $query->get()
@@ -445,12 +564,25 @@ class DataMasterController extends Controller
                     'id' => $row->id,
                     'name' => $row->nama,
                     'slug' => Str::slug($row->nama),
-                    'description' => 'Dibaca dari Data Master mobile.',
+                    'description' => 'Master bersama untuk mobile, web supplier, inventori, dan rekomendasi restock.',
                     'sort_order' => 0,
                     'is_active' => ! (bool) ($row->isDeleted ?? false),
-                    'source' => 'mobile',
-                    'editable' => false,
+                    'source' => 'shared',
+                    'editable' => true,
                 ]);
+        }
+
+        if (Schema::hasTable('supplier_product_categories')) {
+            return SupplierProductCategory::query()
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get()
+                ->map(function ($row) {
+                    $row->source = 'web-legacy';
+                    $row->editable = true;
+
+                    return $row;
+                });
         }
 
         return collect(SupplierProductCategory::defaultRows())
@@ -468,19 +600,6 @@ class DataMasterController extends Controller
 
     private function productUnits(): Collection
     {
-        if (Schema::hasTable('product_units')) {
-            return ProductUnit::query()
-                ->orderBy('sort_order')
-                ->orderBy('name')
-                ->get()
-                ->map(function ($row) {
-                    $row->source = 'web';
-                    $row->editable = true;
-
-                    return $row;
-                });
-        }
-
         if (Schema::hasTable('satuan')) {
             $hasDeletedFlag = Schema::hasColumn('satuan', 'isDeleted');
             $query = DB::table('satuan')
@@ -489,7 +608,6 @@ class DataMasterController extends Controller
 
             if ($hasDeletedFlag) {
                 $query->addSelect('isDeleted');
-                $query->where('isDeleted', false);
             }
 
             return $query->get()
@@ -497,12 +615,25 @@ class DataMasterController extends Controller
                     'id' => $row->id,
                     'name' => $row->nama,
                     'symbol' => $row->lambang,
-                    'description' => 'Dibaca dari Data Master mobile.',
+                    'description' => 'Master bersama untuk mobile, produk supplier, inventori, dan konversi restock.',
                     'sort_order' => 0,
                     'is_active' => ! (bool) ($row->isDeleted ?? false),
-                    'source' => 'mobile',
-                    'editable' => false,
+                    'source' => 'shared',
+                    'editable' => true,
                 ]);
+        }
+
+        if (Schema::hasTable('product_units')) {
+            return ProductUnit::query()
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get()
+                ->map(function ($row) {
+                    $row->source = 'web-legacy';
+                    $row->editable = true;
+
+                    return $row;
+                });
         }
 
         return collect(ProductUnit::defaultRows())
@@ -516,6 +647,86 @@ class DataMasterController extends Controller
                 'source' => 'default',
                 'editable' => false,
             ]);
+    }
+
+    private function findSharedStockCategoryByName(string $name, ?string $exceptId = null): ?object
+    {
+        $normalized = $this->normalizeMasterKey($name);
+        $columns = ['id', 'nama'];
+        if (Schema::hasColumn('kategoriInventaris', 'isDeleted')) {
+            $columns[] = 'isDeleted';
+        }
+
+        return DB::table('kategoriInventaris')
+            ->select($columns)
+            ->when($exceptId, fn ($query) => $query->where('id', '!=', $exceptId))
+            ->get()
+            ->first(fn ($row) => $this->normalizeMasterKey($row->nama ?? '') === $normalized);
+    }
+
+    private function findSharedProductUnit(string $name, string $symbol, ?string $exceptId = null): ?object
+    {
+        $normalizedName = $this->normalizeMasterKey($name);
+        $normalizedSymbol = $this->normalizeMasterKey($symbol);
+        $columns = ['id', 'nama'];
+        if (Schema::hasColumn('satuan', 'lambang')) {
+            $columns[] = 'lambang';
+        }
+        if (Schema::hasColumn('satuan', 'isDeleted')) {
+            $columns[] = 'isDeleted';
+        }
+
+        return DB::table('satuan')
+            ->select($columns)
+            ->when($exceptId, fn ($query) => $query->where('id', '!=', $exceptId))
+            ->get()
+            ->first(fn ($row) => $this->normalizeMasterKey($row->nama ?? '') === $normalizedName
+                || $this->normalizeMasterKey($row->lambang ?? '') === $normalizedSymbol);
+    }
+
+    private function normalizeMasterDisplayName(mixed $value): string
+    {
+        return Str::of((string) $value)
+            ->squish()
+            ->toString();
+    }
+
+    private function normalizeUnitSymbol(mixed $value): string
+    {
+        return Str::of((string) $value)
+            ->squish()
+            ->toString();
+    }
+
+    private function normalizeMasterKey(mixed $value): string
+    {
+        return Str::of((string) $value)
+            ->squish()
+            ->lower()
+            ->toString();
+    }
+
+    private function softDeletePayload(string $table, bool $isDeleted): array
+    {
+        return Schema::hasColumn($table, 'isDeleted')
+            ? ['isDeleted' => $isDeleted]
+            : [];
+    }
+
+    private function timestampPayload(string $table, bool $includeCreatedAt): array
+    {
+        $now = now();
+        $payload = [];
+
+        if ($includeCreatedAt && Schema::hasColumn($table, 'createdAt')) {
+            $payload['createdAt'] = $now;
+        }
+
+        if (Schema::hasColumn($table, 'updatedAt')) {
+            $payload['updatedAt'] = $now;
+        }
+
+        return $payload;
     }
 
     /**

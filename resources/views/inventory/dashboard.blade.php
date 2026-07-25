@@ -64,7 +64,6 @@
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">
-                    <x-dashboard-hint-toggle />
                     <select x-model="barnFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-300">
                         <option value="all">Semua Kandang</option>
                         @foreach($barnOptions as $barn)

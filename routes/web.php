@@ -5,6 +5,7 @@ use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\DataMasterController;
 use App\Http\Controllers\Inventory\InventoryController;
 use App\Http\Controllers\Iot\IotController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Perkebunan\PerkebunanController;
 use App\Http\Controllers\Peternakan\PeternakanController;
 use App\Http\Controllers\Profile\ProfileController;
@@ -48,6 +49,7 @@ Route::middleware('guest.api')->group(function () {
     Route::post('/register/owner', [RegisterController::class, 'storeOwner'])->name('register.owner.store');
     Route::get('/register/supplier', [RegisterController::class, 'supplier'])->name('register.supplier');
     Route::post('/register/supplier', [RegisterController::class, 'storeSupplier'])->name('register.supplier.store');
+    Route::get('/register/supplier/submitted', [RegisterController::class, 'supplierSubmitted'])->name('register.supplier.submitted');
 });
 
 // Webhook IoT - HARUS di luar auth.api agar device IoT bisa kirim data tanpa login
@@ -59,6 +61,9 @@ Route::post('/iot/webhook/{deviceCode}', [IotController::class, 'handleWebhook']
 Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual,user'])->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::patch('/notifications/{event}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
+    Route::patch('/notifications/{event}/unread', [NotificationController::class, 'markUnread'])->name('notifications.unread');
 
     // Peternakan
     Route::get('/peternakan', [PeternakanController::class, 'index'])->name('peternakan');
@@ -163,7 +168,7 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
         Route::post('/items', [InventoryController::class, 'store'])->name('items.store');
         Route::get('/items/{item}', [InventoryController::class, 'show'])->name('items.show');
         Route::post('/items/{item}/adjust', [InventoryController::class, 'adjust'])->name('items.adjust');
-        Route::middleware('role:pjawab,owner,admin')->group(function () {
+    Route::middleware('role:pjawab,owner,admin')->group(function () {
             Route::post('/items/{item}/supplier-links', [InventoryController::class, 'storeSupplierLink'])->name('items.supplier-links.store');
             Route::post('/items/{item}/restock-order', [InventoryController::class, 'orderRestock'])->name('items.restock-order');
             Route::get('/items/{item}/supplier-recommendations', [InventoryController::class, 'supplierRecommendations'])->name('items.supplier-recommendations');
@@ -176,11 +181,19 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
     // Data Master (DASH-02)
     Route::middleware('role:pjawab,owner,admin')->group(function () {
         Route::get('/data-master', [DataMasterController::class, 'index'])->name('data-master.index');
+        Route::post('/data-master/sensor-parameters', [DataMasterController::class, 'storeSensorParameter'])->name('data-master.sensor-parameters.store');
+        Route::patch('/data-master/sensor-parameters/{parameter}', [DataMasterController::class, 'updateSensorParameter'])->name('data-master.sensor-parameters.update');
+        Route::delete('/data-master/sensor-parameters/{parameter}', [DataMasterController::class, 'destroySensorParameter'])->name('data-master.sensor-parameters.destroy');
         Route::post('/data-master/livestock', [DataMasterController::class, 'storeLivestockMaster'])->name('data-master.livestock.store');
+        Route::post('/data-master/stock-categories', [DataMasterController::class, 'storeStockCategory'])->name('data-master.stock-categories.store');
+        Route::patch('/data-master/stock-categories/{category}', [DataMasterController::class, 'updateStockCategory'])->name('data-master.stock-categories.update');
+        Route::post('/data-master/product-units', [DataMasterController::class, 'storeProductUnit'])->name('data-master.product-units.store');
+        Route::patch('/data-master/product-units/{unit}', [DataMasterController::class, 'updateProductUnit'])->name('data-master.product-units.update');
     });
 
     // Pengaturan (Settings Hub)
     Route::middleware('role:pjawab,owner,admin')->get('/settings', [\App\Http\Controllers\Settings\SettingsController::class, 'index'])->name('settings.index');
+    Route::middleware('role:pjawab,owner,admin')->get('/settings/notifications', [\App\Http\Controllers\Settings\NotificationSettingsController::class, 'index'])->name('settings.notifications.index');
     Route::middleware('role:pjawab,owner,admin')->prefix('settings/health-scheduler')->group(function () {
         Route::get('/', [\App\Http\Controllers\Settings\HealthSchedulerController::class, 'index'])->name('settings.health-scheduler.index');
         Route::put('/', [\App\Http\Controllers\Settings\HealthSchedulerController::class, 'update'])->name('settings.health-scheduler.update');
@@ -198,6 +211,7 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
         Route::get('/', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'index'])->name('settings.fuzzy.index');
         Route::post('/profiles', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'storeProfile'])->name('settings.fuzzy.profiles.store');
         Route::patch('/profiles/{id}/activate', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'activateProfile'])->name('settings.fuzzy.profiles.activate');
+        Route::patch('/templates/activate', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'activateTemplateForJenis'])->name('settings.fuzzy.templates.activate');
         // CRUD Variables
         Route::post('/variables', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'storeVariable'])->name('settings.fuzzy.variables.store');
         Route::put('/variables/{id}', [\App\Http\Controllers\Settings\FuzzyConfigController::class, 'updateVariable'])->name('settings.fuzzy.variables.update');
@@ -252,8 +266,12 @@ Route::middleware('auth.api')->group(function () {
         Route::put('/store', [SupplierPanelController::class, 'updateStore'])->name('store.update');
 
         Route::get('/products', [SupplierPanelController::class, 'products'])->name('products.index');
+        Route::get('/products/create', [SupplierPanelController::class, 'createProduct'])->name('products.create');
         Route::post('/products', [SupplierPanelController::class, 'storeProduct'])->name('products.store');
+        Route::get('/products/{product}/edit', [SupplierPanelController::class, 'editProduct'])->name('products.edit');
         Route::put('/products/{product}', [SupplierPanelController::class, 'updateProduct'])->name('products.update');
+        Route::get('/products/{product}/stock', [SupplierPanelController::class, 'editProductStock'])->name('products.stock.edit');
+        Route::patch('/products/{product}/stock', [SupplierPanelController::class, 'adjustProductStock'])->name('products.stock');
         Route::delete('/products/{product}', [SupplierPanelController::class, 'destroyProduct'])->name('products.destroy');
 
         Route::get('/orders', [SupplierPanelController::class, 'orders'])->name('orders.index');

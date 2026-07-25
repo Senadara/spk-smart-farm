@@ -11,9 +11,10 @@
     </style>
 @endonce
 
-<div
+<span
     x-data="{
         showHints: true,
+        infoOpen: false,
         init() {
             this.showHints = localStorage.getItem('smartfarm.dashboardHints') !== 'hidden';
             this.apply();
@@ -27,14 +28,37 @@
             document.documentElement.classList.toggle('dashboard-hints-hidden', !this.showHints);
         }
     }"
-    class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm"
+    class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1 shadow-sm"
 >
-    <span>{{ $label }}</span>
+    <span class="relative inline-flex">
+        <button
+            type="button"
+            class="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-xs font-black text-slate-500 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            aria-label="Fungsi tombol hint indikator"
+            @mouseenter="infoOpen = true"
+            @mouseleave="infoOpen = false"
+            @focus="infoOpen = true"
+            @blur="infoOpen = false"
+        >
+            ?
+        </button>
+        <span
+            x-show="infoOpen"
+            x-cloak
+            x-transition
+            class="absolute right-0 top-8 z-[80] w-60 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 shadow-xl"
+        >
+            Mengatur tampil atau sembunyi ikon penjelasan pada indikator dashboard.
+        </span>
+    </span>
+
     <button
         type="button"
-        class="relative h-5 w-9 rounded-full transition"
+        class="relative h-5 w-9 rounded-full transition focus:outline-none focus:ring-2 focus:ring-emerald-200"
         :class="showHints ? 'bg-emerald-500' : 'bg-slate-300'"
         :aria-pressed="showHints.toString()"
+        :aria-label="showHints ? 'Sembunyikan hint indikator' : 'Tampilkan hint indikator'"
+        :title="showHints ? 'Hint indikator aktif' : 'Hint indikator mati'"
         @click="toggle()"
     >
         <span
@@ -42,5 +66,4 @@
             :class="showHints ? 'left-4' : 'left-0.5'"
         ></span>
     </button>
-    <span class="min-w-[46px] text-[11px] text-slate-400" x-text="showHints ? 'Aktif' : 'Mati'"></span>
-</div>
+</span>

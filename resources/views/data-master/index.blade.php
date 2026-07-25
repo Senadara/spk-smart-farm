@@ -11,6 +11,7 @@
     $productivityFunctions = $masterOverview['productivityFunctions'];
     $selectedFunctionIds = $masterOverview['selectedFunctionIds'];
     $selectedOperationalFunctionIds = $masterOverview['selectedOperationalFunctionIds'] ?? [];
+    $afkirConfig = $masterOverview['afkirConfig'] ?? ['label' => 'Afkir / akhir siklus', 'target_weeks' => null, 'warning_weeks' => 4, 'is_configured' => false];
     $schemaReady = $masterOverview['schemaReady'];
     $readyCount = $types->filter(fn ($type) => $type['readiness']['configured'] ?? false)->count();
     $pendingCount = max($types->count() - $readyCount, 0);
@@ -58,8 +59,12 @@
         'stock-categories' => ['label' => 'Kategori Stok', 'description' => 'Kategori produk dan kebutuhan restock'],
         'product-units' => ['label' => 'Satuan Produk', 'description' => 'Satuan katalog supplier dan inventori'],
     ];
-    $stockCategorySource = $dataMasterSources['stock_categories'] ?? ($stockCategories->first()->source ?? 'web');
-    $productUnitSource = $dataMasterSources['product_units'] ?? ($productUnits->first()->source ?? 'web');
+    $stockCategorySource = $stockCategories->contains('source', 'shared')
+        ? 'shared'
+        : ($dataMasterSources['stock_categories'] ?? ($stockCategories->first()->source ?? 'web'));
+    $productUnitSource = $productUnits->contains('source', 'shared')
+        ? 'shared'
+        : ($dataMasterSources['product_units'] ?? ($productUnits->first()->source ?? 'web'));
     $stockCategoryRowsForJs = $stockCategories->map(fn ($category) => [
         'id' => $category->id,
         'name' => $category->name,
@@ -402,7 +407,7 @@
                             </div>
                         </div>
 
-                        <div class="mt-4 grid grid-cols-1 gap-2 md:grid-cols-3">
+                        <div class="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
                             <div class="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
                                 <div class="text-[11px] font-bold uppercase text-emerald-700">1. Lingkungan</div>
                                 <p class="mt-1 text-xs text-emerald-800">Pilih data sensor yang dibutuhkan.</p>
@@ -411,8 +416,12 @@
                                 <div class="text-[11px] font-bold uppercase text-sky-700">2. Referensi Produktivitas</div>
                                 <p class="mt-1 text-xs text-sky-800">Pisahkan data operasional dan input fuzzy.</p>
                             </div>
+                            <div class="rounded-xl border border-violet-100 bg-violet-50 px-3 py-2">
+                                <div class="text-[11px] font-bold uppercase text-violet-700">3. Siklus Ternak</div>
+                                <p class="mt-1 text-xs text-violet-800">Atur target afkir atau akhir panen.</p>
+                            </div>
                             <div class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
-                                <div class="text-[11px] font-bold uppercase text-amber-700">3. Simpan</div>
+                                <div class="text-[11px] font-bold uppercase text-amber-700">4. Simpan</div>
                                 <p class="mt-1 text-xs text-amber-800">Lanjutkan mapping input di Pengaturan Fuzzy.</p>
                             </div>
                         </div>
@@ -608,8 +617,71 @@
                             </div>
                         </section>
 
+                        <section class="rounded-xl border border-violet-100 bg-violet-50/40 p-4">
+                            <div class="mb-4">
+                                <h3 class="text-base font-bold text-gray-900">3. Konfigurasi Afkir / Akhir Siklus</h3>
+                                <p class="mt-1 max-w-3xl text-sm text-gray-500">
+                                    Gunakan konfigurasi ini untuk menandai kapan ternak mendekati afkir, berhenti produksi, atau akhir siklus panen sesuai jenis ternaknya.
+                                </p>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-3 lg:grid-cols-12">
+                                <label class="block lg:col-span-4">
+                                    <span class="mb-1 block text-xs font-bold text-gray-700">Label di laporan</span>
+                                    <input
+                                        type="text"
+                                        name="afkir_label"
+                                        value="{{ old('afkir_label', $afkirConfig['label'] ?? 'Afkir / akhir siklus') }}"
+                                        maxlength="80"
+                                        class="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 focus:border-[var(--color-primary)] focus:outline-none"
+                                        placeholder="Contoh: Afkir layer / Akhir siklus panen"
+                                    >
+                                </label>
+                                <label class="block lg:col-span-3">
+                                    <span class="mb-1 block text-xs font-bold text-gray-700">Target umur/siklus</span>
+                                    <div class="flex rounded-xl border border-gray-200 bg-white focus-within:border-[var(--color-primary)]">
+                                        <input
+                                            type="number"
+                                            name="afkir_target_weeks"
+                                            value="{{ old('afkir_target_weeks', $afkirConfig['target_weeks'] ?? '') }}"
+                                            min="1"
+                                            max="520"
+                                            class="min-w-0 flex-1 rounded-l-xl border-0 px-3 py-2.5 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-0"
+                                            placeholder="80"
+                                        >
+                                        <span class="inline-flex items-center rounded-r-xl border-l border-gray-100 bg-gray-50 px-3 text-xs font-bold text-gray-500">minggu</span>
+                                    </div>
+                                </label>
+                                <label class="block lg:col-span-3">
+                                    <span class="mb-1 block text-xs font-bold text-gray-700">Mulai peringatan</span>
+                                    <div class="flex rounded-xl border border-gray-200 bg-white focus-within:border-[var(--color-primary)]">
+                                        <input
+                                            type="number"
+                                            name="afkir_warning_weeks"
+                                            value="{{ old('afkir_warning_weeks', $afkirConfig['warning_weeks'] ?? 4) }}"
+                                            min="0"
+                                            max="52"
+                                            class="min-w-0 flex-1 rounded-l-xl border-0 px-3 py-2.5 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-0"
+                                            placeholder="4"
+                                        >
+                                        <span class="inline-flex items-center rounded-r-xl border-l border-gray-100 bg-gray-50 px-3 text-xs font-bold text-gray-500">minggu sebelum target</span>
+                                    </div>
+                                </label>
+                                <div class="rounded-xl border border-violet-100 bg-white px-3 py-2.5 lg:col-span-2">
+                                    <span class="block text-xs font-bold text-gray-500">Status</span>
+                                    <span class="mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-bold {{ ($afkirConfig['is_configured'] ?? false) ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">
+                                        {{ ($afkirConfig['is_configured'] ?? false) ? 'Sudah disimpan' : 'Default sistem' }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <p class="mt-3 rounded-xl border border-violet-100 bg-white px-3 py-2 text-xs leading-5 text-violet-700">
+                                Contoh: ayam petelur biasanya memakai istilah afkir, sedangkan ayam potong atau lele lebih cocok memakai akhir siklus panen.
+                            </p>
+                        </section>
+
                         <section class="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                            <h3 class="text-base font-bold text-gray-900">3. Catatan dan Simpan</h3>
+                            <h3 class="text-base font-bold text-gray-900">4. Catatan dan Simpan</h3>
                             <label class="mt-3 block">
                                 <span class="mb-1.5 block text-sm font-semibold text-gray-700">Catatan konfigurasi</span>
                                 <textarea name="notes" rows="3" class="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-[var(--color-primary)] focus:outline-none" placeholder="Contoh: parameter disesuaikan dengan sensor kandang batch pertama.">{{ old('notes', $selectedConfig->notes ?? '') }}</textarea>
@@ -662,12 +734,12 @@
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <h2 class="text-lg font-bold text-gray-900">Kategori Stok</h2>
-                        <span class="rounded-full px-2.5 py-1 text-[11px] font-bold {{ $stockCategorySource === 'web' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700' }}">
-                            {{ $stockCategorySource === 'web' ? 'Dikonfigurasi di web' : ($stockCategorySource === 'mobile' ? 'Referensi mobile' : 'Default') }}
+                        <span class="rounded-full px-2.5 py-1 text-[11px] font-bold {{ $stockCategorySource === 'shared' ? 'bg-indigo-50 text-indigo-700' : ($stockCategorySource === 'web' || $stockCategorySource === 'web-legacy' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700') }}">
+                            {{ $stockCategorySource === 'shared' ? 'Master bersama mobile + web' : ($stockCategorySource === 'web' || $stockCategorySource === 'web-legacy' ? 'Dikonfigurasi di web' : ($stockCategorySource === 'mobile' ? 'Referensi mobile' : 'Default')) }}
                         </span>
                     </div>
                     <p class="mt-1 text-sm text-gray-500">
-                        Kategori ini dikonfigurasi dari web dan dipakai untuk katalog supplier, rekomendasi restock, serta filter inventori.
+                        Kategori ini disimpan di master yang sama dengan mobile, lalu dipakai untuk katalog supplier, rekomendasi restock, dan filter inventori.
                     </p>
                 </div>
                 <button type="button" @click="openStockCategoryModal()" class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">
@@ -715,7 +787,7 @@
                                     <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="row.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'" x-text="row.is_active ? 'Aktif' : 'Nonaktif'"></span>
                                 </td>
                                 <td class="px-3 py-3">
-                                    <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="row.source === 'web' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'" x-text="sourceLabel(row.source)"></span>
+                                    <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="sourceClass(row.source)" x-text="sourceLabel(row.source)"></span>
                                 </td>
                                 <td class="px-3 py-3 text-right">
                                     <template x-if="row.editable && row.update_url">
@@ -747,7 +819,7 @@
                 <div class="mb-4 flex items-start justify-between gap-3">
                     <div>
                         <h3 class="text-lg font-bold text-gray-900" x-text="stockCategoryModal.mode === 'edit' ? 'Ubah Kategori' : 'Tambah Kategori'"></h3>
-                        <p class="mt-1 text-sm text-gray-500">Kategori menjadi pilihan untuk inventori, supplier, dan rekomendasi restock.</p>
+                        <p class="mt-1 text-sm text-gray-500">Kategori disimpan di master bersama, sehingga pilihan mobile dan web tetap sama.</p>
                     </div>
                     <button type="button" @click="closeStockCategoryModal()" class="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50" title="Tutup">
                         <span class="text-lg leading-none">&times;</span>
@@ -760,8 +832,9 @@
                         <input x-ref="stockCategoryName" name="name" x-model="stockCategoryModal.name" required class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none" placeholder="Contoh: Mineral">
                     </label>
                     <label class="block">
-                        <span class="text-xs font-bold text-gray-700">Deskripsi</span>
+                        <span class="text-xs font-bold text-gray-700">Catatan</span>
                         <textarea name="description" rows="3" x-model="stockCategoryModal.description" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none" placeholder="Kegunaan kategori ini"></textarea>
+                        <span class="mt-1 block text-[11px] text-gray-400">Pada master bersama, yang disimpan ke tabel utama adalah nama dan status aktif.</span>
                     </label>
                     <label x-show="stockCategoryModal.mode === 'edit'" x-cloak class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">
                         <input type="hidden" name="is_active" value="0" :disabled="stockCategoryModal.mode !== 'edit'">
@@ -785,12 +858,12 @@
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <h2 class="text-lg font-bold text-gray-900">Satuan Produk</h2>
-                        <span class="rounded-full px-2.5 py-1 text-[11px] font-bold {{ $productUnitSource === 'web' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700' }}">
-                            {{ $productUnitSource === 'web' ? 'Dikonfigurasi di web' : ($productUnitSource === 'mobile' ? 'Referensi mobile' : 'Default') }}
+                        <span class="rounded-full px-2.5 py-1 text-[11px] font-bold {{ $productUnitSource === 'shared' ? 'bg-indigo-50 text-indigo-700' : ($productUnitSource === 'web' || $productUnitSource === 'web-legacy' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700') }}">
+                            {{ $productUnitSource === 'shared' ? 'Master bersama mobile + web' : ($productUnitSource === 'web' || $productUnitSource === 'web-legacy' ? 'Dikonfigurasi di web' : ($productUnitSource === 'mobile' ? 'Referensi mobile' : 'Default')) }}
                         </span>
                     </div>
                     <p class="mt-1 text-sm text-gray-500">
-                        Satuan ini dikonfigurasi dari web dan dipakai saat supplier membuat produk serta inventori menghubungkan barang ke supplier.
+                        Satuan ini disimpan di master yang sama dengan mobile, lalu dipakai saat supplier membuat produk dan inventori menghubungkan barang ke supplier.
                     </p>
                 </div>
                 <button type="button" @click="openProductUnitModal()" class="inline-flex items-center justify-center rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-sky-700">
@@ -838,7 +911,7 @@
                                     <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="row.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'" x-text="row.is_active ? 'Aktif' : 'Nonaktif'"></span>
                                 </td>
                                 <td class="px-3 py-3">
-                                    <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="row.source === 'web' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'" x-text="sourceLabel(row.source)"></span>
+                                    <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="sourceClass(row.source)" x-text="sourceLabel(row.source)"></span>
                                 </td>
                                 <td class="px-3 py-3 text-right">
                                     <template x-if="row.editable && row.update_url">
@@ -870,7 +943,7 @@
                 <div class="mb-4 flex items-start justify-between gap-3">
                     <div>
                         <h3 class="text-lg font-bold text-gray-900" x-text="productUnitModal.mode === 'edit' ? 'Ubah Satuan' : 'Tambah Satuan'"></h3>
-                        <p class="mt-1 text-sm text-gray-500">Satuan menjadi pilihan untuk produk supplier dan inventori.</p>
+                        <p class="mt-1 text-sm text-gray-500">Satuan disimpan di master bersama, sehingga pilihan mobile dan web tetap sama.</p>
                     </div>
                     <button type="button" @click="closeProductUnitModal()" class="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50" title="Tutup">
                         <span class="text-lg leading-none">&times;</span>
@@ -887,8 +960,9 @@
                         <input name="name" x-model="productUnitModal.name" required class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none" placeholder="Dus">
                     </label>
                     <label class="block">
-                        <span class="text-xs font-bold text-gray-700">Deskripsi</span>
+                        <span class="text-xs font-bold text-gray-700">Catatan</span>
                         <textarea name="description" rows="3" x-model="productUnitModal.description" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none" placeholder="Keterangan satuan"></textarea>
+                        <span class="mt-1 block text-[11px] text-gray-400">Pada master bersama, yang disimpan ke tabel utama adalah nama, simbol, dan status aktif.</span>
                     </label>
                     <label x-show="productUnitModal.mode === 'edit'" x-cloak class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">
                         <input type="hidden" name="is_active" value="0" :disabled="productUnitModal.mode !== 'edit'">
@@ -1098,10 +1172,23 @@ function livestockMasterPage(initialEnvironmentRows, initialSelectedFunctions, i
         },
 
         sourceLabel(source) {
+            if (source === 'shared') return 'Master bersama';
+            if (source === 'mobile-sync') return 'Sinkron mobile';
             if (source === 'mobile') return 'Mobile';
             if (source === 'default') return 'Default';
+            if (source === 'web-legacy') return 'Web lama';
 
             return 'Web';
+        },
+
+        sourceClass(source) {
+            if (source === 'shared') return 'bg-indigo-50 text-indigo-700';
+            if (source === 'mobile-sync') return 'bg-indigo-50 text-indigo-700';
+            if (source === 'web') return 'bg-emerald-50 text-emerald-700';
+            if (source === 'web-legacy') return 'bg-amber-50 text-amber-700';
+            if (source === 'default') return 'bg-gray-100 text-gray-500';
+
+            return 'bg-sky-50 text-sky-700';
         },
 
         addPreset(code) {

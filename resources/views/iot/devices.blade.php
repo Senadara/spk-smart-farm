@@ -149,15 +149,26 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                 </button>
-                                <form action="{{ route('iot.connections.destroy', $connection->id) }}" method="POST" onsubmit="return confirm('Hapus koneksi {{ $connection->protocol->protocolName ?? 'IoT' }} ini?\nKoneksi yang masih dipakai device tidak bisa dihapus.');">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-100 bg-white text-red-600 transition hover:bg-red-50" title="Hapus koneksi">
+                                @php($connectionDeviceCount = (int) ($connection->devices_count ?? 0))
+                                @if($connectionDeviceCount > 0)
+                                    <button type="button" disabled
+                                        class="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-lg border border-gray-100 bg-gray-50 text-gray-300"
+                                        title="Koneksi masih dipakai {{ $connectionDeviceCount }} device. Pindahkan device terlebih dahulu.">
                                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                         </svg>
                                     </button>
-                                </form>
+                                @else
+                                    <form action="{{ route('iot.connections.destroy', $connection->id) }}" method="POST" onsubmit="return confirm('Hapus koneksi {{ $connection->protocol->protocolName ?? 'IoT' }} ini?');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-100 bg-white text-red-600 transition hover:bg-red-50" title="Hapus koneksi">
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                        </button>
+                                    </form>
+                                @endif
                             </div>
                         </div>
                         <div class="mt-3 flex flex-wrap gap-2 text-[11px] text-gray-500">
@@ -373,9 +384,9 @@
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h2 class="text-base font-semibold text-[var(--color-gray-900)]">Parameter Sensor</h2>
-                        <p class="mt-1 text-sm text-[var(--color-gray-500)]">Daftar parameter yang bisa dipakai pada mapping payload device.</p>
+                        <p class="mt-1 text-sm text-[var(--color-gray-500)]">Katalog pusat dari Data Master yang dipakai pada mapping payload device.</p>
                     </div>
-                    <button type="button" @click="modal = 'addParameter'" class="inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-semibold text-white bg-[var(--color-primary)] border-none cursor-pointer hover:opacity-90">Tambah Parameter</button>
+                    <a href="{{ route('data-master.index', ['tab' => 'sensor-parameters']) }}" class="inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-semibold text-white bg-[var(--color-primary)] hover:opacity-90" style="text-decoration:none;">Kelola di Data Master</a>
                 </div>
 
                 <div class="mt-4 overflow-x-auto">
@@ -385,7 +396,7 @@
                                 <th class="text-left py-3 px-3 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider">Kode</th>
                                 <th class="text-left py-3 px-3 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider">Nama</th>
                                 <th class="text-left py-3 px-3 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider">Satuan</th>
-                                <th class="text-right py-3 px-3 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider">Aksi</th>
+                                <th class="text-right py-3 px-3 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider">Sumber</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -402,27 +413,15 @@
                                     </td>
                                     <td class="py-3.5 px-3 text-[var(--color-gray-600)]">{{ $param->unit ?: '-' }}</td>
                                     <td class="py-3.5 px-3 text-right">
-                                        <div class="flex items-center justify-end gap-1">
-                                            <button type="button" @click="editParameter = {{ $param->toJson() }}; modal = 'editParameter'"
-                                                class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                                title="Edit Parameter">
-                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                            </button>
-                                            <form action="{{ route('iot.parameters.destroy', $param->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Hapus parameter {{ $param->parameterCode }}? Parameter yang masih dipakai mapping atau threshold tidak bisa dihapus.');">
-                                                @csrf @method('DELETE')
-                                                <button type="submit" class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Hapus Parameter">
-                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                </button>
-                                            </form>
-                                        </div>
+                                        <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Data Master</span>
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
                                     <td colspan="4" class="py-8 px-3 text-center">
                                         <p class="text-sm font-semibold text-gray-900">Belum ada parameter sensor</p>
-                                        <p class="mt-1 text-xs text-gray-500">Tambahkan parameter seperti TEMP, HUMID, AMMON, atau LIGHT sebelum mapping payload.</p>
-                                        <button type="button" @click="modal = 'addParameter'" class="mt-3 inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-semibold text-white bg-[var(--color-primary)] border-none cursor-pointer hover:opacity-90">Tambah Parameter</button>
+                                        <p class="mt-1 text-xs text-gray-500">Tambahkan parameter seperti TEMP, HUMID, AMMON, atau LIGHT di Data Master sebelum mapping payload.</p>
+                                        <a href="{{ route('data-master.index', ['tab' => 'sensor-parameters']) }}" class="mt-3 inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-semibold text-white bg-[var(--color-primary)] hover:opacity-90" style="text-decoration:none;">Buka Data Master</a>
                                     </td>
                                 </tr>
                             @endforelse
@@ -434,10 +433,10 @@
             <div class="bg-white rounded-2xl p-6" style="box-shadow: var(--shadow-sm);">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h2 class="text-base font-semibold text-[var(--color-gray-900)]">Threshold Komoditas</h2>
-                        <p class="mt-1 text-sm text-[var(--color-gray-500)]">Batas ideal parameter sensor untuk komoditas tertentu.</p>
+                        <h2 class="text-base font-semibold text-[var(--color-gray-900)]">Threshold Sensor Ternak</h2>
+                        <p class="mt-1 text-sm text-[var(--color-gray-500)]">Batas ideal diatur dari Data Master Ternak agar konsisten dengan SPK.</p>
                     </div>
-                    <button type="button" @click="modal = 'addCommodityParam'" class="inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-semibold text-white bg-[var(--color-primary)] border-none cursor-pointer hover:opacity-90">Tambah Threshold</button>
+                    <a href="{{ route('data-master.index', ['tab' => 'livestock']) }}" class="inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-semibold text-white bg-[var(--color-primary)] hover:opacity-90" style="text-decoration:none;">Atur di Data Master</a>
                 </div>
 
                 <div class="mt-4 overflow-x-auto">
@@ -447,7 +446,7 @@
                                 <th class="text-left py-3 px-3 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider">Komoditas</th>
                                 <th class="text-left py-3 px-3 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider">Parameter</th>
                                 <th class="text-left py-3 px-3 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider">Rentang</th>
-                                <th class="text-right py-3 px-3 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider">Aksi</th>
+                                <th class="text-right py-3 px-3 text-xs font-semibold text-[var(--color-gray-500)] uppercase tracking-wider">Pengaturan</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -461,27 +460,15 @@
                                         </span>
                                     </td>
                                     <td class="py-3.5 px-3 text-right">
-                                        <div class="flex items-center justify-end gap-1">
-                                            <button type="button" @click="editCommodityParam = {{ $cp->toJson() }}; modal = 'editCommodityParam'"
-                                                class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                                title="Edit Threshold">
-                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                            </button>
-                                            <form action="{{ route('iot.commodity-params.destroy', $cp->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Hapus threshold komoditas ini?');">
-                                                @csrf @method('DELETE')
-                                                <button type="submit" class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Hapus Threshold">
-                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                </button>
-                                            </form>
-                                        </div>
+                                        <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Data Master Ternak</span>
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
                                     <td colspan="4" class="py-8 px-3 text-center">
                                         <p class="text-sm font-semibold text-gray-900">Belum ada threshold komoditas</p>
-                                        <p class="mt-1 text-xs text-gray-500">Tambahkan batas ideal setelah parameter sensor tersedia.</p>
-                                        <button type="button" @click="modal = 'addCommodityParam'" @if($parameters->isEmpty()) disabled @endif class="mt-3 inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-semibold border-none {{ $parameters->isEmpty() ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'text-white bg-[var(--color-primary)] cursor-pointer hover:opacity-90' }}">Tambah Threshold</button>
+                                        <p class="mt-1 text-xs text-gray-500">Tambahkan batas ideal dari Data Master Ternak setelah katalog sensor tersedia.</p>
+                                        <a href="{{ route('data-master.index', ['tab' => 'livestock']) }}" class="mt-3 inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-semibold text-white bg-[var(--color-primary)] hover:opacity-90" style="text-decoration:none;">Atur Threshold</a>
                                     </td>
                                 </tr>
                             @endforelse
@@ -547,7 +534,7 @@
 
                     <div x-show="connectionMode === 'MQTT'" x-cloak class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div class="sm:col-span-2 rounded-xl border border-violet-100 bg-violet-50/60 p-3">
-                            <p class="text-xs leading-5 text-violet-700">Isi broker MQTT. Default topic boleh memakai {deviceCode} agar setiap device otomatis punya topic berbeda.</p>
+                            <p class="text-xs leading-5 text-violet-700">Isi broker MQTT. Default topic adalah pola subscribe utama dan boleh memakai {deviceCode} agar setiap device otomatis punya topic berbeda.</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Broker URL *</label>
@@ -558,8 +545,9 @@
                             <input type="number" name="mqttPort" placeholder="8883" min="1" max="65535" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                         </div>
                         <div class="sm:col-span-2">
-                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Default MQTT Topic</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Default MQTT Topic / Pola Topic</label>
                             <input type="text" name="mqttTopic" placeholder="smartfarm/devices/{deviceCode}/sensors" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            <p class="mt-1 text-xs text-gray-400">Dipakai sebagai topic subscribe jika device tidak punya topic khusus.</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Client ID</label>
@@ -664,8 +652,9 @@
                                 <input type="number" name="mqttPort" x-model="editConnection.mqttPort" min="1" max="65535" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                             </div>
                             <div class="sm:col-span-2">
-                                <label class="block text-sm font-medium text-gray-700 mb-1.5">Default MQTT Topic</label>
+                                <label class="block text-sm font-medium text-gray-700 mb-1.5">Default MQTT Topic / Pola Topic</label>
                                 <input type="text" name="mqttTopic" x-model="editConnection.mqttTopic" placeholder="smartfarm/devices/{deviceCode}/sensors" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                                <p class="mt-1 text-xs text-gray-400">Dipakai sebagai topic subscribe jika device tidak punya topic khusus.</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Client ID</label>
@@ -754,16 +743,16 @@
                         <p class="text-xs leading-5 text-gray-500">Pilih konfigurasi koneksi dulu. Field lanjutan akan mengikuti jalur device yang dipakai.</p>
                     </div>
                     <div x-show="selectedProtocol() === 'MQTT'" x-cloak class="sm:col-span-2 rounded-xl border border-violet-100 bg-violet-50/60 p-3">
-                        <p class="text-xs leading-5 text-violet-700">Device MQTT akan dibaca dari topic. Topic bisa mengikuti default koneksi atau ditentukan khusus per device.</p>
+                        <p class="text-xs leading-5 text-violet-700">Device MQTT akan dibaca dari topic final: topic khusus device jika diisi, atau default topic koneksi jika dikosongkan.</p>
                     </div>
                     <div x-show="selectedProtocol() === 'API'" x-cloak class="sm:col-span-2 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
                         <p class="text-xs leading-5 text-blue-700">Device API/Antares akan dibaca berkala oleh Laravel lewat command polling.</p>
                     </div>
                     <div x-show="selectedProtocol() === 'MQTT'" x-cloak class="sm:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Topic Device</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Topic Khusus Device (Opsional)</label>
                         <input type="text" name="mqttTopic" placeholder="smartfarm/devices/DHT22-KA-01/sensors"
                             class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
-                        <p class="text-xs text-[var(--color-gray-400)] mt-1">Kosongkan jika memakai default topic koneksi. Isi topic unik jika satu broker melayani banyak device.</p>
+                        <p class="text-xs text-[var(--color-gray-400)] mt-1">Kosongkan jika ingin subscribe dari default topic koneksi. Isi hanya bila device publish ke topic berbeda.</p>
                     </div>
                     <div x-show="selectedProtocol() === 'API'" x-cloak>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Polling Interval (detik)</label>
@@ -832,13 +821,13 @@
                             </select>
                         </div>
                         <div x-show="editProtocol() === 'MQTT'" x-cloak class="sm:col-span-2 rounded-xl border border-violet-100 bg-violet-50/60 p-3">
-                            <p class="text-xs leading-5 text-violet-700">Device MQTT akan dibaca dari topic. Kosongkan topic khusus jika ingin memakai default koneksi.</p>
+                            <p class="text-xs leading-5 text-violet-700">Device MQTT akan dibaca dari topic final: topic khusus device jika diisi, atau default topic koneksi jika dikosongkan.</p>
                         </div>
                         <div x-show="editProtocol() === 'API'" x-cloak class="sm:col-span-2 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
                             <p class="text-xs leading-5 text-blue-700">Interval polling dipakai saat Laravel menarik data dari API/Antares.</p>
                         </div>
                         <div x-show="editProtocol() === 'MQTT'" x-cloak class="sm:col-span-2">
-                            <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Topic Device</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Topic Khusus Device (Opsional)</label>
                             <input type="text" name="mqttTopic" x-model="editData.mqttTopic"
                                 class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]20 transition-all">
                         </div>
@@ -871,8 +860,8 @@
                     </div>
                     @if($parameters->isEmpty())
                         <div class="rounded-xl border border-amber-100 bg-amber-50/70 p-3">
-                            <p class="text-xs leading-5 text-amber-700">Belum ada parameter sensor. Tambahkan parameter di section Parameter Sensor pada halaman ini terlebih dahulu.</p>
-                            <button type="button" @click="modal = 'addParameter'" class="mt-2 inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-semibold bg-white text-amber-700 border border-amber-100 hover:bg-amber-50">Tambah Parameter Sensor</button>
+                            <p class="text-xs leading-5 text-amber-700">Belum ada parameter sensor. Tambahkan kode sensor di Data Master terlebih dahulu agar mapping payload konsisten.</p>
+                            <a href="{{ route('data-master.index', ['tab' => 'sensor-parameters']) }}" class="mt-2 inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-semibold bg-white text-amber-700 border border-amber-100 hover:bg-amber-50" style="text-decoration:none;">Buka Data Master</a>
                         </div>
                     @endif
                     <div>

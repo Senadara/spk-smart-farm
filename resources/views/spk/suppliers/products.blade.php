@@ -31,24 +31,24 @@
     </x-page-hint>
 
     <section class="rounded-lg border border-gray-200 bg-white p-4 md:p-5">
-        <form action="{{ route('spk.suppliers.products') }}" method="GET" class="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
-            <div class="relative">
+        <form action="{{ route('spk.suppliers.products') }}" method="GET" class="flex flex-wrap items-center gap-2">
+            <div class="relative min-w-[240px] flex-1">
                 <svg class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 <input type="text" name="search" value="{{ $search }}" placeholder="Cari pakan, vitamin, vaksin, alat..."
-                    class="w-full rounded-lg border border-gray-300 py-3 pl-9 pr-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                    class="h-11 w-full rounded-lg border border-gray-300 pl-9 pr-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
             </div>
-            <select name="category" class="rounded-lg border border-gray-300 px-3 py-3 text-sm">
+            <select name="category" class="h-11 min-w-[170px] flex-1 rounded-lg border border-gray-300 bg-white px-3 text-sm sm:flex-none">
                 <option value="all">Semua kategori</option>
                 @foreach($categoryOptions as $option)
                     <option value="{{ $option }}" @selected($category === $option)>{{ $option }}</option>
                 @endforeach
             </select>
-            <select name="sort" class="rounded-lg border border-gray-300 px-3 py-3 text-sm">
+            <select name="sort" class="h-11 min-w-[140px] flex-1 rounded-lg border border-gray-300 bg-white px-3 text-sm sm:flex-none">
                 <option value="recommended" @selected($filterSort === 'recommended')>Rekomendasi</option>
                 <option value="cheapest" @selected($filterSort === 'cheapest')>Termurah</option>
                 <option value="closest" @selected($filterSort === 'closest')>Terdekat</option>
             </select>
-            <button class="rounded-lg bg-gray-900 px-5 py-3 text-sm font-bold text-white hover:bg-gray-800">Cari</button>
+            <button class="h-11 flex-1 rounded-lg bg-gray-900 px-5 text-sm font-bold text-white hover:bg-gray-800 sm:flex-none">Cari</button>
         </form>
 
         <div class="mt-4 flex flex-wrap gap-2">

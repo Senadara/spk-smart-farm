@@ -63,7 +63,7 @@ class LayerChickenFuzzyTemplateDefinition
 
     public static function fuzzyProductivityCodes(): array
     {
-        return ['hdp', 'feed_intake', 'mortalitas'];
+        return ['hdp', 'fcr', 'mortalitas'];
     }
 
     public static function variables(): array
@@ -74,7 +74,7 @@ class LayerChickenFuzzyTemplateDefinition
             ['group' => 'lingkungan', 'name' => 'amonia', 'type' => 'input', 'unit' => 'ppm', 'description' => 'Kadar amonia udara kandang ayam petelur.'],
             ['group' => 'lingkungan', 'name' => 'status_lingkungan', 'type' => 'output', 'unit' => 'score', 'description' => 'Status lingkungan berdasarkan rule validasi pakar.'],
             ['group' => 'kesehatan', 'name' => 'hdp', 'type' => 'input', 'unit' => '%', 'description' => 'Hen-Day Production harian.'],
-            ['group' => 'kesehatan', 'name' => 'pakan', 'type' => 'input', 'unit' => 'g/ekor/hari', 'description' => 'Konsumsi pakan per ekor per hari.'],
+            ['group' => 'kesehatan', 'name' => 'fcr', 'type' => 'input', 'unit' => 'rasio', 'description' => 'Feed Conversion Ratio sebagai indikator efisiensi pakan terhadap berat panen telur.'],
             ['group' => 'kesehatan', 'name' => 'mortalitas', 'type' => 'input', 'unit' => '% per minggu', 'description' => 'Mortalitas ayam petelur pada periode berjalan.'],
             ['group' => 'kesehatan', 'name' => 'indeks_kesehatan', 'type' => 'output', 'unit' => 'score', 'description' => 'Indeks produktivitas dan kesehatan berdasarkan rule validasi pakar.'],
             ['group' => 'kausalitas', 'name' => 'label_lingkungan', 'type' => 'input', 'unit' => 'label', 'description' => 'Kategori ringkas lingkungan untuk integrasi kausalitas.'],
@@ -91,7 +91,7 @@ class LayerChickenFuzzyTemplateDefinition
             'amonia' => self::ammoniaSets(),
             'status_lingkungan' => self::environmentOutputSets(),
             'hdp' => self::hdpSets(),
-            'pakan' => self::feedSets(),
+            'fcr' => self::fcrSets(),
             'mortalitas' => self::mortalitySets(),
             'indeks_kesehatan' => self::healthOutputSets(),
             'label_lingkungan' => self::causalityInputSets(),
@@ -131,11 +131,11 @@ class LayerChickenFuzzyTemplateDefinition
                 'function_name' => 'App\\Services\\Fuzzy\\CalculateHdp',
                 'extra_config' => null,
             ],
-            'pakan' => [
+            'fcr' => [
                 'source_type' => 'function',
                 'source_name' => null,
                 'field_name' => null,
-                'function_name' => 'App\\Services\\Fuzzy\\CalculatePakan',
+                'function_name' => 'App\\Services\\Fuzzy\\CalculateFcr',
                 'extra_config' => null,
             ],
             'mortalitas' => [
@@ -163,6 +163,7 @@ class LayerChickenFuzzyTemplateDefinition
         return match (strtolower($code)) {
             'hdp', 'hhep' => self::hdpSets(),
             'feed_intake' => self::feedSets(),
+            'fcr' => self::fcrSets(),
             'mortalitas' => self::mortalitySets(),
             default => [],
         };
@@ -189,7 +190,7 @@ class LayerChickenFuzzyTemplateDefinition
             'Sangat Boros',
             'Inefisiensi',
             'Waspada',
-            'Boros Pakan',
+            'FCR Boros',
             'Efisien Positif',
             'Sehat',
             'Sangat Sehat',
@@ -215,7 +216,7 @@ class LayerChickenFuzzyTemplateDefinition
             'Performa Stagnan',
             'Toleransi Baik',
             'Wabah Internal',
-            'Inefisiensi Pakan',
+            'Inefisiensi FCR',
             'Kondisi Optimal',
         ]);
     }
@@ -256,24 +257,24 @@ class LayerChickenFuzzyTemplateDefinition
     public static function healthRules(): array
     {
         return [
-            ['output_set' => 'Kurang Sehat', 'diagnosis' => 'Ayam tidak nafsu makan/stres', 'conditions' => [['hdp', 'Rendah'], ['pakan', 'Kurang'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Sakit Kritis', 'diagnosis' => 'Indikasi wabah penyakit', 'conditions' => [['hdp', 'Rendah'], ['pakan', 'Kurang'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Inefisiensi', 'diagnosis' => 'Masalah kualitas pakan/genetik', 'conditions' => [['hdp', 'Rendah'], ['pakan', 'Normal'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Sakit Berat', 'diagnosis' => 'Ada penyakit, ayam masih mau makan tetapi mati', 'conditions' => [['hdp', 'Rendah'], ['pakan', 'Normal'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Sangat Boros', 'diagnosis' => 'Pakan terbuang atau hama tikus', 'conditions' => [['hdp', 'Rendah'], ['pakan', 'Berlebih'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Sakit Berat', 'diagnosis' => 'Gangguan metabolisme berat', 'conditions' => [['hdp', 'Rendah'], ['pakan', 'Berlebih'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Waspada', 'diagnosis' => 'Pantau nafsu makan', 'conditions' => [['hdp', 'Sedang'], ['pakan', 'Kurang'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Sakit Sedang', 'diagnosis' => 'Gejala awal penyakit', 'conditions' => [['hdp', 'Sedang'], ['pakan', 'Kurang'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Sehat', 'diagnosis' => 'Performa standar rata-rata', 'conditions' => [['hdp', 'Sedang'], ['pakan', 'Normal'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Waspada', 'diagnosis' => 'Cek penyebab kematian fisik', 'conditions' => [['hdp', 'Sedang'], ['pakan', 'Normal'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Boros Pakan', 'diagnosis' => 'Perlu audit pemberian pakan', 'conditions' => [['hdp', 'Sedang'], ['pakan', 'Berlebih'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Sakit Sedang', 'diagnosis' => 'Indikasi masalah pencernaan', 'conditions' => [['hdp', 'Sedang'], ['pakan', 'Berlebih'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Efisien Positif', 'diagnosis' => 'FCR sangat baik', 'conditions' => [['hdp', 'Tinggi'], ['pakan', 'Kurang'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Waspada', 'diagnosis' => 'Produksi dipaksakan/indikasi kanibalisme', 'conditions' => [['hdp', 'Tinggi'], ['pakan', 'Kurang'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Sangat Sehat', 'diagnosis' => 'Kondisi target/ideal', 'conditions' => [['hdp', 'Tinggi'], ['pakan', 'Normal'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Waspada', 'diagnosis' => 'Anomali, cek faktor non-medis', 'conditions' => [['hdp', 'Tinggi'], ['pakan', 'Normal'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Sehat', 'diagnosis' => 'Produksi tinggi tetapi boros pakan', 'conditions' => [['hdp', 'Tinggi'], ['pakan', 'Berlebih'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Waspada', 'diagnosis' => 'Mortalitas tinggi saat puncak produksi', 'conditions' => [['hdp', 'Tinggi'], ['pakan', 'Berlebih'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Kurang Sehat', 'diagnosis' => 'Produksi rendah meskipun FCR efisien, perlu cek stres atau kualitas produksi', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Efisien'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Sakit Kritis', 'diagnosis' => 'Indikasi wabah penyakit dengan produksi rendah', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Efisien'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Inefisiensi', 'diagnosis' => 'Masalah kualitas pakan, genetik, atau manajemen produksi', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Normal'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Sakit Berat', 'diagnosis' => 'Produksi rendah dengan mortalitas tinggi', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Normal'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Sangat Boros', 'diagnosis' => 'FCR boros dan produksi rendah', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Boros'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Sakit Berat', 'diagnosis' => 'Gangguan metabolisme berat atau kualitas pakan buruk', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Boros'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Waspada', 'diagnosis' => 'Produksi sedang dengan FCR efisien, pantau konsistensi panen', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Efisien'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Sakit Sedang', 'diagnosis' => 'Gejala awal penyakit pada produksi sedang', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Efisien'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Sehat', 'diagnosis' => 'Performa standar rata-rata', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Normal'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Waspada', 'diagnosis' => 'Cek penyebab kematian fisik', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Normal'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'FCR Boros', 'diagnosis' => 'FCR boros, perlu audit pakan dan berat panen', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Boros'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Sakit Sedang', 'diagnosis' => 'Indikasi masalah pencernaan atau kualitas pakan', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Boros'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Efisien Positif', 'diagnosis' => 'FCR sangat baik', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Efisien'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Waspada', 'diagnosis' => 'Produksi tinggi tetapi mortalitas naik', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Efisien'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Sangat Sehat', 'diagnosis' => 'Kondisi target/ideal', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Normal'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Waspada', 'diagnosis' => 'Anomali, cek faktor non-medis', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Normal'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Sehat', 'diagnosis' => 'Produksi tinggi tetapi FCR mulai boros', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Boros'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Waspada', 'diagnosis' => 'Mortalitas tinggi saat puncak produksi', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Boros'], ['mortalitas', 'Tinggi']]],
         ];
     }
 
@@ -287,7 +288,7 @@ class LayerChickenFuzzyTemplateDefinition
             ['environment' => 'Sedang', 'productivity' => 'Sedang', 'output_set' => 'Performa Stagnan', 'recommendation' => 'Evaluasi: cek manajemen harian. Bersihkan kandang dan optimalkan program pencahayaan.'],
             ['environment' => 'Sedang', 'productivity' => 'Baik', 'output_set' => 'Toleransi Baik', 'recommendation' => 'Monitoring: kondisi stabil. Jaga kebersihan kandang agar amonia tidak naik.'],
             ['environment' => 'Baik', 'productivity' => 'Buruk', 'output_set' => 'Wabah Internal', 'recommendation' => 'Kritis medis: lingkungan ideal tetapi ayam mati/drop. Indikasi kuat virus/bakteri. Panggil dokter hewan.'],
-            ['environment' => 'Baik', 'productivity' => 'Sedang', 'output_set' => 'Inefisiensi Pakan', 'recommendation' => 'Manajemen: cek gudang pakan, seperti jamur atau tengik. Timbang ulang takaran pakan harian.'],
+            ['environment' => 'Baik', 'productivity' => 'Sedang', 'output_set' => 'Inefisiensi FCR', 'recommendation' => 'Manajemen: cek FCR, egg mass, dan takaran pakan harian. Pastikan data panen dan pakan tercatat pada periode yang sama.'],
             ['environment' => 'Baik', 'productivity' => 'Baik', 'output_set' => 'Kondisi Optimal', 'recommendation' => 'Pertahankan: lanjutkan SOP saat ini. Cek stok logistik untuk periode depan.'],
         ];
     }
@@ -317,6 +318,7 @@ class LayerChickenFuzzyTemplateDefinition
             'inefisiensi' => 'Sedang',
             'sangat boros' => 'Sedang',
             'waspada' => 'Sedang',
+            'fcr boros' => 'Sedang',
             'boros pakan' => 'Sedang',
             'sedang' => 'Sedang',
             'efisien positif' => 'Baik',
@@ -372,6 +374,15 @@ class LayerChickenFuzzyTemplateDefinition
             ['name' => 'Kurang', 'shape' => 'trapezoid', 'a' => 0, 'b' => 0, 'c' => 95, 'd' => 105],
             ['name' => 'Normal', 'shape' => 'trapezoid', 'a' => 100, 'b' => 108, 'c' => 122, 'd' => 130],
             ['name' => 'Berlebih', 'shape' => 'trapezoid', 'a' => 122, 'b' => 130, 'c' => 200, 'd' => 200],
+        ];
+    }
+
+    private static function fcrSets(): array
+    {
+        return [
+            ['name' => 'Efisien', 'shape' => 'trapezoid', 'a' => 0, 'b' => 0, 'c' => 1.85, 'd' => 2.1],
+            ['name' => 'Normal', 'shape' => 'triangle', 'a' => 1.95, 'b' => 2.25, 'c' => 2.55],
+            ['name' => 'Boros', 'shape' => 'trapezoid', 'a' => 2.4, 'b' => 2.75, 'c' => 6, 'd' => 6],
         ];
     }
 

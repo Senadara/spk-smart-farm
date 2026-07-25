@@ -14,7 +14,7 @@
 @endphp
 
 <section id="daftar-kandang" class="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-    <div class="px-5 py-4 border-b border-gray-50 bg-gradient-to-r from-emerald-50/80 to-white">
+    <div class="px-5 py-4 border-b border-gray-50 bg-emerald-50/60">
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="flex items-start gap-3">
                 <div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">

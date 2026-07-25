@@ -8,6 +8,7 @@ use App\Models\FarmProfile;
 use App\Models\SupplierProductCategory;
 use App\Models\SupplierStore;
 use App\Services\ApiService;
+use App\Services\Notifications\SupplierNotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -16,7 +17,10 @@ use Illuminate\View\View;
 
 class RegisterController extends Controller
 {
-    public function __construct(private readonly ApiService $api) {}
+    public function __construct(
+        private readonly ApiService $api,
+        private readonly SupplierNotificationService $supplierNotificationService,
+    ) {}
 
     public function index(): View
     {
@@ -33,6 +37,11 @@ class RegisterController extends Controller
         return view('auth.register.supplier', [
             'categoryOptions' => SupplierProductCategory::activeOptions(),
         ]);
+    }
+
+    public function supplierSubmitted(): View
+    {
+        return view('auth.register.supplier-submitted');
     }
 
     public function storeOwner(Request $request): RedirectResponse
@@ -114,27 +123,34 @@ class RegisterController extends Controller
         }
 
         $userId = data_get($response, 'data.id');
+        $store = null;
         if ($userId) {
-            SupplierStore::query()->updateOrCreate(
+            $store = SupplierStore::query()->updateOrCreate(
                 ['userId' => $userId, 'isDeleted' => false],
                 [
                     'id' => SupplierStore::query()->where('userId', $userId)->value('id') ?? Str::uuid()->toString(),
                     'nama' => $validated['store_name'],
                     'phone' => $this->normalizeWhatsApp($validated['phone']),
+                    'notificationEmail' => $validated['email'],
                     'alamat' => $validated['alamat'],
                     'latitude' => $validated['latitude'] ?? null,
                     'longitude' => $validated['longitude'] ?? null,
                     'deskripsi' => $validated['deskripsi'] ?? null,
                     'kategori' => $this->normalizeCategories($validated['kategori']),
                     'tokoStatus' => 'request',
+                    'registrationNotifiedAt' => now(),
                     'TypeToko' => 'umkm',
                 ]
             );
         }
 
+        if ($store) {
+            $this->supplierNotificationService->supplierRegistrationSubmitted($store);
+        }
+
         return redirect()
-            ->route('login')
-            ->with('success', 'Akun supplier berhasil diajukan. Toko akan tampil untuk owner setelah disetujui super admin.');
+            ->route('register.supplier.submitted')
+            ->with('success', 'Pengajuan supplier berhasil dikirim. Silakan tunggu informasi approval melalui email.');
     }
 
     private function normalizeCategories(array $categories): string

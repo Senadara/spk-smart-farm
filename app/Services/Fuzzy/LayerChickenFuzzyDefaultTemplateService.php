@@ -177,17 +177,31 @@ class LayerChickenFuzzyDefaultTemplateService
             ->where('jenis_budidaya_id', $jenisBudidayaId)
             ->value('id') ?: (string) Str::uuid();
 
+        $configPayload = [
+            'id' => $configId,
+            'commodity_id' => $commodityId,
+            'status' => 'configured',
+            'notes' => 'Default ayam petelur berdasarkan rule validasi pakar.',
+            'configured_at' => now(),
+            'createdAt' => now(),
+            'updatedAt' => now(),
+        ];
+
+        if (Schema::hasColumn('livestock_master_configs', 'afkir_label')) {
+            $configPayload['afkir_label'] = 'Afkir layer';
+        }
+
+        if (Schema::hasColumn('livestock_master_configs', 'afkir_target_weeks')) {
+            $configPayload['afkir_target_weeks'] = 80;
+        }
+
+        if (Schema::hasColumn('livestock_master_configs', 'afkir_warning_weeks')) {
+            $configPayload['afkir_warning_weeks'] = 8;
+        }
+
         DB::table('livestock_master_configs')->updateOrInsert(
             ['jenis_budidaya_id' => $jenisBudidayaId],
-            [
-                'id' => $configId,
-                'commodity_id' => $commodityId,
-                'status' => 'configured',
-                'notes' => 'Default ayam petelur berdasarkan rule validasi pakar.',
-                'configured_at' => now(),
-                'createdAt' => now(),
-                'updatedAt' => now(),
-            ]
+            $configPayload
         );
 
         $fuzzyEnvironmentCodes = collect(LayerChickenFuzzyTemplateDefinition::masterEnvironmentRows())

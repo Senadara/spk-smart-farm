@@ -43,7 +43,7 @@
         </div>
         <div class="rounded-xl border border-sky-100 bg-sky-50 p-3">
             <div class="text-xs font-bold uppercase tracking-wide text-sky-700">Laporan Mobile</div>
-            <p class="mt-1 text-xs leading-5 text-sky-800">Metric panen, pakan, dan mortalitas dibaca dari laporan harian yang masuk ke backend.</p>
+            <p class="mt-1 text-xs leading-5 text-sky-800">Metric panen, FCR, dan mortalitas dibaca dari laporan harian dan fungsi produktivitas backend.</p>
         </div>
         <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
             <div class="text-xs font-bold uppercase tracking-wide text-gray-700">Function Produktivitas</div>

@@ -107,12 +107,16 @@
                 </div>
                 <div class="divide-y divide-gray-100">
                     @forelse($products as $product)
+                        @php
+                            $minimumStock = (int) ($product->minimum_stock ?? 10);
+                            $isLowStock = (int) $product->stok <= $minimumStock;
+                        @endphp
                         <div class="px-5 py-3 flex items-center justify-between gap-4">
                             <div class="min-w-0">
                                 <p class="text-sm font-semibold text-gray-800 truncate">{{ $product->nama }}</p>
-                                <p class="text-xs text-gray-500">Rp {{ number_format($product->harga, 0, ',', '.') }}</p>
+                                <p class="text-xs text-gray-500">Rp {{ number_format($product->harga, 0, ',', '.') }} / min {{ $minimumStock }} {{ $product->satuan }}</p>
                             </div>
-                            <span class="shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold {{ $product->stok <= 10 ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600' }}">
+                            <span class="shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold {{ $isLowStock ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600' }}">
                                 {{ $product->stok }} {{ $product->satuan }}
                             </span>
                         </div>

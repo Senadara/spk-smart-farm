@@ -13,6 +13,11 @@ class InputResolver
 {
     public function resolve(?string $coopId = null, ?string $commodityId = null, ?string $profileId = null): array
     {
+        return $this->resolveWithMeta($coopId, $commodityId, $profileId)['inputs'];
+    }
+
+    public function resolveWithMeta(?string $coopId = null, ?string $commodityId = null, ?string $profileId = null): array
+    {
         $profile = SpkFuzzyProfile::resolveForContext($commodityId, $coopId, $profileId);
         $profileId = $profile?->id ?: $profileId;
         $commodityId = $commodityId ?: $profile?->commodity_id;
@@ -23,6 +28,7 @@ class InputResolver
             ->get();
 
         $inputs = [];
+        $meta = [];
 
         foreach ($variables as $var) {
             if ($var->group === 'kausalitas') {
@@ -34,29 +40,73 @@ class InputResolver
             if (! $source) {
                 Log::warning("[InputResolver] Variable '{$var->name}' has no input source, defaulting to 0.");
                 $inputs[$var->name] = 0.0;
+                $meta[$var->name] = [
+                    'variable' => $var->name,
+                    'label' => $var->description ?: $var->name,
+                    'source_type' => null,
+                    'status' => 'missing',
+                    'value' => 0.0,
+                    'message' => 'Variabel belum memiliki sumber data.',
+                    'fallback' => true,
+                ];
                 continue;
             }
 
             try {
-                $value = match ($source->source_type) {
-                    'iot' => $this->resolveIot($source, $coopId),
-                    'report_metric' => $this->resolveReportMetric($source, $coopId, $commodityId),
-                    'database' => $this->resolveDatabase($source, $coopId, $commodityId),
-                    'function' => $this->resolveFunction($source, $coopId, $commodityId, $profileId),
-                    default => 0.0,
-                };
+                [$value, $sourceMeta] = $this->resolveSourceWithMeta($source, $coopId, $commodityId, $profileId);
 
                 $inputs[$var->name] = (float) ($value ?? 0.0);
+                $meta[$var->name] = array_merge([
+                    'variable' => $var->name,
+                    'label' => $var->description ?: $var->name,
+                    'source_type' => $source->source_type,
+                    'value' => $inputs[$var->name],
+                    'fallback' => false,
+                ], $sourceMeta);
             } catch (\Throwable $e) {
                 Log::error("[InputResolver] Error resolving '{$var->name}': " . $e->getMessage());
                 $inputs[$var->name] = 0.0;
+                $meta[$var->name] = [
+                    'variable' => $var->name,
+                    'label' => $var->description ?: $var->name,
+                    'source_type' => $source->source_type,
+                    'status' => 'error',
+                    'value' => 0.0,
+                    'message' => $e->getMessage(),
+                    'fallback' => true,
+                ];
             }
         }
 
-        return $inputs;
+        return [
+            'inputs' => $inputs,
+            'meta' => $meta,
+            'profile_id' => $profileId,
+            'commodity_id' => $commodityId,
+        ];
+    }
+
+    private function resolveSourceWithMeta($source, ?string $coopId, ?string $commodityId, ?string $profileId): array
+    {
+        return match ($source->source_type) {
+            'iot' => $this->resolveIotWithMeta($source, $coopId),
+            'report_metric' => $this->resolveReportMetricWithMeta($source, $coopId, $commodityId),
+            'database' => $this->resolveDatabaseWithMeta($source, $coopId, $commodityId),
+            'function' => $this->resolveFunctionWithMeta($source, $coopId, $commodityId, $profileId),
+            default => [0.0, [
+                'status' => 'missing',
+                'message' => 'Tipe sumber data tidak dikenali.',
+                'fallback' => true,
+            ]],
+        };
     }
 
     private function resolveIot($source, ?string $coopId): float
+    {
+        return (float) $this->resolveIotWithMeta($source, $coopId)[0];
+    }
+
+    private function resolveIotWithMeta($source, ?string $coopId): array
     {
         $config = $source->extra_config ?? [];
         $paramCode = $config['parameterCode'] ?? null;
@@ -87,18 +137,39 @@ class InputResolver
 
         if (! $row) {
             $this->markIotMiss(null, $coopId, $paramCode, $config, 'Tidak ada data sensor.');
-            return $fallbackValue;
+            return [$fallbackValue, [
+                'status' => 'missing',
+                'message' => 'Tidak ada data sensor.',
+                'parameter_code' => $paramCode,
+                'max_age_minutes' => $maxAgeMinutes,
+                'fallback' => true,
+            ]];
         }
 
         $timestamp = Carbon::parse($row->sensorTimestamp);
         if ($maxAgeMinutes > 0 && $timestamp->lt(now()->subMinutes($maxAgeMinutes))) {
             $this->markIotMiss((string) $row->deviceId, $coopId, $paramCode, $config, "Data sensor lebih lama dari {$maxAgeMinutes} menit.");
-            return $fallbackValue;
+            return [$fallbackValue, [
+                'status' => 'stale',
+                'message' => "Data sensor lebih lama dari {$maxAgeMinutes} menit.",
+                'parameter_code' => $paramCode,
+                'device_id' => (string) $row->deviceId,
+                'sensor_timestamp' => $timestamp->toDateTimeString(),
+                'max_age_minutes' => $maxAgeMinutes,
+                'fallback' => true,
+            ]];
         }
 
         $this->markIotOnline((string) $row->deviceId, $timestamp);
 
-        return (float) ($row->value ?? 0.0);
+        return [(float) ($row->value ?? 0.0), [
+            'status' => 'ok',
+            'message' => 'Data sensor tersedia.',
+            'parameter_code' => $paramCode,
+            'device_id' => (string) $row->deviceId,
+            'sensor_timestamp' => $timestamp->toDateTimeString(),
+            'max_age_minutes' => $maxAgeMinutes,
+        ]];
     }
 
     private function iotFallbackValue(?string $paramCode, array $config): float
@@ -119,11 +190,21 @@ class InputResolver
 
     private function resolveReportMetric($source, ?string $coopId, ?string $commodityId): float
     {
+        return (float) $this->resolveReportMetricWithMeta($source, $coopId, $commodityId)[0];
+    }
+
+    private function resolveReportMetricWithMeta($source, ?string $coopId, ?string $commodityId): array
+    {
         $config = $source->extra_config ?? [];
         $metricCode = $config['metricCode'] ?? $source->field_name;
 
         if (! $metricCode || ! Schema::hasTable('daily_report_metrics')) {
-            return 0.0;
+            return [0.0, [
+                'status' => 'missing',
+                'message' => 'Metric laporan belum tersedia.',
+                'metric_code' => $metricCode,
+                'fallback' => true,
+            ]];
         }
 
         $aggregation = strtolower((string) ($config['aggregation'] ?? 'sum'));
@@ -138,15 +219,31 @@ class InputResolver
         $this->applyReportScope($query, $coopId, $commodityId);
         $this->applyDateScope($query, 'laporan.createdAt', $dateScope);
 
-        return match ($aggregation) {
-            'avg', 'average' => (float) $query->avg('daily_report_metrics.value'),
-            'count' => (float) $query->count(),
-            'latest' => (float) ($query->orderBy('laporan.createdAt', 'desc')->orderBy('daily_report_metrics.createdAt', 'desc')->value('daily_report_metrics.value') ?? 0.0),
-            default => (float) $query->sum('daily_report_metrics.value'),
+        $recordCount = (clone $query)->count();
+        $value = match ($aggregation) {
+            'avg', 'average' => (float) ((clone $query)->avg('daily_report_metrics.value') ?? 0.0),
+            'count' => (float) $recordCount,
+            'latest' => (float) ((clone $query)->orderBy('laporan.createdAt', 'desc')->orderBy('daily_report_metrics.createdAt', 'desc')->value('daily_report_metrics.value') ?? 0.0),
+            default => (float) ((clone $query)->sum('daily_report_metrics.value') ?? 0.0),
         };
+
+        return [$value, [
+            'status' => $recordCount > 0 ? 'ok' : 'missing',
+            'message' => $recordCount > 0 ? 'Metric laporan tersedia.' : 'Metric laporan belum terisi pada periode ini.',
+            'metric_code' => $metricCode,
+            'aggregation' => $aggregation,
+            'date_scope' => $dateScope,
+            'records' => $recordCount,
+            'fallback' => $recordCount === 0,
+        ]];
     }
 
     private function resolveDatabase($source, ?string $coopId, ?string $commodityId): float
+    {
+        return (float) $this->resolveDatabaseWithMeta($source, $coopId, $commodityId)[0];
+    }
+
+    private function resolveDatabaseWithMeta($source, ?string $coopId, ?string $commodityId): array
     {
         $allowed = $this->allowedDatabaseFields();
         $tableName = $source->source_name;
@@ -154,11 +251,23 @@ class InputResolver
 
         if (! $tableName || ! $fieldName || ! isset($allowed[$tableName]) || ! in_array($fieldName, $allowed[$tableName], true)) {
             Log::warning("[InputResolver] Database source '{$tableName}.{$fieldName}' is not allowed.");
-            return 0.0;
+            return [0.0, [
+                'status' => 'missing',
+                'message' => 'Sumber database tidak diizinkan.',
+                'table' => $tableName,
+                'field' => $fieldName,
+                'fallback' => true,
+            ]];
         }
 
         if (! Schema::hasTable($tableName) || ! Schema::hasColumn($tableName, $fieldName)) {
-            return 0.0;
+            return [0.0, [
+                'status' => 'missing',
+                'message' => 'Kolom sumber database belum tersedia.',
+                'table' => $tableName,
+                'field' => $fieldName,
+                'fallback' => true,
+            ]];
         }
 
         $config = $source->extra_config ?? [];
@@ -181,34 +290,67 @@ class InputResolver
             $query->where("{$tableName}.isDeleted", 0);
         }
 
-        return match ($aggregation) {
-            'avg', 'average' => (float) $query->avg("{$tableName}.{$fieldName}"),
-            'count' => (float) $query->count(),
-            'latest' => (float) ($query->orderBy("{$tableName}.createdAt", 'desc')->value("{$tableName}.{$fieldName}") ?? 0.0),
-            default => (float) $query->sum("{$tableName}.{$fieldName}"),
+        $recordCount = (clone $query)->count();
+        $value = match ($aggregation) {
+            'avg', 'average' => (float) ((clone $query)->avg("{$tableName}.{$fieldName}") ?? 0.0),
+            'count' => (float) $recordCount,
+            'latest' => (float) ((clone $query)->orderBy("{$tableName}.createdAt", 'desc')->value("{$tableName}.{$fieldName}") ?? 0.0),
+            default => (float) ((clone $query)->sum("{$tableName}.{$fieldName}") ?? 0.0),
         };
+
+        return [$value, [
+            'status' => $recordCount > 0 ? 'ok' : 'missing',
+            'message' => $recordCount > 0 ? 'Data operasional tersedia.' : 'Data operasional belum tersedia pada periode ini.',
+            'table' => $tableName,
+            'field' => $fieldName,
+            'aggregation' => $aggregation,
+            'date_scope' => $dateScope,
+            'records' => $recordCount,
+            'fallback' => $recordCount === 0,
+        ]];
     }
 
     private function resolveFunction($source, ?string $coopId, ?string $commodityId, ?string $profileId): float
+    {
+        return (float) $this->resolveFunctionWithMeta($source, $coopId, $commodityId, $profileId)[0];
+    }
+
+    private function resolveFunctionWithMeta($source, ?string $coopId, ?string $commodityId, ?string $profileId): array
     {
         $className = $source->function_name;
 
         if (! $className || ! class_exists($className)) {
             Log::warning("[InputResolver] Function class '{$className}' was not found.");
-            return 0.0;
+            return [0.0, [
+                'status' => 'missing',
+                'message' => 'Fungsi kalkulasi belum tersedia.',
+                'function' => $className,
+                'fallback' => true,
+            ]];
         }
 
         $service = app($className);
 
         if (! method_exists($service, 'handle')) {
             Log::warning("[InputResolver] Function class '{$className}' does not have handle().");
-            return 0.0;
+            return [0.0, [
+                'status' => 'missing',
+                'message' => 'Fungsi kalkulasi tidak memiliki method handle.',
+                'function' => $className,
+                'fallback' => true,
+            ]];
         }
 
         $reflection = new \ReflectionMethod($service, 'handle');
         $args = array_slice([$coopId, $commodityId, $profileId], 0, $reflection->getNumberOfParameters());
 
-        return (float) $service->handle(...$args);
+        $value = (float) $service->handle(...$args);
+
+        return [$value, [
+            'status' => 'ok',
+            'message' => 'Nilai kalkulasi tersedia.',
+            'function' => $className,
+        ]];
     }
 
     private function applyReportScope($query, ?string $coopId, ?string $commodityId): void

@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\SpkFuzzyProfile;
 use App\Models\SpkFuzzyRule;
+use App\Models\SpkFuzzyRuleCondition;
 use App\Models\SpkFuzzySet;
 use App\Models\SpkFuzzyVariable;
+use App\Services\Fuzzy\FuzzyProfileTemplateService;
 use App\Services\Fuzzy\MamdaniEngine;
 use Database\Seeders\SpkFuzzySeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -127,7 +129,43 @@ class SpkFuzzyTest extends TestCase
 
         $this->assertDatabaseHas('spk_fuzzy_sets', ['name' => 'Sangat Nyaman']);
         $this->assertDatabaseHas('spk_fuzzy_sets', ['name' => 'Sakit Kritis']);
-        $this->assertDatabaseHas('spk_fuzzy_sets', ['name' => 'Inefisiensi Pakan']);
+        $this->assertDatabaseHas('spk_fuzzy_sets', ['name' => 'Inefisiensi FCR']);
+    }
+
+    public function test_sync_repairs_missing_default_health_rules_with_fcr(): void
+    {
+        $profile = SpkFuzzyProfile::query()
+            ->where('name', 'Ayam Petelur - RFC v1')
+            ->first();
+
+        $this->assertNotNull($profile);
+
+        $healthRuleIds = SpkFuzzyRule::query()
+            ->where('profile_id', $profile->id)
+            ->where('group', 'kesehatan')
+            ->pluck('id');
+
+        SpkFuzzyRuleCondition::query()->whereIn('rule_id', $healthRuleIds)->delete();
+        SpkFuzzyRule::query()->whereIn('id', $healthRuleIds)->delete();
+
+        $this->assertSame(0, SpkFuzzyRule::where('profile_id', $profile->id)->where('group', 'kesehatan')->count());
+
+        app(FuzzyProfileTemplateService::class)->syncFromMaster($profile->fresh());
+
+        $this->assertSame(18, SpkFuzzyRule::where('profile_id', $profile->id)->where('group', 'kesehatan')->count());
+
+        $healthConditionVariables = SpkFuzzyRuleCondition::query()
+            ->join('spk_fuzzy_rules', 'spk_fuzzy_rules.id', '=', 'spk_fuzzy_rule_conditions.rule_id')
+            ->join('spk_fuzzy_variables', 'spk_fuzzy_variables.id', '=', 'spk_fuzzy_rule_conditions.variable_id')
+            ->where('spk_fuzzy_rules.profile_id', $profile->id)
+            ->where('spk_fuzzy_rules.group', 'kesehatan')
+            ->pluck('spk_fuzzy_variables.name')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        $this->assertSame(['fcr', 'hdp', 'mortalitas'], $healthConditionVariables);
     }
 
     public function test_cascaded_process_uses_validated_excel_rules(): void
@@ -141,7 +179,7 @@ class SpkFuzzyTest extends TestCase
             'kelembapan' => 60,
             'amonia' => 5,
             'hdp' => 90,
-            'pakan' => 115,
+            'fcr' => 2.1,
             'mortalitas' => 0.1,
         ], $profile?->id, $profile?->commodity_id);
 

@@ -23,6 +23,7 @@ class SpkFuzzyLog extends Model
         'profile_id',
         'commodity_id',
         'input_json',
+        'input_meta_json',
         'fuzzified_json',
         'rule_result_json',
         'status_lingkungan',
@@ -36,6 +37,7 @@ class SpkFuzzyLog extends Model
 
     protected $casts = [
         'input_json'      => 'array',
+        'input_meta_json' => 'array',
         'fuzzified_json'  => 'array',
         'rule_result_json'=> 'array',
         'output_value'    => 'float',

@@ -34,6 +34,7 @@ class SpkReportUploadTest extends TestCase
         ]);
 
         $response = $this->withSession([
+            '_token' => 'spk-report-token',
             'api_token' => 'testing-token',
             'user' => [
                 'id' => $user->id,
@@ -42,6 +43,7 @@ class SpkReportUploadTest extends TestCase
                 'role' => $user->role,
             ],
         ])->post("/penugasan/{$taskId}/report", [
+            '_token' => 'spk-report-token',
             'description' => 'Pekerjaan telah selesai dan bukti foto terlampir.',
             'status_update' => 'done',
             'photo' => UploadedFile::fake()->createWithContent(
