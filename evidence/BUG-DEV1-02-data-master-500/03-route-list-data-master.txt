@@ -1,0 +1,6 @@
+
+  GET|HEAD   data-master ...... data-master.index › DataMasterController@index
+  POST       data-master/livestock data-master.livestock.store › DataMasterCo…
+
+                                                            Showing [2] routes
+

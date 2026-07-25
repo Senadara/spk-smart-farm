@@ -1,0 +1,48 @@
+BUG-DEV1-02 — Halaman Data Master HTTP 500
+===========================================
+Tanggal uji : 2026-07-23
+Penguji     : QA
+Branch      : testing (setelah merge origin/feature/health-indication-merge)
+Commit app  : d67b363 "Fix fuzzy rule template and active tab styling" (Dev1 Nanda)
+URL         : http://127.0.0.1:8000/data-master
+Role        : Penanggung Jawab (pjawab@email.com)
+
+HASIL
+-----
+HTTP 500 (Server Error). Diverifikasi 2 cara:
+- Playwright: response.status() = 500 (lihat 01-data-master-http500.png)
+- Manual browser: tampil halaman "500 | SERVER ERROR"
+
+AKAR MASALAH (dari log Laravel)
+-------------------------------
+Symfony\Component\Routing\Exception\RouteNotFoundException:
+  Route [data-master.stock-categories.update] not defined.
+  at vendor/laravel/framework/src/Illuminate/Routing/UrlGenerator.php:517
+
+Dipicu oleh view resources/views/data-master/index.blade.php:
+  L71: route('data-master.stock-categories.update', $category->id)
+  L88: route('data-master.stock-categories.store')
+
+Route 'data-master.stock-categories.update' dan 'data-master.stock-categories.store'
+TIDAK terdaftar di routes/web.php (lihat 03-route-list-data-master.txt — tidak ada
+route stock-categories.* untuk data-master).
+
+BUKTI INI REGRESI (bukan efek pull QA)
+--------------------------------------
+- Sebelum pull: data-master/index.blade.php punya 0 referensi 'stock-categories'.
+- Sesudah pull: 4 referensi 'stock-categories' (ditambahkan commit Nanda).
+- Sebelum pull, test e2e data-master (data-master-blocks & data-master-users) LOLOS,
+  membuktikan halaman /data-master sehat sebelum pull.
+
+LANGKAH REPRODUKSI
+------------------
+1. Login sebagai pjawab@email.com / Password123.
+2. Buka http://127.0.0.1:8000/data-master (atau Settings > kartu "Data Master").
+3. Halaman menampilkan 500 | SERVER ERROR.
+
+SARAN PERBAIKAN (untuk Dev1)
+----------------------------
+Daftarkan route 'data-master.stock-categories.store' (POST) dan
+'data-master.stock-categories.update' (PUT/PATCH) di routes/web.php pada grup
+data-master, mengarah ke aksi controller yang sesuai di DataMasterController,
+atau sesuaikan pemanggilan route() di data-master/index.blade.php.

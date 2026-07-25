@@ -2,5 +2,5 @@ projectKey=smart-farm
 serverUrl=http://localhost:9099
 serverVersion=25.3.0.104237
 dashboardUrl=http://localhost:9099/dashboard?id=smart-farm
-ceTaskId=bf166686-1327-46fa-9284-346ce4979f08
-ceTaskUrl=http://localhost:9099/api/ce/task?id=bf166686-1327-46fa-9284-346ce4979f08
+ceTaskId=229937d3-44fc-4fe3-8d49-14025b5c5feb
+ceTaskUrl=http://localhost:9099/api/ce/task?id=229937d3-44fc-4fe3-8d49-14025b5c5feb
