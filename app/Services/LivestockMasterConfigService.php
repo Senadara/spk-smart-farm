@@ -303,6 +303,7 @@ class LivestockMasterConfigService
             'selectedOperationalFunctionIds' => $selectedConfig
                 ? $this->selectedOperationalFunctionIdsForConfig((string) $selectedConfig->id)
                 : [],
+            'afkirConfig' => $this->afkirConfigForJenis($selectedJenisBudidayaId),
             'productivityFunctions' => $this->productivityCatalog(),
         ];
     }
@@ -316,6 +317,50 @@ class LivestockMasterConfigService
         return DB::table('livestock_master_configs')
             ->where('jenis_budidaya_id', $jenisBudidayaId)
             ->first();
+    }
+
+    public function afkirConfigForCommodity(?string $commodityId): array
+    {
+        $jenisBudidayaId = null;
+        if ($commodityId) {
+            $jenisBudidayaId = $this->livestockCommodities()
+                ->firstWhere('id', $commodityId)
+                ?->jenisBudidayaId;
+        }
+
+        return $this->afkirConfigForJenis($jenisBudidayaId);
+    }
+
+    public function afkirConfigForJenis(?string $jenisBudidayaId): array
+    {
+        $type = $jenisBudidayaId
+            ? $this->livestockTypes()->firstWhere('id', $jenisBudidayaId)
+            : null;
+        $defaults = $this->defaultAfkirCycleSettings($type?->nama);
+
+        if (! $jenisBudidayaId || ! $this->hasSchema()) {
+            return $defaults;
+        }
+
+        $config = $this->configForJenis($jenisBudidayaId);
+        if (! $config || ! Schema::hasColumn('livestock_master_configs', 'afkir_target_weeks')) {
+            return $defaults;
+        }
+
+        $targetWeeks = $this->nullableInteger($config->afkir_target_weeks ?? null);
+        $warningWeeks = Schema::hasColumn('livestock_master_configs', 'afkir_warning_weeks')
+            ? $this->nullableInteger($config->afkir_warning_weeks ?? null)
+            : null;
+        $label = Schema::hasColumn('livestock_master_configs', 'afkir_label')
+            ? trim((string) ($config->afkir_label ?? ''))
+            : '';
+
+        return [
+            'label' => $label !== '' ? $label : $defaults['label'],
+            'target_weeks' => $targetWeeks ?? $defaults['target_weeks'],
+            'warning_weeks' => $warningWeeks ?? $defaults['warning_weeks'],
+            'is_configured' => $targetWeeks !== null,
+        ];
     }
 
     public function readinessForCommodity(?string $commodityId): array
@@ -829,6 +874,7 @@ class LivestockMasterConfigService
             'data_master_function_count' => $productivityFunctions->count(),
             'master_productivity_functions' => $productivityFunctions->values()->all(),
             'environment_parameters' => $environmentParameters->values()->all(),
+            'afkir_config' => $this->afkirConfigForCommodity($commodityId),
             'productivity_functions' => $spkStatus['productivity_parameters'],
             'environment_count' => $environmentParameters->count(),
             'function_count' => $spkStatus['productivity_count'],
@@ -921,18 +967,33 @@ class LivestockMasterConfigService
             $configId = $config?->id ?: (string) Str::uuid();
             $now = now();
 
+            $configPayload = [
+                'id' => $configId,
+                'commodity_id' => $commodityId,
+                'status' => $environmentRows->isNotEmpty() ? 'configured' : 'draft',
+                'notes' => $data['notes'] ?? null,
+                'configured_by' => $data['configured_by'] ?? null,
+                'configured_at' => $environmentRows->isNotEmpty() || $productivityRows->where('is_active', true)->isNotEmpty() ? $now : null,
+                'createdAt' => $config?->createdAt ?? $now,
+                'updatedAt' => $now,
+            ];
+
+            if (Schema::hasColumn('livestock_master_configs', 'afkir_label')) {
+                $label = trim((string) ($data['afkir_label'] ?? ''));
+                $configPayload['afkir_label'] = $label !== '' ? $label : $this->defaultAfkirCycleSettings($this->livestockTypes()->firstWhere('id', $jenisBudidayaId)?->nama)['label'];
+            }
+
+            if (Schema::hasColumn('livestock_master_configs', 'afkir_target_weeks')) {
+                $configPayload['afkir_target_weeks'] = $this->nullableInteger($data['afkir_target_weeks'] ?? null);
+            }
+
+            if (Schema::hasColumn('livestock_master_configs', 'afkir_warning_weeks')) {
+                $configPayload['afkir_warning_weeks'] = $this->nullableInteger($data['afkir_warning_weeks'] ?? null) ?? 4;
+            }
+
             DB::table('livestock_master_configs')->updateOrInsert(
                 ['jenis_budidaya_id' => $jenisBudidayaId],
-                [
-                    'id' => $configId,
-                    'commodity_id' => $commodityId,
-                    'status' => $environmentRows->isNotEmpty() ? 'configured' : 'draft',
-                    'notes' => $data['notes'] ?? null,
-                    'configured_by' => $data['configured_by'] ?? null,
-                    'configured_at' => $environmentRows->isNotEmpty() || $productivityRows->where('is_active', true)->isNotEmpty() ? $now : null,
-                    'createdAt' => $config?->createdAt ?? $now,
-                    'updatedAt' => $now,
-                ]
+                $configPayload
             );
 
             $activeCodes = [];
@@ -1409,6 +1470,54 @@ class LivestockMasterConfigService
         }
 
         return is_numeric($value) ? (float) $value : null;
+    }
+
+    private function nullableInteger(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return is_numeric($value) ? max(0, (int) $value) : null;
+    }
+
+    private function defaultAfkirCycleSettings(?string $typeName = null): array
+    {
+        $name = strtolower((string) $typeName);
+
+        if (str_contains($name, 'petelur') || str_contains($name, 'layer')) {
+            return [
+                'label' => 'Afkir layer',
+                'target_weeks' => 80,
+                'warning_weeks' => 8,
+                'is_configured' => false,
+            ];
+        }
+
+        if (str_contains($name, 'potong') || str_contains($name, 'broiler') || str_contains($name, 'pedaging')) {
+            return [
+                'label' => 'Akhir siklus panen',
+                'target_weeks' => 6,
+                'warning_weeks' => 1,
+                'is_configured' => false,
+            ];
+        }
+
+        if (str_contains($name, 'lele') || str_contains($name, 'ikan')) {
+            return [
+                'label' => 'Akhir siklus panen',
+                'target_weeks' => 12,
+                'warning_weeks' => 2,
+                'is_configured' => false,
+            ];
+        }
+
+        return [
+            'label' => 'Afkir / akhir siklus',
+            'target_weeks' => null,
+            'warning_weeks' => 4,
+            'is_configured' => false,
+        ];
     }
 
     private function defaultFunctionMap(): array

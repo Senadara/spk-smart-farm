@@ -43,7 +43,7 @@
 
         $groupDescriptions = [
             'lingkungan' => 'Sensor kandang dan kualitas udara.',
-            'kesehatan' => 'Laporan produksi dan konsumsi pakan.',
+            'kesehatan' => 'Laporan produksi, FCR, dan mortalitas.',
         ];
 
         $statusClass = function (?string $label) {
@@ -192,7 +192,7 @@
                                 <button type="button" data-preset="environment_bad" class="preset-btn rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-left text-xs font-bold text-red-800 transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-100">Lingkungan buruk</button>
                                 <button type="button" data-preset="productivity_bad" class="preset-btn rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-left text-xs font-bold text-amber-800 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-100">Produktivitas buruk</button>
                                 <button type="button" data-preset="critical" class="preset-btn rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-xs font-bold text-slate-800 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-100">Kondisi kritis</button>
-                                <button type="button" data-preset="feed_excess" class="preset-btn rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-left text-xs font-bold text-sky-800 transition hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-100 sm:col-span-2">Pakan berlebih</button>
+                                <button type="button" data-preset="fcr_bad" class="preset-btn rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-left text-xs font-bold text-sky-800 transition hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-100 sm:col-span-2">FCR boros</button>
                             </div>
                         </div>
                     </section>
@@ -456,11 +456,11 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const presets = {
-                optimal: { suhu: 27, kelembapan: 65, humidity: 65, amonia: 5, hdp: 85, pakan: 115, mortalitas: 0.1 },
-                environment_bad: { suhu: 34, kelembapan: 85, humidity: 85, amonia: 30, hdp: 82, pakan: 115, mortalitas: 0.2 },
-                productivity_bad: { suhu: 27, kelembapan: 65, humidity: 65, amonia: 5, hdp: 55, pakan: 80, mortalitas: 1.5 },
-                critical: { suhu: 35, kelembapan: 88, humidity: 88, amonia: 35, hdp: 50, pakan: 75, mortalitas: 2 },
-                feed_excess: { suhu: 28, kelembapan: 68, humidity: 68, amonia: 8, hdp: 60, pakan: 145, mortalitas: 0.5 },
+                optimal: { suhu: 27, kelembapan: 65, humidity: 65, amonia: 5, hdp: 85, fcr: 2.1, mortalitas: 0.1 },
+                environment_bad: { suhu: 34, kelembapan: 85, humidity: 85, amonia: 30, hdp: 82, fcr: 2.1, mortalitas: 0.2 },
+                productivity_bad: { suhu: 27, kelembapan: 65, humidity: 65, amonia: 5, hdp: 55, fcr: 2.6, mortalitas: 1.5 },
+                critical: { suhu: 35, kelembapan: 88, humidity: 88, amonia: 35, hdp: 50, fcr: 2.9, mortalitas: 2 },
+                fcr_bad: { suhu: 28, kelembapan: 68, humidity: 68, amonia: 8, hdp: 60, fcr: 2.85, mortalitas: 0.5 },
             };
 
             const aliases = {
@@ -472,6 +472,7 @@
                 ammonia: 'amonia',
                 feed: 'pakan',
                 konsumsi_pakan: 'pakan',
+                feed_conversion_ratio: 'fcr',
                 mortality: 'mortalitas',
             };
 

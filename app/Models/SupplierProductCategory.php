@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -39,20 +40,93 @@ class SupplierProductCategory extends Model
 
     public static function activeOptions(): Collection
     {
-        if (! Schema::hasTable((new self)->getTable())) {
-            return collect(self::defaultNames());
+        if (Schema::hasTable('kategoriInventaris')) {
+            $hasSharedRows = DB::table('kategoriInventaris')->exists();
+            $query = DB::table('kategoriInventaris')
+                ->orderBy('nama');
+
+            if (Schema::hasColumn('kategoriInventaris', 'isDeleted')) {
+                $query->where('isDeleted', false);
+            }
+
+            $names = $query->pluck('nama')
+                ->map(fn ($name) => trim((string) $name))
+                ->filter()
+                ->unique(fn ($name) => Str::lower((string) $name))
+                ->values();
+
+            if ($names->isNotEmpty() || $hasSharedRows) {
+                return $names;
+            }
         }
 
-        $names = self::query()
-            ->active()
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->pluck('name')
-            ->map(fn ($name) => trim((string) $name))
-            ->filter()
-            ->values();
+        if (Schema::hasTable((new self)->getTable())) {
+            $names = self::query()
+                ->active()
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->pluck('name')
+                ->map(fn ($name) => trim((string) $name))
+                ->filter()
+                ->unique(fn ($name) => Str::lower((string) $name))
+                ->values();
 
-        return $names->isNotEmpty() ? $names : collect(self::defaultNames());
+            if ($names->isNotEmpty()) {
+                return $names;
+            }
+        }
+
+        return collect(self::defaultNames());
+    }
+
+    public static function syncFromMobileMaster(): void
+    {
+        if (! Schema::hasTable((new self)->getTable()) || ! Schema::hasTable('kategoriInventaris')) {
+            return;
+        }
+
+        $query = DB::table('kategoriInventaris')
+            ->select('id', 'nama')
+            ->orderBy('nama');
+
+        if (Schema::hasColumn('kategoriInventaris', 'isDeleted')) {
+            $query->addSelect('isDeleted');
+            $query->where('isDeleted', false);
+        }
+
+        $nextOrder = (int) self::query()->max('sort_order') + 1;
+
+        foreach ($query->get() as $row) {
+            $name = trim((string) ($row->nama ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $slug = Str::slug($name);
+            $category = self::query()
+                ->where('slug', $slug)
+                ->first();
+
+            $payload = [
+                'name' => $name,
+                'slug' => $slug,
+                'description' => 'Sinkron dari Data Master mobile.',
+                'is_active' => true,
+            ];
+
+            if ($category) {
+                $category->fill($payload);
+                if ($category->isDirty()) {
+                    $category->save();
+                }
+
+                continue;
+            }
+
+            self::query()->create(array_merge($payload, [
+                'sort_order' => $nextOrder++,
+            ]));
+        }
     }
 
     public static function defaultNames(): array

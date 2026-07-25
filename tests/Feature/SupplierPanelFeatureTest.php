@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\SupplierOrder;
+use App\Models\SupplierOrderDetail;
 use App\Models\SupplierProduct;
 use App\Models\SupplierStore;
 use App\Models\User;
@@ -90,6 +91,8 @@ class SupplierPanelFeatureTest extends TestCase
                 'deskripsi' => 'Produk dibuat melalui feature test.',
                 'kategori' => 'Pakan',
                 'stok' => 25,
+                'minimum_stock' => 5,
+                'restock_quantity' => 20,
                 'satuan' => 'Karung',
                 'harga' => 350000,
                 'gambar' => UploadedFile::fake()->createWithContent(
@@ -151,7 +154,7 @@ class SupplierPanelFeatureTest extends TestCase
             ->assertOk()
             ->assertSee('Pakan')
             ->assertSee('Vitamin')
-            ->assertSee('Kategori berasal dari data master');
+            ->assertSee('Semua kategori');
 
         $this->withSession(array_merge($this->supplierSession(), ['_token' => 'supplier-invalid-category-token']))
             ->from('/supplier/products')
@@ -161,6 +164,8 @@ class SupplierPanelFeatureTest extends TestCase
                 'deskripsi' => 'Kategori ini tidak boleh dibuat sembarangan.',
                 'kategori' => 'Kategori Buatan Sendiri',
                 'stok' => 10,
+                'minimum_stock' => 5,
+                'restock_quantity' => 20,
                 'satuan' => 'Pcs',
                 'harga' => 10000,
             ])
@@ -183,12 +188,32 @@ class SupplierPanelFeatureTest extends TestCase
         ]);
 
         $customer = $this->createUser('user');
+        $product = SupplierProduct::query()->create([
+            'id' => Str::uuid()->toString(),
+            'tokoId' => $this->store->id,
+            'nama' => 'Pakan Pesanan Uji',
+            'deskripsi' => 'Produk untuk uji penerimaan pesanan.',
+            'kategori' => 'Pakan',
+            'stok' => 20,
+            'minimum_stock' => 5,
+            'restock_quantity' => 10,
+            'satuan' => 'Karung',
+            'harga' => 375000,
+            'isDeleted' => false,
+        ]);
         $order = SupplierOrder::query()->create([
             'id' => Str::uuid()->toString(),
             'userId' => $customer->id,
             'tokoId' => $this->store->id,
             'status' => 'menunggu',
             'totalHarga' => 750000,
+            'isDeleted' => false,
+        ]);
+        SupplierOrderDetail::query()->create([
+            'id' => Str::uuid()->toString(),
+            'pesananId' => $order->id,
+            'produkId' => $product->id,
+            'jumlah' => 2,
             'isDeleted' => false,
         ]);
 

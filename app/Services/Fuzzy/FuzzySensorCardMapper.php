@@ -25,8 +25,8 @@ class FuzzySensorCardMapper
         'amonia' => 30,
         'hdp' => 10,
         'umur_biologis' => 20,
-        'pakan' => 30,
-        'fcr' => 40,
+        'fcr' => 30,
+        'pakan' => 40,
         'mortalitas' => 50,
     ];
 
@@ -72,6 +72,7 @@ class FuzzySensorCardMapper
 
             $cards[$variable->group][] = [
                 'key' => $variable->name,
+                'code' => $this->codeFor($variable),
                 'label' => $this->labelFor($variable),
                 'percent' => $percent,
                 'status' => $this->statusFor($variable, $dominantSet),
@@ -139,6 +140,23 @@ class FuzzySensorCardMapper
             ->toString();
     }
 
+    private function codeFor(SpkFuzzyVariable $variable): string
+    {
+        $name = Str::lower($variable->name);
+
+        return match (true) {
+            str_contains($name, 'hhep') => 'hhep',
+            str_contains($name, 'hdp') => 'hdp',
+            str_contains($name, 'fcr') => 'fcr',
+            str_contains($name, 'flock') || str_contains($name, 'umur') || str_contains($name, 'age') => 'flock_age',
+            str_contains($name, 'egg_mass') || str_contains($name, 'massa_telur') => 'egg_mass',
+            str_contains($name, 'avg_egg') || str_contains($name, 'berat_rata') => 'avg_egg_weight',
+            str_contains($name, 'feed') || str_contains($name, 'pakan') => 'feed_intake',
+            str_contains($name, 'mortal') || str_contains($name, 'kematian') => 'mortalitas',
+            default => $name,
+        };
+    }
+
     private function dominantSet(array $fuzzified): ?string
     {
         if (empty($fuzzified)) {
@@ -185,6 +203,7 @@ class FuzzySensorCardMapper
             'amonia' => ['aman'],
             'hdp' => ['sedang', 'tinggi'],
             'pakan' => ['normal'],
+            'fcr' => ['efisien', 'normal'],
             'mortalitas' => ['wajar'],
         ];
 
@@ -194,6 +213,7 @@ class FuzzySensorCardMapper
 
         $dangerByVariable = [
             'amonia' => ['tinggi'],
+            'fcr' => ['boros'],
             'mortalitas' => ['tinggi'],
         ];
 

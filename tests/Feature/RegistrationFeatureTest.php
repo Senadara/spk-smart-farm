@@ -93,7 +93,7 @@ class RegistrationFeatureTest extends TestCase
                 'longitude' => 112.7147,
                 'deskripsi' => 'Supplier pakan dan vitamin untuk demo.',
             ])
-            ->assertRedirect(route('login'))
+            ->assertRedirect(route('register.supplier.submitted'))
             ->assertSessionHas('success');
 
         Http::assertSent(fn (HttpRequest $request) => str_ends_with($request->url(), '/auth/register')

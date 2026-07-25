@@ -9,6 +9,7 @@ use App\Services\Fuzzy\InputResolver;
 use App\Services\Fuzzy\MamdaniEngine;
 use App\Services\Fuzzy\NarrativeGenerator;
 use App\Services\Notifications\SpkEnvironmentAlertService;
+use App\Services\Spk\SpkFuzzyEvaluationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,7 @@ class FuzzyController extends Controller
         private readonly MamdaniEngine     $engine,
         private readonly NarrativeGenerator $narrator,
         private readonly SpkEnvironmentAlertService $environmentAlertService,
+        private readonly SpkFuzzyEvaluationService $evaluationService,
     ) {}
 
     // ──────────────────────────────────────────────────────────────
@@ -47,37 +49,19 @@ class FuzzyController extends Controller
             // 1. Kumpulkan input dari semua sumber
             $profile = SpkFuzzyProfile::resolveForContext($commodityId, $coopId, $profileId);
             $commodityId = $commodityId ?: $profile?->commodity_id;
-            $inputs = $this->resolver->resolve($coopId, $commodityId, $profile?->id);
+            $resolvedInput = $this->resolver->resolveWithMeta($coopId, $commodityId, $profile?->id);
+            $inputs = $resolvedInput['inputs'];
 
             // 2. Jalankan 3-engine cascaded Mamdani
             $result = $this->engine->processCascaded($inputs, $profile?->id, $commodityId, $coopId);
+            $result['input_meta'] = $resolvedInput['meta'] ?? [];
 
             // 3. Generate narasi AI-like
             $narrative = $this->narrator->generate($result, $barnName);
+            $result['narrative'] = $narrative;
 
             // 4. Simpan ke log
-            $log = SpkFuzzyLog::create([
-                'unit_budidaya_id'    => $coopId,
-                'profile_id'          => $result['profile']['id'] ?? $profile?->id,
-                'commodity_id'        => $result['profile']['commodity_id'] ?? $commodityId,
-                'input_json'          => $inputs,
-                'fuzzified_json'      => [
-                    'lingkungan' => $result['lingkungan']['fuzzified'] ?? [],
-                    'kesehatan'  => $result['kesehatan']['fuzzified'] ?? [],
-                ],
-                'rule_result_json'    => [
-                    'lingkungan'     => $result['lingkungan']['dominant_rule'] ?? null,
-                    'kesehatan'      => $result['kesehatan']['dominant_rule'] ?? null,
-                    'kausalitas'     => $result['kausalitas'] ?? null,
-                ],
-                'status_lingkungan'   => $result['lingkungan']['label'] ?? null,
-                'status_kesehatan'    => $result['kesehatan']['label'] ?? null,
-                'diagnosis_kausalitas'=> $result['kausalitas']['label'] ?? null,
-                'output_value'        => min((float) ($result['lingkungan']['value'] ?? 0), (float) ($result['kesehatan']['value'] ?? 0)),
-                'output_label'        => $result['kausalitas']['label'] ?? null,
-                'narrative'           => $narrative,
-                'recommendation'      => $result['kausalitas']['recommendation'] ?? null,
-            ]);
+            $log = $this->evaluationService->persist($coopId, $result, $commodityId);
 
             $this->environmentAlertService->dispatchForLog($log);
 

@@ -137,6 +137,18 @@ class SpkTaskController extends Controller
             ? $this->barnHealthContextService->taskPlansForBarns($barns, $users)
             : collect();
 
+        if ($taskPlans->isNotEmpty() && $healthTaskPlans->isNotEmpty()) {
+            $spkPlanBarnIds = $taskPlans
+                ->pluck('coop_id')
+                ->filter()
+                ->map(fn ($id) => (string) $id)
+                ->unique();
+
+            $healthTaskPlans = $healthTaskPlans
+                ->reject(fn ($plan) => filled($plan['coop_id'] ?? null) && $spkPlanBarnIds->contains((string) $plan['coop_id']))
+                ->values();
+        }
+
         $prefill = [
             'showModal' => $request->has('create_task'),
             'spk_id' => $request->input('spk_id', ''),
@@ -182,7 +194,9 @@ class SpkTaskController extends Controller
             'assigned_to' => ['nullable', 'string', Rule::in($this->petugasIds())],
             'unit_budidaya_id' => 'nullable|string',
             'spk_fuzzy_log_id' => 'nullable|string',
-            'due_date' => 'nullable|date',
+            'due_date' => 'nullable|date|after_or_equal:today',
+        ], [
+            'due_date.after_or_equal' => 'Tanggal target tidak boleh sebelum hari ini.',
         ]);
 
         SpkActionTask::create([
@@ -243,7 +257,9 @@ class SpkTaskController extends Controller
             'priority' => 'required|in:urgent,high,medium,low',
             'assigned_to' => ['nullable', 'string', Rule::in($this->petugasIds())],
             'unit_budidaya_id' => 'nullable|string',
-            'due_date' => 'nullable|date',
+            'due_date' => 'nullable|date|after_or_equal:today',
+        ], [
+            'due_date.after_or_equal' => 'Tanggal target tidak boleh sebelum hari ini.',
         ]);
 
         $task = SpkActionTask::findOrFail($id);
@@ -389,6 +405,7 @@ class SpkTaskController extends Controller
 
                 return [
                     'spk_id' => $spk->id,
+                    'coop_id' => $spk->unit_budidaya_id,
                     'title' => $title,
                     'barn' => $barnName,
                     'score' => $score,
@@ -486,11 +503,11 @@ class SpkTaskController extends Controller
     private function priorityClass(string $priority): string
     {
         return [
-            'urgent' => 'bg-red-50 text-red-700 border-red-200',
+            'urgent' => 'bg-rose-50 text-rose-700 border-rose-200',
             'high' => 'bg-amber-50 text-amber-700 border-amber-200',
-            'medium' => 'bg-blue-50 text-blue-700 border-blue-200',
+            'medium' => 'bg-sky-50 text-sky-700 border-sky-200',
             'low' => 'bg-slate-50 text-slate-600 border-slate-200',
-        ][$priority] ?? 'bg-blue-50 text-blue-700 border-blue-200';
+        ][$priority] ?? 'bg-sky-50 text-sky-700 border-sky-200';
     }
 
     private function petugasQuery()

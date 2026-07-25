@@ -64,7 +64,7 @@
         @focus="if (!pinned) show()"
         @blur="scheduleClose()"
     >
-        i
+        ?
     </button>
 
     <template x-teleport="body">

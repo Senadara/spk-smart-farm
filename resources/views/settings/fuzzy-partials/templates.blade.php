@@ -24,7 +24,7 @@
         </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-3 xl:grid-cols-2">
+    <div class="grid grid-cols-1 gap-4">
         @forelse($assignments as $assignment)
             @php
                 $activeTemplate = $assignment->active_profile;
@@ -32,8 +32,8 @@
                     ->reject(fn ($profile) => $profile->status === 'archived')
                     ->values();
             @endphp
-            <article class="rounded-2xl border border-gray-100 bg-white p-4" style="box-shadow: var(--shadow-sm);">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <article class="min-w-0 rounded-2xl border border-gray-100 bg-white p-4" style="box-shadow: var(--shadow-sm);">
+                <div class="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,420px)] xl:items-start">
                     <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
                             <h3 class="truncate text-base font-bold text-gray-900">{{ $assignment->jenis_budidaya_nama }}</h3>
@@ -78,7 +78,7 @@
                         @endif
                     </div>
 
-                    <div class="w-full lg:max-w-sm">
+                    <div class="w-full min-w-0 rounded-xl border border-gray-100 bg-gray-50/70 p-3">
                         <form action="{{ route('settings.fuzzy.templates.activate') }}" method="POST" class="space-y-3">
                             @csrf
                             @method('PATCH')
@@ -97,15 +97,15 @@
                                     @endforelse
                                 </select>
                             </div>
-                            <div class="flex flex-col gap-2 sm:flex-row">
+                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                                 <button type="submit"
-                                    class="inline-flex flex-1 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                                    class="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                                     @disabled($availableProfiles->isEmpty())>
                                     Aktifkan Template
                                 </button>
                                 @if($activeTemplate)
                                     <a href="{{ route('settings.fuzzy.index', ['profile_id' => $activeTemplate->id, 'jenis_budidaya_id' => $assignment->jenis_budidaya_id, 'tab' => 'variables']) }}"
-                                        class="inline-flex flex-1 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                                        class="inline-flex w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
                                         style="text-decoration:none;">
                                         Buka Konfigurasi
                                     </a>

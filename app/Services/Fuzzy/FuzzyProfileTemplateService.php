@@ -9,6 +9,7 @@ use App\Models\SpkFuzzyRuleCondition;
 use App\Models\SpkFuzzySet;
 use App\Models\SpkFuzzyVariable;
 use App\Services\LivestockMasterConfigService;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -95,7 +96,13 @@ class FuzzyProfileTemplateService
             }
 
             foreach ($productivityRows as $row) {
-                $name = $this->productivityVariableName((string) $row->code);
+                $code = strtolower((string) $row->code);
+                if ($code === 'feed_intake') {
+                    // Expert revision: feed intake remains an operational metric, fuzzy rules use FCR.
+                    continue;
+                }
+
+                $name = $this->productivityVariableName($code);
                 $stats['master_variable_names'][] = $name;
                 $variable = $this->ensureVariable($profile, [
                     'name' => $name,
@@ -105,7 +112,7 @@ class FuzzyProfileTemplateService
                     'description' => $row->description ?: $row->name,
                 ], $stats);
 
-                $this->ensureSets($variable, $this->productivitySets((string) $row->code), $stats);
+                $this->ensureSets($variable, $this->productivitySets($code), $stats);
                 $this->ensureInputSource($profile, $variable, [
                     'source_type' => 'function',
                     'source_name' => null,
@@ -116,6 +123,7 @@ class FuzzyProfileTemplateService
             }
 
             $this->pruneInactiveMasterInputs($profile, $stats['master_variable_names'], $stats);
+            $this->ensureDefaultRules($profile, $stats);
         });
 
         $stats['master_variable_names'] = collect($stats['master_variable_names'])
@@ -264,6 +272,161 @@ class FuzzyProfileTemplateService
         }
     }
 
+    private function ensureDefaultRules(SpkFuzzyProfile $profile, array &$stats): void
+    {
+        if (! Schema::hasTable('spk_fuzzy_rules') || ! Schema::hasTable('spk_fuzzy_rule_conditions')) {
+            return;
+        }
+
+        $variables = SpkFuzzyVariable::query()
+            ->with('sets')
+            ->where('profile_id', $profile->id)
+            ->get()
+            ->keyBy('name');
+
+        $groups = [
+            'lingkungan' => [
+                'rules' => LayerChickenFuzzyTemplateDefinition::environmentRules(),
+                'output' => 'status_lingkungan',
+            ],
+            'kesehatan' => [
+                'rules' => LayerChickenFuzzyTemplateDefinition::healthRules(),
+                'output' => 'indeks_kesehatan',
+            ],
+            'kausalitas' => [
+                'rules' => LayerChickenFuzzyTemplateDefinition::causalityRules(),
+                'output' => 'diagnosis_kausalitas',
+            ],
+        ];
+
+        foreach ($groups as $group => $config) {
+            $existingSignatures = $this->existingRuleSignatures($profile, $group);
+
+            foreach ($config['rules'] as $rule) {
+                $signature = $this->ruleSignature(
+                    $group,
+                    (string) $rule['output_set'],
+                    $this->conditionsForDefaultRule($group, $rule)
+                );
+
+                if (isset($existingSignatures[$signature])) {
+                    continue;
+                }
+
+                if (! $this->defaultRuleCanBeCreated($variables, (string) $config['output'], (string) $rule['output_set'], $this->conditionsForDefaultRule($group, $rule))) {
+                    continue;
+                }
+
+                $this->createDefaultRule($profile, $variables, $group, (string) $config['output'], $rule);
+                $existingSignatures[$signature] = true;
+                $stats['rules_created']++;
+            }
+        }
+    }
+
+    private function existingRuleSignatures(SpkFuzzyProfile $profile, string $group): array
+    {
+        return SpkFuzzyRule::query()
+            ->with(['conditions.variable', 'conditions.set', 'outputSet'])
+            ->where('profile_id', $profile->id)
+            ->where('group', $group)
+            ->get()
+            ->mapWithKeys(function (SpkFuzzyRule $rule) use ($group) {
+                $conditions = $rule->conditions
+                    ->map(fn (SpkFuzzyRuleCondition $condition) => [
+                        $condition->variable?->name,
+                        $condition->set?->name,
+                    ])
+                    ->filter(fn (array $condition) => $condition[0] && $condition[1])
+                    ->values()
+                    ->all();
+
+                return [$this->ruleSignature($group, (string) $rule->outputSet?->name, $conditions) => true];
+            })
+            ->all();
+    }
+
+    private function defaultRuleCanBeCreated(Collection $variables, string $outputVariableName, string $outputSetName, array $conditions): bool
+    {
+        if (! $this->setIdFor($variables, $outputVariableName, $outputSetName)) {
+            return false;
+        }
+
+        foreach ($conditions as [$variableName, $setName]) {
+            if (! $this->setIdFor($variables, $variableName, $setName)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function createDefaultRule(SpkFuzzyProfile $profile, Collection $variables, string $group, string $outputVariableName, array $rule): void
+    {
+        $ruleNumber = SpkFuzzyRule::query()
+            ->where('profile_id', $profile->id)
+            ->where('group', $group)
+            ->count() + 1;
+
+        $payload = [
+            'profile_id' => $profile->id,
+            'name' => 'Rule-'.$group.'-'.str_pad((string) $ruleNumber, 2, '0', STR_PAD_LEFT),
+            'operator' => 'AND',
+            'output_set_id' => $this->setIdFor($variables, $outputVariableName, (string) $rule['output_set']),
+            'group' => $group,
+            'diagnosis' => $group === 'kausalitas'
+                ? (string) $rule['output_set']
+                : (string) ($rule['diagnosis'] ?? $rule['output_set']),
+            'recommendation' => $rule['recommendation'] ?? null,
+        ];
+
+        if (Schema::hasColumn('spk_fuzzy_rules', 'is_active')) {
+            $payload['is_active'] = true;
+        }
+
+        $createdRule = SpkFuzzyRule::create($payload);
+
+        foreach ($this->conditionsForDefaultRule($group, $rule) as [$variableName, $setName]) {
+            SpkFuzzyRuleCondition::create([
+                'rule_id' => $createdRule->id,
+                'variable_id' => $variables[$variableName]->id,
+                'set_id' => $this->setIdFor($variables, $variableName, $setName),
+            ]);
+        }
+    }
+
+    private function conditionsForDefaultRule(string $group, array $rule): array
+    {
+        if ($group !== 'kausalitas') {
+            return $rule['conditions'] ?? [];
+        }
+
+        return [
+            ['label_lingkungan', $rule['environment']],
+            ['label_kesehatan', $rule['productivity']],
+        ];
+    }
+
+    private function ruleSignature(string $group, string $outputSetName, array $conditions): string
+    {
+        $conditionKey = collect($conditions)
+            ->map(fn (array $condition) => implode(':', [(string) ($condition[0] ?? ''), (string) ($condition[1] ?? '')]))
+            ->sort()
+            ->values()
+            ->implode('|');
+
+        return strtolower($group.'|'.$outputSetName.'|'.$conditionKey);
+    }
+
+    private function setIdFor(Collection $variables, string $variableName, string $setName): ?string
+    {
+        $variable = $variables[$variableName] ?? null;
+
+        return $variable?->sets
+            ->first(fn (SpkFuzzySet $set) => $set->name === $setName)
+            ?->id;
+    }
+
     private function ensureVariable(SpkFuzzyProfile $profile, array $payload, array &$stats): SpkFuzzyVariable
     {
         $variable = SpkFuzzyVariable::firstOrNew([
@@ -407,10 +570,7 @@ class FuzzyProfileTemplateService
 
     private function productivityVariableName(string $code): string
     {
-        return match (strtolower($code)) {
-            'feed_intake' => 'pakan',
-            default => Str::snake(strtolower($code)),
-        };
+        return Str::snake(strtolower($code));
     }
 
     private function environmentSets(object $row): array
@@ -467,9 +627,9 @@ class FuzzyProfileTemplateService
                 ['name' => 'Tinggi', 'shape' => 'trapezoid', 'a' => 0.5, 'b' => 1.2, 'c' => 10, 'd' => 10],
             ],
             'fcr' => [
-                ['name' => 'Baik', 'shape' => 'trapezoid', 'a' => 0, 'b' => 0, 'c' => 1.9, 'd' => 2.2],
-                ['name' => 'Sedang', 'shape' => 'triangle', 'a' => 2, 'b' => 2.4, 'c' => 2.8],
-                ['name' => 'Buruk', 'shape' => 'trapezoid', 'a' => 2.6, 'b' => 3, 'c' => 6, 'd' => 6],
+                ['name' => 'Efisien', 'shape' => 'trapezoid', 'a' => 0, 'b' => 0, 'c' => 1.85, 'd' => 2.1],
+                ['name' => 'Normal', 'shape' => 'triangle', 'a' => 1.95, 'b' => 2.25, 'c' => 2.55],
+                ['name' => 'Boros', 'shape' => 'trapezoid', 'a' => 2.4, 'b' => 2.75, 'c' => 6, 'd' => 6],
             ],
             'egg_mass' => $this->thresholdSets(0, 60, ['Rendah', 'Sedang', 'Tinggi']),
             'avg_egg_weight' => [

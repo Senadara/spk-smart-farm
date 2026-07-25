@@ -182,7 +182,7 @@ class NarrativeGenerator
         $kesehatLabel = match ($kesehatLabel) {
             'Sangat Sehat' => 'Optimal',
             'Sehat', 'Efisien Positif' => 'Baik',
-            'Kurang Sehat', 'Inefisiensi', 'Sangat Boros', 'Boros Pakan' => 'Waspada',
+            'Kurang Sehat', 'Inefisiensi', 'Sangat Boros', 'FCR Boros', 'Boros Pakan' => 'Waspada',
             'Sakit Kritis', 'Sakit Berat', 'Sakit Sedang' => 'Buruk',
             default => $kesehatLabel,
         };
@@ -223,7 +223,8 @@ class NarrativeGenerator
             'Performa Tidak Stabil'   => "Kedua dimensi lingkungan dan kesehatan berada di level waspada. Diagnosis: Performa Tidak Stabil. Sistem manajemen perlu dievaluasi.",
             'Toleransi Baik'          => "Lingkungan dalam kondisi waspada namun ayam menunjukkan toleransi yang baik. Diagnosis: Toleransi Baik. Lanjutkan monitoring.",
             'Wabah Internal'          => "Lingkungan baik namun kesehatan buruk. Sistem menduga adanya masalah internal. Diagnosis: Wabah Internal, indikasi penyakit perlu diperiksa.",
-            'Inefisiensi Pakan'       => "Lingkungan baik, namun produktivitas belum optimal. Diagnosis: Inefisiensi Pakan. Periksa manajemen pakan dan operasional.",
+            'Inefisiensi FCR'         => "Lingkungan baik, namun produktivitas belum optimal. Diagnosis: Inefisiensi FCR. Periksa FCR, egg mass, dan data pakan harian.",
+            'Inefisiensi Pakan'       => "Lingkungan baik, namun produktivitas belum optimal. Diagnosis: Inefisiensi FCR. Periksa FCR, egg mass, dan data pakan harian.",
             'Inefisiensi Sistem'      => "Lingkungan baik, namun produktivitas belum optimal. Diagnosis: Inefisiensi Sistem. Periksa manajemen pakan dan operasional.",
             'Stabil'                  => "Kondisi keseluruhan stabil. Diagnosis: Stabil. Tidak ada tindakan darurat yang diperlukan.",
             'Anomali Medis'           => "Lingkungan optimal namun kesehatan memburuk. Hal ini mengindikasikan anomali medis. Diagnosis: Anomali Medis, segera cek kemungkinan penyakit.",

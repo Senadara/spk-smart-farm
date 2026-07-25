@@ -30,7 +30,7 @@
         'kesehatan' => [
             'label' => 'Engine 2',
             'title' => 'Produktivitas',
-            'hint' => 'Mengolah laporan harian, panen, pakan, dan mortalitas.',
+            'hint' => 'Mengolah laporan harian, panen, FCR, dan mortalitas.',
             'tone' => 'sky',
         ],
         'kausalitas' => [

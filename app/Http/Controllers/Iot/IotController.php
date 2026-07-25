@@ -86,7 +86,7 @@ class IotController extends Controller
             'connectionConfigs' => $connectionConfigs,
             'protocols' => IotProtocol::whereIn('protocolName', array_keys(self::FIXED_PROTOCOLS))->get(),
             'protocolOptions' => $this->fixedProtocolOptions(),
-            'parameters' => $this->livestockMasterConfigService->configuredIotParametersForCommodity(null, false),
+            'parameters' => IotParameter::query()->orderBy('parameterCode')->get(),
             'mappings' => IotParameterMapping::with(['device', 'parameter'])
                 ->when(! empty($deviceIds), fn ($query) => $query->whereIn('deviceId', $deviceIds), fn ($query) => $query->whereRaw('1 = 0'))
                 ->get(),

@@ -5,15 +5,19 @@ namespace App\Http\Controllers\Supplier;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\MasterSupplier;
+use App\Models\ProductUnit;
 use App\Models\SpkRanking;
 use App\Models\SupplierOrder;
 use App\Models\SupplierProduct;
 use App\Models\SupplierProductCategory;
+use App\Models\SupplierProductStockMovement;
 use App\Models\SupplierStore;
 use App\Services\ApiService;
+use App\Services\Notifications\SupplierNotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -21,7 +25,10 @@ use Illuminate\View\View;
 
 class SupplierPanelController extends Controller
 {
-    public function __construct(private readonly ApiService $api) {}
+    public function __construct(
+        private readonly ApiService $api,
+        private readonly SupplierNotificationService $supplierNotificationService,
+    ) {}
 
     public function dashboard(): View
     {
@@ -54,7 +61,7 @@ class SupplierPanelController extends Controller
                 'products' => $store->products()->where('isDeleted', false)->count(),
                 'low_stock' => $store->products()
                     ->where('isDeleted', false)
-                    ->where('stok', '<=', 10)
+                    ->whereRaw('stok <= COALESCE(minimum_stock, 10)')
                     ->count(),
                 'pending_orders' => $store->orders()
                     ->where('isDeleted', false)
@@ -154,14 +161,15 @@ class SupplierPanelController extends Controller
         }
 
         $categoryOptions = SupplierProductCategory::activeOptions();
+        $unitOptions = ProductUnit::activeOptions();
         $query = $store->products()->where('isDeleted', false);
         if ($request->filled('search')) {
             $query->where('nama', 'like', '%'.$request->string('search').'%');
         }
         if ($request->get('stock') === 'low') {
-            $query->where('stok', '<=', 10);
+            $query->whereRaw('stok <= COALESCE(minimum_stock, 10)');
         } elseif ($request->get('stock') === 'available') {
-            $query->where('stok', '>', 10);
+            $query->whereRaw('stok > COALESCE(minimum_stock, 10)');
         }
         $selectedCategory = trim((string) $request->string('category'));
         if ($selectedCategory !== '' && $categoryOptions->contains($selectedCategory)) {
@@ -172,13 +180,29 @@ class SupplierPanelController extends Controller
             'store' => $store,
             'products' => $query->latest('createdAt')->paginate(12)->withQueryString(),
             'categoryOptions' => $categoryOptions,
+            'unitOptions' => $unitOptions,
+        ]);
+    }
+
+    public function createProduct(): View|RedirectResponse
+    {
+        $store = $this->store();
+        if (! $store) {
+            return $this->missingStoreRedirect();
+        }
+
+        return view('supplier.product-form', [
+            'store' => $store,
+            'product' => null,
+            'categoryOptions' => SupplierProductCategory::activeOptions(),
+            'unitOptions' => ProductUnit::activeOptions(),
         ]);
     }
 
     public function storeProduct(Request $request): RedirectResponse
     {
         $store = $this->requiredStore();
-        $validated = $this->validateProduct($request);
+        $validated = $this->validateProduct($request, true);
 
         $imagePath = $request->hasFile('gambar')
             ? $request->file('gambar')->store("supplier-products/{$store->id}", 'public')
@@ -191,6 +215,8 @@ class SupplierPanelController extends Controller
             'kategori' => $validated['kategori'] ?? null,
             'gambar' => $imagePath,
             'stok' => $validated['stok'],
+            'minimum_stock' => $validated['minimum_stock'],
+            'restock_quantity' => $validated['restock_quantity'],
             'satuan' => $validated['satuan'],
             'harga' => $validated['harga'],
             'isDeleted' => false,
@@ -200,10 +226,22 @@ class SupplierPanelController extends Controller
             ->with('success', 'Produk berhasil ditambahkan.');
     }
 
+    public function editProduct(SupplierProduct $product): View
+    {
+        $this->ensureProductOwnership($product);
+
+        return view('supplier.product-form', [
+            'store' => $this->requiredStore(),
+            'product' => $product,
+            'categoryOptions' => SupplierProductCategory::activeOptions(),
+            'unitOptions' => ProductUnit::activeOptions(),
+        ]);
+    }
+
     public function updateProduct(Request $request, SupplierProduct $product): RedirectResponse
     {
         $this->ensureProductOwnership($product);
-        $validated = $this->validateProduct($request);
+        $validated = $this->validateProduct($request, false);
         $imagePath = $product->gambar;
 
         if ($request->hasFile('gambar')) {
@@ -220,13 +258,83 @@ class SupplierPanelController extends Controller
             'deskripsi' => $validated['deskripsi'],
             'kategori' => $validated['kategori'] ?? null,
             'gambar' => $imagePath,
-            'stok' => $validated['stok'],
+            'minimum_stock' => $validated['minimum_stock'],
+            'restock_quantity' => $validated['restock_quantity'],
             'satuan' => $validated['satuan'],
             'harga' => $validated['harga'],
         ]);
 
         return redirect()->route('supplier.products.index')
             ->with('success', 'Produk berhasil diperbarui.');
+    }
+
+    public function editProductStock(SupplierProduct $product): View
+    {
+        $this->ensureProductOwnership($product);
+
+        return view('supplier.product-stock', [
+            'store' => $this->requiredStore(),
+            'product' => $product,
+            'movements' => $product->stockMovements()
+                ->latest('createdAt')
+                ->limit(15)
+                ->get(),
+        ]);
+    }
+
+    public function adjustProductStock(Request $request, SupplierProduct $product): RedirectResponse
+    {
+        $this->ensureProductOwnership($product);
+        $validated = $request->validate([
+            'type' => 'required|in:restock,correction_in,correction_out',
+            'quantity' => 'required|integer|min:1|max:100000000',
+            'note' => 'nullable|string|max:500',
+        ], [
+            'type.in' => 'Pilih jenis pergerakan stok yang valid.',
+            'quantity.min' => 'Jumlah stok harus minimal 1.',
+        ]);
+
+        $label = [
+            'restock' => 'Restock',
+            'correction_in' => 'Koreksi tambah',
+            'correction_out' => 'Koreksi kurang',
+        ][$validated['type']];
+
+        try {
+            DB::transaction(function () use ($product, $validated) {
+                $locked = SupplierProduct::query()
+                    ->whereKey($product->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $before = (int) $locked->stok;
+                $delta = in_array($validated['type'], ['restock', 'correction_in'], true)
+                    ? (int) $validated['quantity']
+                    : -1 * (int) $validated['quantity'];
+                $after = $before + $delta;
+
+                if ($after < 0) {
+                    throw new \RuntimeException('Stok tidak boleh menjadi minus.');
+                }
+
+                $locked->update(['stok' => $after]);
+
+                SupplierProductStockMovement::query()->create([
+                    'supplier_product_id' => $locked->id,
+                    'supplier_store_id' => $locked->tokoId,
+                    'type' => $validated['type'],
+                    'quantity' => $delta,
+                    'stock_before' => $before,
+                    'stock_after' => $after,
+                    'actor_id' => $this->userId(),
+                    'note' => $validated['note'] ?? null,
+                ]);
+            });
+        } catch (\RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        return back()->with('success', "{$label} stok berhasil dicatat.");
     }
 
     public function destroyProduct(SupplierProduct $product): RedirectResponse
@@ -280,6 +388,14 @@ class SupplierPanelController extends Controller
 
         $validated = $request->validate([
             'status' => 'required|in:diterima,selesai,ditolak',
+            'reason' => [
+                Rule::requiredIf(fn () => $request->input('status') === 'ditolak'),
+                'nullable',
+                'string',
+                'max:500',
+            ],
+        ], [
+            'reason.required' => 'Alasan penolakan pesanan wajib diisi.',
         ]);
 
         $transitions = [
@@ -295,6 +411,13 @@ class SupplierPanelController extends Controller
             return back()->with('error', 'Perubahan status pesanan tidak valid.');
         }
 
+        if ($validated['status'] === 'diterima' && $this->shouldDeductStockOnAcceptance($order)) {
+            $stockError = $this->orderStockValidationError($order);
+            if ($stockError) {
+                return back()->with('error', $stockError);
+            }
+        }
+
         try {
             $this->api->put('/store/pesanan/status', [
                 'pesananId' => $order->id,
@@ -302,6 +425,33 @@ class SupplierPanelController extends Controller
             ]);
         } catch (ApiException $exception) {
             return back()->with('error', $exception->getMessage());
+        }
+
+        $reason = trim((string) ($validated['reason'] ?? ''));
+
+        try {
+            DB::transaction(function () use ($order, $validated, $reason) {
+                $lockedOrder = SupplierOrder::query()
+                    ->whereKey($order->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if ($validated['status'] === 'diterima' && $this->shouldDeductStockOnAcceptance($lockedOrder)) {
+                    $this->deductStockForAcceptedOrder($lockedOrder);
+                }
+
+                $lockedOrder->forceFill([
+                    'status' => $validated['status'],
+                    'statusReason' => $validated['status'] === 'ditolak' && $reason !== '' ? $reason : null,
+                    'statusChangedAt' => now(),
+                ])->save();
+            });
+        } catch (\RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        if ($validated['status'] === 'ditolak') {
+            $this->supplierNotificationService->orderRejected($order->fresh(['customer', 'store']), $reason);
         }
 
         return back()->with('success', 'Status pesanan berhasil diperbarui.');
@@ -346,17 +496,130 @@ class SupplierPanelController extends Controller
         ]);
     }
 
-    private function validateProduct(Request $request): array
+    private function validateProduct(Request $request, bool $includeStock): array
     {
-        return $request->validate([
+        $rules = [
             'nama' => 'required|string|max:255',
             'deskripsi' => 'required|string|max:2000',
             'kategori' => ['required', 'string', 'max:80', Rule::in(SupplierProductCategory::activeOptions()->all())],
-            'stok' => 'required|integer|min:0|max:100000000',
-            'satuan' => 'required|string|max:50',
+            'minimum_stock' => 'required|integer|min:0|max:100000000',
+            'restock_quantity' => 'nullable|integer|min:0|max:100000000',
+            'satuan' => ['required', 'string', 'max:50', Rule::in(ProductUnit::activeOptions()->all())],
             'harga' => 'required|integer|min:0|max:2000000000',
             'gambar' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
-        ]);
+        ];
+
+        if ($includeStock) {
+            $rules['stok'] = 'required|integer|min:0|max:100000000';
+        }
+
+        $validated = $request->validate($rules);
+
+        $validated['restock_quantity'] = (int) ($validated['restock_quantity'] ?? 0);
+
+        return $validated;
+    }
+
+    private function shouldDeductStockOnAcceptance(SupplierOrder $order): bool
+    {
+        return blank($order->MidtransOrderId);
+    }
+
+    private function orderStockValidationError(SupplierOrder $order): ?string
+    {
+        $details = $order->details()
+            ->with('product')
+            ->where('isDeleted', false)
+            ->get();
+
+        if ($details->isEmpty()) {
+            return 'Rincian pesanan tidak tersedia, stok tidak dapat diproses.';
+        }
+
+        foreach ($details as $detail) {
+            $product = $detail->product;
+            $quantity = (int) $detail->jumlah;
+
+            if (! $product || $product->isDeleted || $product->tokoId !== $order->tokoId) {
+                return 'Ada produk pesanan yang tidak tersedia di toko ini.';
+            }
+
+            if ($quantity <= 0) {
+                return 'Jumlah produk pada pesanan tidak valid.';
+            }
+
+            if ((int) $product->stok < $quantity) {
+                return 'Stok '.$product->nama.' tidak mencukupi. Tersisa '
+                    .number_format((int) $product->stok, 0, ',', '.').' '.$product->satuan
+                    .', pesanan '.number_format($quantity, 0, ',', '.').'.';
+            }
+        }
+
+        return null;
+    }
+
+    private function deductStockForAcceptedOrder(SupplierOrder $order): void
+    {
+        $details = $order->details()
+            ->where('isDeleted', false)
+            ->get();
+
+        if ($details->isEmpty()) {
+            throw new \RuntimeException('Rincian pesanan tidak tersedia, stok tidak dapat diproses.');
+        }
+
+        foreach ($details as $detail) {
+            $quantity = (int) $detail->jumlah;
+            if ($quantity <= 0) {
+                throw new \RuntimeException('Jumlah produk pada pesanan tidak valid.');
+            }
+
+            $product = SupplierProduct::query()
+                ->whereKey($detail->produkId)
+                ->where('tokoId', $order->tokoId)
+                ->where('isDeleted', false)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $product) {
+                throw new \RuntimeException('Ada produk pesanan yang tidak tersedia di toko ini.');
+            }
+
+            if ($this->acceptedOrderStockMovementExists($order, $product)) {
+                continue;
+            }
+
+            $before = (int) $product->stok;
+            if ($before < $quantity) {
+                throw new \RuntimeException('Stok '.$product->nama.' tidak mencukupi. Tersisa '
+                    .number_format($before, 0, ',', '.').' '.$product->satuan
+                    .', pesanan '.number_format($quantity, 0, ',', '.').'.');
+            }
+
+            $after = $before - $quantity;
+            $product->update(['stok' => $after]);
+
+            SupplierProductStockMovement::query()->create([
+                'supplier_product_id' => $product->id,
+                'supplier_store_id' => $order->tokoId,
+                'type' => 'order_accepted',
+                'quantity' => -$quantity,
+                'stock_before' => $before,
+                'stock_after' => $after,
+                'actor_id' => $this->userId(),
+                'note' => 'Pesanan diterima '.$order->id,
+            ]);
+        }
+    }
+
+    private function acceptedOrderStockMovementExists(SupplierOrder $order, SupplierProduct $product): bool
+    {
+        return SupplierProductStockMovement::query()
+            ->where('supplier_product_id', $product->id)
+            ->where('supplier_store_id', $order->tokoId)
+            ->where('type', 'order_accepted')
+            ->where('note', 'like', '%'.$order->id.'%')
+            ->exists();
     }
 
     private function store(): ?SupplierStore
