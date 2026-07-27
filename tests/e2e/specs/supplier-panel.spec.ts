@@ -89,6 +89,19 @@ test.describe.serial('Modul Panel Supplier (/supplier) - E2E QA', () => {
         await expect(page.getByText('Profil toko berhasil diperbarui.')).toBeHidden();
     });
 
+    test('Negatif/Boundary - Update Profil Toko dengan latitude di luar rentang (-90..90) ditolak server', async ({ page }) => {
+        await supplierPage.gotoStore();
+
+        // latitude = 999 melanggar aturan server between:-90,90 (input number tanpa atribut max).
+        await page.locator('input[name="latitude"]').fill('999');
+        await page.getByRole('button', { name: /Simpan Profil/i }).click();
+        await page.waitForTimeout(1500);
+
+        // Server menolak → tetap di halaman store, tidak ada notifikasi sukses.
+        await expect(page).toHaveURL(/\/supplier\/store/, { timeout: 10000 });
+        await expect(page.getByText('Profil toko berhasil diperbarui.')).toBeHidden();
+    });
+
     /* ═══════════════════════════════════════════════════════════════════
        PRODUK (KATALOG)
        ═══════════════════════════════════════════════════════════════════ */
@@ -97,10 +110,11 @@ test.describe.serial('Modul Panel Supplier (/supplier) - E2E QA', () => {
         await supplierPage.gotoProducts();
 
         await expect(page.getByRole('heading', { name: /Katalog Produk/i })).toBeVisible();
-        await expect(page.getByRole('button', { name: /Tambah Produk/i })).toBeVisible();
-        // Minimal 1 kartu produk seed (mis. "Pakan Layer Premium 50 kg")
-        await expect(page.locator('article').first()).toBeVisible({ timeout: 10000 });
-        expect(await page.locator('article').count()).toBeGreaterThan(0);
+        // "Tambah Produk" kini berupa LINK ke halaman create (bukan tombol modal).
+        await expect(page.getByRole('link', { name: /Tambah Produk/i }).first()).toBeVisible();
+        // Daftar produk kini berupa tabel (baris <tr>). Minimal 1 produk seed.
+        await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 10000 });
+        expect(await page.locator('tbody tr').count()).toBeGreaterThan(0);
     });
 
     test('Positif - Filter produk (search & stok menipis) memperbarui query', async ({ page }) => {
@@ -171,9 +185,9 @@ test.describe.serial('Modul Panel Supplier (/supplier) - E2E QA', () => {
         const f = supplierPage.createProductForm;
         await f.locator('textarea[name="deskripsi"]').fill('Tanpa nama');
         await f.locator('select[name="kategori"]').selectOption({ index: 1 });
+        await f.locator('select[name="satuan"]').selectOption({ index: 0 });
         await f.locator('input[name="harga"]').fill('1000');
         await f.locator('input[name="stok"]').fill('1');
-        await f.locator('input[name="satuan"]').fill('Pcs');
         await f.getByRole('button', { name: /Simpan Produk/i }).click();
 
         const namaInput = f.locator('input[name="nama"]');
@@ -312,25 +326,22 @@ async function loginSupplier(page: Page) {
 const createFormSel = 'form[action$="/supplier/products"]';
 
 test.describe('FUNC Panel Supplier (supplier)', () => {
-    test.setTimeout(220000);
+    test.setTimeout(240000);
 
-    test('SPNLF001/003/004/005 - Tambah, cari, edit, nonaktif produk QA', async ({ page }) => {
+    test('SPNLF001/003/004/005 - Tambah, cari, edit, nonaktif produk QA (page-based)', async ({ page }) => {
         page.on('dialog', (d) => d.accept().catch(() => { }));
         await loginSupplier(page);
-        await page.goto('/supplier/products', { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(800);
 
-        // --- SPNLF001: tambah VALID ---
-        await page.getByRole('button', { name: /Tambah Produk/i }).click();
+        // --- SPNLF001: tambah VALID (halaman create terpisah) ---
+        await page.goto('/supplier/products/create', { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(500);
-        const createForm = page.locator(createFormSel);
-        await createForm.locator('input[name="nama"]').fill(QA_PROD);
-        await createForm.locator('textarea[name="deskripsi"]').fill('Produk uji otomatis QA.');
-        await createForm.locator('select[name="kategori"]').selectOption({ index: 1 });
-        await createForm.locator('input[name="harga"]').fill('15000');
-        await createForm.locator('input[name="stok"]').fill('25');
-        await createForm.locator('input[name="satuan"]').fill('Karung');
-        await createForm.getByRole('button', { name: /Simpan Produk/i }).click();
+        await page.locator('input[name="nama"]').fill(QA_PROD);
+        await page.locator('textarea[name="deskripsi"]').fill('Produk uji otomatis QA.');
+        await page.locator('select[name="kategori"]').selectOption({ index: 1 });
+        await page.locator('select[name="satuan"]').selectOption({ index: 0 });
+        await page.locator('input[name="harga"]').fill('15000');
+        await page.locator('input[name="stok"]').fill('25');
+        await page.getByRole('button', { name: /Simpan Produk/i }).click();
         await page.waitForLoadState('domcontentloaded').catch(() => { });
         await page.waitForTimeout(1500);
         const bodyC = await bodyTextFuncSupplier(page);
@@ -342,20 +353,17 @@ test.describe('FUNC Panel Supplier (supplier)', () => {
         // --- SPNLF005a: cari produk QA (valid) ---
         await page.goto('/supplier/products?search=' + encodeURIComponent(QA_PROD), { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(800);
-        const card = page.locator('article', { hasText: QA_PROD });
-        const found = await card.count();
-        console.log('SPNLF005_valid:: kartuDitemukan=' + found);
+        const row = page.locator('tbody tr', { hasText: QA_PROD });
+        const found = await row.count();
+        console.log('SPNLF005_valid:: barisDitemukan=' + found);
         await capFuncSupplier(page, 'SPNL/SPNLF005a_search_valid.png');
         expect(found).toBeGreaterThan(0);
 
-        // --- SPNLF003: edit produk QA (ubah harga & stok) ---
-        await card.first().getByText('Edit produk').click();
-        await page.waitForTimeout(400);
-        const editForm = card.first().locator('form[action*="/supplier/products/"]')
-            .filter({ has: page.getByRole('button', { name: /^Simpan$/ }) }).first();
-        await editForm.locator('input[name="harga"]').fill('18500');
-        await editForm.locator('input[name="stok"]').fill('30');
-        await editForm.getByRole('button', { name: /^Simpan$/ }).click();
+        // --- SPNLF003: edit produk QA (ubah harga via halaman edit) ---
+        await row.first().getByRole('link', { name: /^Edit$/ }).click();
+        await page.waitForURL(/\/supplier\/products\/[^/]+\/edit/, { timeout: 15000 });
+        await page.locator('input[name="harga"]').fill('18500');
+        await page.getByRole('button', { name: /Simpan Perubahan/i }).click();
         await page.waitForLoadState('domcontentloaded').catch(() => { });
         await page.waitForTimeout(1500);
         const bodyE = await bodyTextFuncSupplier(page);
@@ -373,13 +381,12 @@ test.describe('FUNC Panel Supplier (supplier)', () => {
         await capFuncSupplier(page, 'SPNL/SPNLF005b_search_kosong.png');
         expect(kosong).toBeTruthy();
 
-        // --- SPNLF004: nonaktifkan produk QA ---
+        // --- SPNLF004: nonaktifkan produk QA (halaman edit -> Nonaktifkan Produk) ---
         await page.goto('/supplier/products?search=' + encodeURIComponent(QA_PROD), { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(800);
-        const card2 = page.locator('article', { hasText: QA_PROD }).first();
-        await card2.getByText('Edit produk').click();
-        await page.waitForTimeout(400);
-        await card2.getByRole('button', { name: /Nonaktifkan Produk/i }).click();
+        await page.locator('tbody tr', { hasText: QA_PROD }).first().getByRole('link', { name: /^Edit$/ }).click();
+        await page.waitForURL(/\/supplier\/products\/[^/]+\/edit/, { timeout: 15000 });
+        await page.getByRole('button', { name: /Nonaktifkan Produk/i }).click();
         await page.waitForLoadState('domcontentloaded').catch(() => { });
         await page.waitForTimeout(1500);
         const bodyD = await bodyTextFuncSupplier(page);
@@ -391,26 +398,68 @@ test.describe('FUNC Panel Supplier (supplier)', () => {
 
     test('SPNLF002 - Tambah produk INVALID (harga di atas batas server) -> ditolak', async ({ page }) => {
         await loginSupplier(page);
-        await page.goto('/supplier/products', { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(800);
-        await page.getByRole('button', { name: /Tambah Produk/i }).click();
+        await page.goto('/supplier/products/create', { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(500);
-        const createForm = page.locator(createFormSel);
-        await createForm.locator('input[name="nama"]').fill('QA Produk Invalid Harga');
-        await createForm.locator('textarea[name="deskripsi"]').fill('Harga melebihi batas.');
-        await createForm.locator('select[name="kategori"]').selectOption({ index: 1 });
-        await createForm.locator('input[name="harga"]').fill('9999999999');
-        await createForm.locator('input[name="stok"]').fill('5');
-        await createForm.locator('input[name="satuan"]').fill('Pcs');
-        await createForm.getByRole('button', { name: /Simpan Produk/i }).click();
+        await page.locator('input[name="nama"]').fill('QA Produk Invalid Harga');
+        await page.locator('textarea[name="deskripsi"]').fill('Harga melebihi batas.');
+        await page.locator('select[name="kategori"]').selectOption({ index: 1 });
+        await page.locator('select[name="satuan"]').selectOption({ index: 0 });
+        await page.locator('input[name="harga"]').fill('9999999999');
+        await page.locator('input[name="stok"]').fill('5');
+        await page.getByRole('button', { name: /Simpan Produk/i }).click();
         await page.waitForLoadState('domcontentloaded').catch(() => { });
         await page.waitForTimeout(1500);
         const bodyI = await bodyTextFuncSupplier(page);
         const addedInvalid = /Produk berhasil ditambahkan/i.test(bodyI);
-        const errShown = await page.locator('.bg-red-50').count();
-        console.log('SPNLF002:: added=' + addedInvalid + ' errBlocks=' + errShown + ' url=' + page.url());
+        console.log('SPNLF002:: added=' + addedInvalid + ' url=' + page.url());
         expect(addedInvalid).toBeFalsy();
         await capFuncSupplier(page, 'SPNL/SPNLF002_produk_invalid.png');
+    });
+
+    test('SPNLF007 - Restok stok (positif) & koreksi kurang berlebih ditolak (negatif/boundary)', async ({ page }) => {
+        await loginSupplier(page);
+
+        // Buat produk stok kecil (10) untuk uji koreksi kurang berlebih
+        const nama = 'QA Stok ' + Date.now();
+        await page.goto('/supplier/products/create', { waitUntil: 'domcontentloaded' });
+        await page.locator('input[name="nama"]').fill(nama);
+        await page.locator('textarea[name="deskripsi"]').fill('Uji stok QA.');
+        await page.locator('select[name="kategori"]').selectOption({ index: 1 });
+        await page.locator('select[name="satuan"]').selectOption({ index: 0 });
+        await page.locator('input[name="harga"]').fill('12000');
+        await page.locator('input[name="stok"]').fill('10');
+        await page.getByRole('button', { name: /Simpan Produk/i }).click();
+        await page.waitForLoadState('domcontentloaded').catch(() => { });
+        await page.waitForTimeout(1200);
+
+        // Buka halaman Restok produk tsb
+        await page.goto('/supplier/products?search=' + encodeURIComponent(nama), { waitUntil: 'domcontentloaded' });
+        await page.locator('tbody tr', { hasText: nama }).first().getByRole('link', { name: /^Restok$/ }).click();
+        await page.waitForURL(/\/supplier\/products\/[^/]+\/stock/, { timeout: 15000 });
+
+        // Positif: restok masuk 5 -> "stok berhasil dicatat"
+        await page.locator('select[name="type"]').selectOption('restock');
+        await page.locator('input[name="quantity"]').fill('5');
+        await page.getByRole('button', { name: /Simpan Stok/i }).click();
+        await page.waitForLoadState('domcontentloaded').catch(() => { });
+        await page.waitForTimeout(1000);
+        const bodyR = await bodyTextFuncSupplier(page);
+        const restockOk = /stok berhasil dicatat/i.test(bodyR);
+        console.log('SPNLF007_restock:: ok=' + restockOk);
+        expect(restockOk).toBeTruthy();
+        await capFuncSupplier(page, 'SPNL/SPNLF007a_restock.png');
+
+        // Negatif/boundary: koreksi kurang melebihi stok -> ditolak "tidak boleh menjadi minus"
+        await page.locator('select[name="type"]').selectOption('correction_out');
+        await page.locator('input[name="quantity"]').fill('99999');
+        await page.getByRole('button', { name: /Simpan Stok/i }).click();
+        await page.waitForLoadState('domcontentloaded').catch(() => { });
+        await page.waitForTimeout(1000);
+        const bodyM = await bodyTextFuncSupplier(page);
+        const minusRejected = /tidak boleh menjadi minus/i.test(bodyM);
+        console.log('SPNLF007_minus:: rejected=' + minusRejected);
+        expect(minusRejected).toBeTruthy();
+        await capFuncSupplier(page, 'SPNL/SPNLF007b_koreksi_minus_ditolak.png');
     });
 
     test('SPNLF006 - Ubah status pesanan (best-effort bila ada pesanan menunggu)', async ({ page }) => {

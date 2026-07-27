@@ -149,7 +149,7 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                 </button>
-                                @php($connectionDeviceCount = (int) ($connection->devices_count ?? 0))
+                                @php $connectionDeviceCount = (int) ($connection->devices_count ?? 0); @endphp
                                 @if($connectionDeviceCount > 0)
                                     <button type="button" disabled
                                         class="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-lg border border-gray-100 bg-gray-50 text-gray-300"

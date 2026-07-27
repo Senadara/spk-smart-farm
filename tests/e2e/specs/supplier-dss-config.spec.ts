@@ -120,22 +120,24 @@ test.describe('Modul Supplier SPK (AHP-SAW DSS) - E2E UI Workflow Tests', () => 
         expect(count).toBeGreaterThan(0);
     });
 
-    test('Positif - DSS Config page menampilkan "Legenda Skala Saaty" dengan skala 1-9', async ({ page }) => {
+    test('Positif - DSS Config page menampilkan panduan skala AHP (pairwise)', async ({ page }) => {
         /**
          * Given: DSS config page loaded
-         * When: Check legend section
-         * Then: Saaty scale legend (1, 3, 5, 7, 9) displayed
+         * When: Check panduan & skala perbandingan
+         * Then: Judul "Atur Bobot Kriteria Supplier" + panduan langkah AHP tampil.
+         *   Desain terbaru menyajikan skala Saaty melalui slider pasangan kriteria,
+         *   bukan blok "Legenda Skala Saaty".
          */
 
         // Arrange & Act
         await page.goto('/spk-suppliers/dss/config', { waitUntil: 'domcontentloaded' });
 
-        // Assert: Legend section
-        await expect(page.getByText('Legenda Skala Saaty')).toBeVisible();
+        // Assert: judul halaman AHP
+        await expect(page.getByRole('heading', { name: /Atur Bobot Kriteria Supplier/i })).toBeVisible();
 
-        // Assert: Scale values
-        await expect(page.locator('text=Sama penting')).toBeVisible();
-        await expect(page.locator('text=Mutlak lebih penting')).toBeVisible();
+        // Assert: panduan langkah AHP (pahami kriteria -> isi perbandingan -> validasi CR)
+        await expect(page.getByText('Isi Perbandingan', { exact: false })).toBeVisible();
+        await expect(page.getByText('Validasi CR', { exact: false })).toBeVisible();
     });
 
     test('Positif - DSS Config menampilkan latest config info (CR, version, status) jika exists', async ({ page }) => {
@@ -183,10 +185,11 @@ test.describe('Modul Supplier SPK (AHP-SAW DSS) - E2E UI Workflow Tests', () => 
             // Form displayed (enough parameters)
             await expect(form).toBeVisible();
 
-            // Assert: Has comparison radio buttons (hidden input[type=radio] with visible label spans)
-            const radioInputs = page.locator('input[type="radio"][name^="pair_"]');
-            const radioCount = await radioInputs.count();
-            expect(radioCount).toBeGreaterThan(0);
+            // Desain terbaru: perbandingan berpasangan memakai tombol skala Saaty + hidden input
+            // name="perbandingans[i][nilai_skala]" (bukan lagi input[type=radio][name^=pair_]).
+            const pairInputs = page.locator('input[name^="perbandingans"][name$="[nilai_skala]"]');
+            const pairInputCount = await pairInputs.count();
+            expect(pairInputCount).toBeGreaterThan(0);
         } else {
             // Not enough criteria - should show warning message
             const warning = page.locator('text=Belum cukup kriteria');
@@ -212,16 +215,13 @@ test.describe('Modul Supplier SPK (AHP-SAW DSS) - E2E UI Workflow Tests', () => 
             return;
         }
 
-        // Act: Click first comparison label (radio is sr-only, click via visible label)
-        const firstLabel = form.locator('label').filter({ has: page.locator('input[type="radio"]') }).first();
-        const labelExists = await firstLabel.count();
-
-        if (labelExists > 0) {
-            await firstLabel.click();
-
-            // Assert: Clicked (no crash)
-            expect(true).toBe(true); // Click succeeded
-        }
+        // Act: Desain terbaru memakai tombol skala Saaty (@click setPair), bukan radio.
+        const scaleButtons = form.locator('button[type="button"]').filter({ hasText: /Sama penting|Kuat|Sedikit|Mutlak/i });
+        const btnCount = await scaleButtons.count();
+        expect(btnCount).toBeGreaterThan(0);
+        await scaleButtons.first().click();
+        // Assert: klik berhasil tanpa error (state Alpine diperbarui)
+        await expect(scaleButtons.first()).toBeVisible();
     });
 
     /* ═══════════════════════════════════════════════════════════════════

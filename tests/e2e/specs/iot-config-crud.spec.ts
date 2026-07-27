@@ -76,44 +76,45 @@ test.describe('Modul IoT Setup - Koneksi/Parameter/Threshold CRUD E2E', () => {
           await expect(page.getByText(broker, { exact: false })).toHaveCount(0);
      });
 
-     // ─── Parameter Sensor ──────────────────────────────────────────
-     // Catatan: tabel "Parameter Sensor" pada halaman ini adalah daftar TERKURASI
-     // (configuredIotParametersForCommodity) — parameter baru tersimpan tetapi belum tentu tampil
-     // di tabel. Karena itu keberhasilan diverifikasi via toast sukses, bukan baris tabel.
-     test('Positif - CREATE Parameter Sensor baru (toast sukses)', async () => {
-          const code = `E2E_TEMP_${Date.now()}`;
-          await iotPage.createParameter(code, 'Suhu E2E', 'C', 'Parameter suhu untuk E2E');
-          await expect(iotPage.toastSuccess.first()).toBeVisible();
-     });
-
-     test('Negatif - CREATE Parameter dengan kode duplikat ditolak (tidak ada toast sukses)', async ({ page }) => {
-          const code = `E2E_DUP_${Date.now()}`;
-          await iotPage.createParameter(code, 'Param Pertama', 'x'); // sukses (toast)
-
-          // Coba buat lagi dengan kode sama → ditolak (unique). Setelah reload, tidak ada flash sukses.
-          await iotPage.openParameterModal();
-          const m = iotPage.modal('addParameter');
-          await m.locator('input[name="parameterCode"]').fill(code);
-          await m.locator('input[name="parameterName"]').fill('Param Duplikat');
-          await iotPage.submitModal('addParameter');
-
-          await expect(iotPage.toastSuccess).toHaveCount(0);
-     });
-
-     // ─── Threshold Komoditas ───────────────────────────────────────
-     // Struktur modal Threshold tersedia (tombol "Tambah Threshold" membuka modal berisi pilihan
-     // Komoditas, Parameter, Min, Max). Namun dropdown Parameter memakai daftar TERKURASI
-     // (configuredIotParametersForCommodity) yang pada state seed saat ini kosong, sehingga
-     // pembuatan threshold end-to-end bergantung pada data konfigurasi komoditas yang belum tersedia.
-     // Di sini hanya diverifikasi ketersediaan & struktur modalnya (tanpa data seed, create tak dapat diuji andal).
-     test('Positif - Modal Tambah Threshold Komoditas tersedia dengan field lengkap', async ({ page }) => {
+     // ─── Parameter Sensor (REDESIGN: read-only di Setup IoT, CRUD pindah ke Data Master) ──────
+     // Realita implementasi terbaru: section "Parameter Sensor" pada /iot/devices kini hanya KATALOG
+     // read-only "dari Data Master yang dipakai pada mapping payload device", dengan tautan
+     // "Kelola di Data Master" (-> /data-master?tab=sensor-parameters). Tidak ada lagi tombol/modal
+     // Tambah Parameter di halaman IoT. CRUD parameter sensor (create/edit/hapus + boundary)
+     // diuji pada modul Data Master (Section 23), bukan di sini.
+     test('Positif - Parameter Sensor di Setup IoT bersifat read-only (katalog) + tautan "Kelola di Data Master"', async ({ page }) => {
           await iotPage.gotoSetup();
-          await iotPage.addThresholdBtn.first().click({ force: true });
-          const m = iotPage.modal('addCommodityParam');
-          await expect(m).toBeVisible({ timeout: 8000 });
-          await expect(m.locator('select[name="commodityId"]')).toBeVisible();
-          await expect(m.locator('select[name="parameterId"]')).toBeVisible();
-          await expect(m.locator('input[name="minValue"]')).toBeVisible();
-          await expect(m.locator('input[name="maxValue"]')).toBeVisible();
+          await expect(page.getByRole('heading', { name: 'Parameter Sensor' })).toBeVisible({ timeout: 10000 });
+          const kelola = page.getByRole('link', { name: /Kelola di Data Master/i }).first();
+          await expect(kelola).toBeVisible();
+          const href = await kelola.getAttribute('href');
+          expect(href).toMatch(/data-master/);
+          expect(href).toMatch(/sensor-parameters/);
+          // Tidak ada lagi tombol Tambah Parameter di halaman IoT (dipindah ke Data Master)
+          await expect(page.getByRole('button', { name: /^\s*Tambah Parameter\s*$/i })).toHaveCount(0);
+     });
+
+     test('Positif - Tautan "Kelola di Data Master" membuka pengelolaan parameter sensor', async ({ page }) => {
+          await iotPage.gotoSetup();
+          await page.getByRole('link', { name: /Kelola di Data Master/i }).first().click();
+          await expect(page).toHaveURL(/\/data-master/, { timeout: 15000 });
+          await expect(page).toHaveURL(/sensor-parameters/);
+          await expect(page.getByRole('heading', { name: /Konfigurasi Data Master/i })).toBeVisible({ timeout: 10000 });
+     });
+
+     // ─── Threshold Sensor Ternak (REDESIGN: read-only di Setup IoT; diatur dari Data Master Ternak) ──
+     // Realita implementasi terbaru: section "Threshold Sensor Ternak" (dahulu "Threshold Komoditas")
+     // kini READ-ONLY — "Batas ideal diatur dari Data Master Ternak agar konsisten dengan SPK",
+     // dengan tautan "Atur di Data Master" (-> /data-master?tab=livestock). Tidak ada lagi tombol/modal
+     // "Tambah Threshold" di halaman IoT. Pengaturan threshold diuji di modul Data Master (Section 23/24).
+     test('Positif - Threshold Sensor Ternak read-only + tautan "Atur di Data Master"', async ({ page }) => {
+          await iotPage.gotoSetup();
+          await expect(page.getByRole('heading', { name: 'Threshold Sensor Ternak' })).toBeVisible({ timeout: 10000 });
+          const atur = page.getByRole('link', { name: /Atur di Data Master|Atur Threshold/i }).first();
+          await expect(atur).toBeVisible();
+          const href = await atur.getAttribute('href');
+          expect(href).toMatch(/data-master/);
+          // Tidak ada lagi tombol Tambah Threshold di halaman IoT (dipindah ke Data Master Ternak)
+          await expect(page.getByRole('button', { name: /^\s*Tambah Threshold\s*$/i })).toHaveCount(0);
      });
 });

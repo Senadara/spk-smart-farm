@@ -162,24 +162,55 @@ test.describe.serial('Modul Super Admin - Manajemen Mitra Supplier - E2E QA', ()
         await expect(page.getByText(/berhasil ditambahkan dan langsung aktif/i).first()).toBeVisible({ timeout: 15000 });
         await expect(page).toHaveURL(/status=active/);
 
-        // Act 1: Tolak supplier aktif (ada confirm dialog)
+        // Act 1: Tolak supplier aktif — REDESIGN: wajib isi alasan (textarea required minlength=5),
+        // tombol kini "Tolak & Kirim Email" (ada confirm dialog).
         const activeCard = superAdminPage.storeCard(nama);
         await expect(activeCard).toBeVisible({ timeout: 10000 });
+        await activeCard.locator('textarea[name="reason"]').fill('Data toko perlu dilengkapi terlebih dahulu.');
         page.once('dialog', dialog => dialog.accept());
-        await activeCard.getByRole('button', { name: /^Tolak$/i }).click();
+        await activeCard.getByRole('button', { name: /Tolak/i }).click();
 
-        // Assert 1: flash reject
-        await expect(page.getByText('Pengajuan supplier ditolak. Toko tidak tampil untuk owner.').first()).toBeVisible({ timeout: 15000 });
+        // Assert 1: flash reject (pesan baru: "...dan notifikasi email sudah diproses.")
+        await expect(page.getByText(/Pengajuan supplier ditolak/i).first()).toBeVisible({ timeout: 15000 });
 
-        // Act 2: buka tab Ditolak, setujui kembali
+        // Act 2: buka tab Ditolak, setujui kembali (tombol "Setujui & Kirim Email", alasan opsional)
         await superAdminPage.goto('reject');
         await superAdminPage.expectPageReady();
         const rejectCard = superAdminPage.storeCard(nama);
         await expect(rejectCard).toBeVisible({ timeout: 10000 });
-        await rejectCard.getByRole('button', { name: /^Setujui$/i }).click();
+        await rejectCard.getByRole('button', { name: /Setujui/i }).click();
 
-        // Assert 2: flash approve
-        await expect(page.getByText('Supplier disetujui dan sudah tampil untuk owner.').first()).toBeVisible({ timeout: 15000 });
+        // Assert 2: flash approve (pesan baru: "...dan notifikasi email sudah diproses.")
+        await expect(page.getByText(/Supplier disetujui/i).first()).toBeVisible({ timeout: 15000 });
+    });
+
+    test('Negatif/Boundary - Tolak supplier dengan alasan < 5 karakter ditahan (minlength)', async ({ page }) => {
+        // Arrange: buat supplier manual (langsung aktif) agar ada kartu dengan form tolak
+        const ts = Date.now();
+        const nama = `AA Boundary Tolak QA ${ts}`;
+        await superAdminPage.openCreateForm();
+        await superAdminPage.fillSupplierForm({
+            nama,
+            whatsapp: '081234567892',
+            alamat: 'Jl. Boundary Tolak No. 5',
+            selectFirstCategory: true,
+        });
+        await superAdminPage.submitCreate();
+        await expect(page).toHaveURL(/status=active/, { timeout: 15000 });
+
+        const card = superAdminPage.storeCard(nama);
+        await expect(card).toBeVisible({ timeout: 10000 });
+        const reasonBox = card.locator('textarea[name="reason"]');
+        await reasonBox.fill('ab'); // < 5 karakter (melanggar minlength=5)
+        page.once('dialog', dialog => dialog.accept());
+        await card.getByRole('button', { name: /Tolak/i }).click();
+        await page.waitForTimeout(1200);
+
+        // Validasi minlength menahan submit → tidak ada flash "ditolak", tetap di tab aktif
+        const rejected = await page.getByText(/Pengajuan supplier ditolak/i).isVisible().catch(() => false);
+        const reasonInvalid = await reasonBox.evaluate((el: HTMLTextAreaElement) => !el.checkValidity()).catch(() => false);
+        expect(rejected).toBeFalsy();
+        expect(reasonInvalid).toBeTruthy();
     });
 });
 
@@ -347,6 +378,9 @@ test.describe('FUNC Super Admin Supplier (admin)', () => {
         await page.getByRole('button', { name: /^Cari$/ }).click();
         await page.waitForTimeout(1000);
         const cardActive = page.locator('article', { hasText: QA_NAME });
+        // REDESIGN: tolak wajib isi alasan (textarea required minlength=5). Confirm dialog
+        // sudah ditangani handler global page.on('dialog') di describe ini.
+        await cardActive.locator('textarea[name="reason"]').first().fill('Alasan penolakan QA otomatis.');
         await cardActive.getByRole('button', { name: /Tolak/i }).first().click();
         await page.waitForLoadState('domcontentloaded').catch(() => { });
         await page.waitForTimeout(1500);
@@ -366,7 +400,7 @@ test.describe('FUNC Super Admin Supplier (admin)', () => {
         await page.waitForLoadState('domcontentloaded').catch(() => { });
         await page.waitForTimeout(1500);
         const bodyA = await bodyText(page);
-        const approved = /Supplier disetujui dan sudah tampil untuk owner/i.test(bodyA);
+        const approved = /Supplier disetujui/i.test(bodyA);
         console.log('SADMF006_setujui:: approved=' + approved);
         expect(approved).toBeTruthy();
         await cap(page, 'SADM/SADMF006b_setujui.png');

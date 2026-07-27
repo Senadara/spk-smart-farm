@@ -2,7 +2,7 @@ import { Page, Locator, expect } from '@playwright/test';
 
 export class InventoryPage {
     readonly page: Page;
-    
+
     // ─── Page Heading ──────────────────────────────────────────
     readonly inventoryHeading: Locator;
 
@@ -45,7 +45,7 @@ export class InventoryPage {
 
     constructor(page: Page) {
         this.page = page;
-        
+
         // ─── Page Heading ──────────────────────────────────────
         this.inventoryHeading = page.locator('h1').filter({ hasText: /Monitoring Stok|Manajemen Inventaris|Inventory/i });
 
@@ -59,9 +59,9 @@ export class InventoryPage {
         this.kpiCards = kpiGridContainer.locator('[class*="border"][class*="rounded"]');
 
         // ─── Restock Recommendations (AHP-SAW Card) ────────────
-        this.restockHeading = page.locator('h3').filter({ hasText: /Smart Restock/i });
+        this.restockHeading = page.locator('h3').filter({ hasText: /Rekomendasi Restock/i });
         // The restock panel is inside a border-emerald div with "SPK" badge
-        this.restockContainer = page.locator('.border-emerald-100').or(page.locator('[class*="border-emerald"]')).first();
+        this.restockContainer = page.locator('div.border-emerald-100').filter({ has: page.getByRole('heading', { name: /Rekomendasi Restock/i }) }).first();
         // Restock cards with priority badges
         this.restockCardItems = this.restockContainer.locator('[class*="rounded"]').filter({ hasText: /Critical|Warning|Safe/i });
 
@@ -80,9 +80,10 @@ export class InventoryPage {
         this.searchInput = page.getByPlaceholder(/Cari item/i);
 
         // ─── Movement Log (Timeline) ──────────────────────────
-        this.movementLogHeading = page.locator('h3').filter({ hasText: /Riwayat Pergerakan Stok/i });
-        this.movementLogTimeline = page.locator('div').filter({ hasText: /Riwayat Pergerakan Stok/i }).locator('..').locator('[class*="border-l"]');
-        this.movementLogEntries = this.movementLogTimeline.locator('div').filter({ hasText: /inflow|outflow|adjustment/i });
+        this.movementLogHeading = page.locator('h3').filter({ hasText: /Riwayat Sinkronisasi Stok/i });
+        // Panel Riwayat Sinkronisasi Stok: daftar entri berupa div.flex.gap-3 di dalam kontainer space-y-3
+        this.movementLogTimeline = page.locator('div.space-y-3').filter({ has: page.locator('span.rounded-full') }).first();
+        this.movementLogEntries = this.movementLogTimeline.locator('> div.flex');
 
         // ─── Action Buttons ────────────────────────────────────
         this.addInventoryBtn = page.locator('button').filter({ hasText: /Tambah Inventaris/i });
@@ -123,23 +124,23 @@ export class InventoryPage {
     // ─── Interactions ──────────────────────────────────────────
     async filterByBarn(barn: string) {
         await this.barnFilter.selectOption(barn);
-        await this.page.waitForLoadState('networkidle').catch(() => {});
+        await this.page.waitForLoadState('networkidle').catch(() => { });
     }
 
     async filterByCategory(category: string) {
         await this.categoryFilter.selectOption(category);
-        await this.page.waitForLoadState('networkidle').catch(() => {});
+        await this.page.waitForLoadState('networkidle').catch(() => { });
     }
 
     async filterByTableStatus(status: string) {
         await this.tableStatusFilter.selectOption(status);
-        await this.page.waitForLoadState('networkidle').catch(() => {});
+        await this.page.waitForLoadState('networkidle').catch(() => { });
     }
 
     async searchInventory(query: string) {
         await this.searchInput.fill(query);
         await this.searchInput.press('Enter');
-        await this.page.waitForLoadState('networkidle').catch(() => {});
+        await this.page.waitForLoadState('networkidle').catch(() => { });
     }
 
     async getInventoryRowCount(): Promise<number> {

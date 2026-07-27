@@ -1,25 +1,31 @@
 import { Page, Locator, expect } from '@playwright/test';
 
 /**
- * Page Object — Data Master (REDESIGN Nanda): "Konfigurasi Data Master Ternak" (/data-master)
- * Halaman lama (tab "Daftar Pengguna"/"Blok Kebun") sudah dihapus & diganti total.
- * Struktur baru:
- *  - Heading "Konfigurasi Data Master Ternak" + breadcrumb "Data Master / Ternak"
- *  - 3 kartu statistik: Jenis Ternak / Siap / Perlu Setup
- *  - Aside "Jenis Ternak dari Mobile": daftar jenis (link ?jenis_budidaya_id=<id>)
- *  - Panel kanan (per jenis terpilih): tautan "IoT Device" & "Fuzzy SPK",
- *    form konfigurasi (Parameter Lingkungan/IoT rows + Fungsi Produktivitas + Catatan + Simpan)
+ * Page Object — Data Master (REDESIGN Nanda 464c630): "Konfigurasi Data Master" (/data-master)
+ * Halaman kini bertab: Parameter Sensor / Ternak / Kategori Stok / Satuan Produk.
+ * Default tab = "livestock" (Ternak). Struktur tab Ternak:
+ *  - Heading h1 "Konfigurasi Data Master" + breadcrumb "Data Master / <tab label>"
+ *  - Header pill statistik: Jenis / Siap / Setup
+ *  - Section "Jenis Ternak" (h2): pemilih jenis via <select id="jenis_budidaya_id">
+ *    (onchange auto-submit -> URL ?tab=livestock&jenis_budidaya_id=<id>)
+ *  - Panel per jenis terpilih (auto-pilih jenis pertama):
+ *      * link "Kelola Katalog Sensor" (-> tab=sensor-parameters)
+ *      * Section "1. Parameter Lingkungan / IoT"
+ *      * Section "2. Konfigurasi Fuzzy Produktivitas"
+ *      * Section "3. Konfigurasi Afkir / Akhir Siklus"
+ *      * Section "4. Catatan dan Simpan" + tombol "Simpan Konfigurasi"
+ *  - Empty state (tanpa jenis): "Belum ada jenis ternak"
  */
 export class DataMasterPage {
     readonly page: Page;
     readonly pageTitle: Locator;
     readonly breadcrumb: Locator;
-    readonly statJenisTernak: Locator;
+    readonly statPills: Locator;
     readonly jenisTernakHeading: Locator;
-    readonly jenisTernakLinks: Locator;
+    readonly typeSelect: Locator;
+    readonly typeOptions: Locator;
     readonly emptyTypeState: Locator;
-    readonly iotDeviceLink: Locator;
-    readonly fuzzyLink: Locator;
+    readonly katalogSensorLink: Locator;
     readonly envSectionHeading: Locator;
     readonly addParamButton: Locator;
     readonly envCodeInputs: Locator;
@@ -30,19 +36,21 @@ export class DataMasterPage {
 
     constructor(page: Page) {
         this.page = page;
-        this.pageTitle = page.getByRole('heading', { name: 'Konfigurasi Data Master Ternak' });
+        this.pageTitle = page.getByRole('heading', { name: 'Konfigurasi Data Master', exact: true });
         this.breadcrumb = page.getByText('Data Master', { exact: false }).first();
-        this.statJenisTernak = page.getByText('Jenis Ternak', { exact: true }).first();
-        this.jenisTernakHeading = page.getByRole('heading', { name: /Jenis Ternak dari Mobile/i });
-        this.jenisTernakLinks = page.locator('aside a[href*="jenis_budidaya_id="]');
+        this.statPills = page.getByText(/^(Jenis|Siap|Setup)$/);
+        this.jenisTernakHeading = page.getByRole('heading', { name: 'Jenis Ternak', exact: true });
+        this.typeSelect = page.locator('select#jenis_budidaya_id');
+        this.typeOptions = this.typeSelect.locator('option');
         this.emptyTypeState = page.getByText('Belum ada jenis ternak');
-        this.iotDeviceLink = page.getByRole('link', { name: 'IoT Device' });
-        this.fuzzyLink = page.getByRole('link', { name: 'Fuzzy SPK' });
+        this.katalogSensorLink = page.getByRole('link', { name: /Kelola Katalog Sensor/i });
         this.envSectionHeading = page.getByRole('heading', { name: /Parameter Lingkungan \/ IoT/i });
-        this.addParamButton = page.getByRole('button', { name: /Tambah Parameter/i });
-        this.envCodeInputs = page.locator('input[name$="[parameter_code]"]');
-        this.funcSectionHeading = page.getByRole('heading', { name: /Fungsi Produktivitas Tetap/i });
-        this.funcCheckboxes = page.locator('input[name="productivity_function_ids[]"]');
+        this.addParamButton = page.getByRole('button', { name: /Tambah Baris Sensor/i });
+        // Kode sensor per baris = <select name="environment_parameters[i][parameter_code]">
+        this.envCodeInputs = page.locator('select[name^="environment_parameters"][name$="[parameter_code]"]');
+        this.funcSectionHeading = page.getByRole('heading', { name: /Konfigurasi Fuzzy Produktivitas/i });
+        // Checkbox fungsi produktivitas (Data Operasional + Input Fuzzy)
+        this.funcCheckboxes = page.locator('input[type="checkbox"][name^="productivity_functions"]');
         this.notesTextarea = page.locator('textarea[name="notes"]');
         this.saveButton = page.getByRole('button', { name: /Simpan Konfigurasi/i });
     }
@@ -53,7 +61,7 @@ export class DataMasterPage {
     }
 
     async gotoInvalidType() {
-        await this.page.goto('/data-master?jenis_budidaya_id=nonexistent-type-123', { waitUntil: 'domcontentloaded' });
+        await this.page.goto('/data-master?tab=livestock&jenis_budidaya_id=nonexistent-type-123', { waitUntil: 'domcontentloaded' });
     }
 
     async expectPageReady() {
@@ -61,14 +69,23 @@ export class DataMasterPage {
     }
 
     async hasTypes(): Promise<boolean> {
-        return (await this.jenisTernakLinks.count()) > 0;
+        if (await this.typeSelect.count() === 0) {
+            return false;
+        }
+        return (await this.typeOptions.count()) > 0;
     }
 
-    /** Pilih jenis ternak pertama sehingga panel konfigurasi (form) tampil. */
+    /** Pilih jenis ternak pertama pada dropdown; onchange akan submit form (reload dengan query). */
     async selectFirstType() {
-        if (await this.jenisTernakLinks.count() > 0) {
-            await this.jenisTernakLinks.first().click();
-            await this.page.waitForLoadState('domcontentloaded');
+        if (await this.hasTypes()) {
+            const firstValue = await this.typeOptions.first().getAttribute('value');
+            if (firstValue) {
+                await Promise.all([
+                    this.page.waitForURL(/jenis_budidaya_id=/, { timeout: 30000 }).catch(() => { }),
+                    this.typeSelect.selectOption(firstValue),
+                ]);
+                await this.page.waitForLoadState('domcontentloaded');
+            }
         }
     }
 }

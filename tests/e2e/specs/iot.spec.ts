@@ -29,9 +29,11 @@ test.describe('Modul IoT dan Monitoring - E2E Smoke Tests', () => {
         await expect(page.getByText('Langkah 2 - Device per Kandang')).toBeVisible();
         await expect(page.getByText('Langkah 3 - Mapping Payload')).toBeVisible();
 
-        // Konfigurasi lanjutan (advanced-iot-config): Parameter Sensor & Threshold Komoditas
+        // Konfigurasi lanjutan (advanced-iot-config): Parameter Sensor & Threshold Sensor Ternak
+        // (REDESIGN: heading "Threshold Komoditas" -> "Threshold Sensor Ternak"; keduanya read-only,
+        //  dikelola dari Data Master)
         await expect(page.getByRole('heading', { name: 'Parameter Sensor' })).toBeVisible();
-        await expect(page.getByRole('heading', { name: 'Threshold Komoditas' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Threshold Sensor Ternak' })).toBeVisible();
 
         // Tombol utama alur
         await expect(iotPage.mulaiSetupBtn.first()).toBeVisible();

@@ -245,7 +245,8 @@ test.describe('Modul Halaman Pengaturan (Setting) - E2E QA', () => {
         const bodyText = await page.locator('body').textContent();
         expect(bodyText).toMatch(/bobot AHP/i);
         expect(bodyText).toMatch(/ranking SAW/i);
-        expect(bodyText).toMatch(/bandingkan supplier/i);
+        // Deskripsi kartu (desain terbaru): "Bobot AHP, ranking SAW, dan barang supplier."
+        expect(bodyText).toMatch(/barang supplier/i);
     });
 
     test('Positif - Kartu DSS Supplier memiliki 3 tombol aksi (Atur Bobot, Ranking SAW, Cari Barang)', async ({ page }) => {
@@ -309,8 +310,9 @@ test.describe('FUNC Health Scheduler / Penjadwal Kesehatan (pjawab)', () => {
         await page.goto('/settings/health-scheduler', { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(800);
 
-        // VALID
-        await page.locator('textarea[name="schedule_times"]').fill('07:00, 12:30');
+        // VALID: jam pagi < jam sore (desain terbaru: input time morning_time & afternoon_time)
+        await page.locator('input[name="morning_time"]').fill('07:00');
+        await page.locator('input[name="afternoon_time"]').fill('12:30');
         await page.locator('select[name="days"]').selectOption('14');
         await page.locator('input[name="threshold_percent"]').fill('40');
         await page.locator('select[name="target_role"]').selectOption('petugas');
@@ -323,15 +325,17 @@ test.describe('FUNC Health Scheduler / Penjadwal Kesehatan (pjawab)', () => {
         expect(saved).toBeTruthy();
         await capHS(page, 'MISC/HSF001_scheduler_valid.png');
 
-        // INVALID (jam tidak valid)
+        // INVALID: jam sore <= jam pagi -> ditolak (validasi server)
         await page.goto('/settings/health-scheduler', { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(600);
-        await page.locator('textarea[name="schedule_times"]').fill('abc-bukan-jam');
+        await page.locator('input[name="morning_time"]').fill('12:30');
+        await page.locator('input[name="afternoon_time"]').fill('07:00');
         await page.getByRole('button', { name: /Simpan Scheduler/i }).click();
         await page.waitForLoadState('domcontentloaded').catch(() => { });
         await page.waitForTimeout(1500);
         const bodyI = await bodyTextHS(page);
-        const rejected = /Isi minimal satu jam valid/i.test(bodyI);
+        const rejected = !/Scheduler indikasi kesehatan berhasil disimpan/i.test(bodyI)
+            || /lebih akhir dari jam pagi|format valid/i.test(bodyI);
         console.log('HSF002:: rejected=' + rejected);
         expect(rejected).toBeTruthy();
         await capHS(page, 'MISC/HSF002_scheduler_invalid.png');

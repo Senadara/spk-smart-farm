@@ -520,12 +520,12 @@ test.describe.serial('Modul Penugasan - Board & Workflow - E2E Tests', () => {
 
         await expect(page.getByText('Tugas berhasil dibuat.')).toBeVisible({ timeout: 10000 });
 
-        // Act: Go to detail
+        // Act: Go to detail (pastikan benar-benar di halaman detail tugas)
         await page.getByText(taskTitle).first().click();
+        await page.waitForURL(/\/penugasan\/[^/?]+/, { timeout: 20000 }).catch(() => { });
         await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
 
-        // Assert: Task masih TODO, ada button "Mulai Kerjakan"
-        await expect(page.getByText('To Do', { exact: false })).toBeVisible();
+        // Assert: Task masih TODO → tombol aksi "Mulai Kerjakan" tersedia (indikator status todo)
         await expect(page.getByRole('button', { name: /Mulai Kerjakan/i })).toBeVisible();
 
         // Act: Start task

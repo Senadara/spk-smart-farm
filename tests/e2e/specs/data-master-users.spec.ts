@@ -2,10 +2,12 @@ import { test, expect } from '@playwright/test';
 import { DataMasterPage } from '../pages/DataMasterPage.js';
 
 /**
- * Modul Data Master Ternak — Overview & Navigasi (REWRITE)
- * Halaman /data-master telah didesain ulang oleh Nanda menjadi
- * "Konfigurasi Data Master Ternak". Spec lama (tab Daftar Pengguna/Blok Kebun,
- * dummy users) sudah usang dan digantikan test ini agar sesuai implementasi nyata.
+ * Modul Data Master Ternak — Overview & Navigasi (REWRITE untuk redesign Nanda 464c630)
+ * Halaman /data-master kini bertab (Parameter Sensor / Ternak / Kategori Stok / Satuan Produk)
+ * dengan default tab "Ternak" (livestock). Heading menjadi "Konfigurasi Data Master",
+ * pemilih jenis ternak memakai dropdown <select id="jenis_budidaya_id"> (bukan lagi daftar link),
+ * dan panel konfigurasi menautkan "Kelola Katalog Sensor". Spec disesuaikan agar cocok
+ * dengan implementasi nyata terbaru.
  */
 test.describe('Data Master Ternak - Overview & Navigasi', () => {
     let dm: DataMasterPage;
@@ -21,53 +23,53 @@ test.describe('Data Master Ternak - Overview & Navigasi', () => {
         await dm.goto();
     });
 
-    test('Positif - Halaman "Konfigurasi Data Master Ternak" load dengan judul & breadcrumb', async ({ page }) => {
+    test('Positif - Halaman "Konfigurasi Data Master" load dengan judul & breadcrumb', async ({ page }) => {
         await dm.expectPageReady();
         await expect(dm.pageTitle).toBeVisible();
         const body = await page.locator('body').textContent() || '';
         expect(body).toContain('Data Master');
         expect(body).toContain('Ternak');
-        // Deskripsi menegaskan jenis ternak & kandang dari mobile
-        expect(body).toMatch(/Jenis ternak dan kandang tetap dibuat dari mobile/i);
+        // Deskripsi section jenis ternak menegaskan data pilihan dibaca dari mobile
+        expect(body).toMatch(/dibaca dari mobile/i);
     });
 
-    test('Positif - Tiga kartu statistik (Jenis Ternak, Siap, Perlu Setup) tampil', async ({ page }) => {
+    test('Positif - Header statistik (Jenis, Siap, Setup) tampil', async ({ page }) => {
         await dm.expectPageReady();
         const body = await page.locator('body').textContent() || '';
-        expect(body).toContain('Jenis Ternak');
+        expect(body).toContain('Jenis');
         expect(body).toContain('Siap');
-        expect(body).toContain('Perlu Setup');
+        expect(body).toContain('Setup');
     });
 
-    test('Positif - Panel "Jenis Ternak dari Mobile" menampilkan daftar jenis ternak', async ({ page }) => {
+    test('Positif - Section "Jenis Ternak" menampilkan pemilih jenis (dropdown)', async ({ page }) => {
         await dm.expectPageReady();
         await expect(dm.jenisTernakHeading).toBeVisible();
-        // Seeder AyamPetelur menyediakan minimal 1 jenis ternak
-        const count = await dm.jenisTernakLinks.count();
+        // Seeder AyamPetelur menyediakan minimal 1 jenis ternak -> dropdown punya opsi
+        const count = await dm.typeOptions.count();
         expect(count).toBeGreaterThanOrEqual(1);
     });
 
-    test('Positif - Klik jenis ternak memuat panel konfigurasi (URL ?jenis_budidaya_id=)', async ({ page }) => {
+    test('Positif - Memilih jenis ternak memuat panel konfigurasi (URL ?jenis_budidaya_id=)', async ({ page }) => {
         await dm.expectPageReady();
         expect(await dm.hasTypes()).toBeTruthy();
-        await dm.jenisTernakLinks.first().click();
+        await dm.selectFirstType();
         await expect(page).toHaveURL(/jenis_budidaya_id=/);
-        // Panel konfigurasi (form parameter lingkungan) tampil
+        // Panel konfigurasi (section parameter lingkungan) tampil
         await expect(dm.envSectionHeading).toBeVisible();
     });
 
-    test('Positif - Panel jenis terpilih menyediakan tautan IoT Device & Fuzzy SPK', async ({ page }) => {
+    test('Positif - Panel jenis terpilih menyediakan tautan "Kelola Katalog Sensor"', async ({ page }) => {
         await dm.selectFirstType();
-        await expect(dm.iotDeviceLink).toBeVisible();
-        await expect(dm.fuzzyLink).toBeVisible();
+        await expect(dm.katalogSensorLink).toBeVisible();
+        await expect(dm.saveButton).toBeVisible();
     });
 
-    test('Positif - Ringkasan konfigurasi (Parameter Lingkungan, Fungsi Produktivitas, Kandang Mobile) tampil', async ({ page }) => {
+    test('Positif - Ringkasan konfigurasi (Parameter Lingkungan, Produktivitas, Kandang) tampil', async ({ page }) => {
         await dm.selectFirstType();
         const body = await page.locator('body').textContent() || '';
         expect(body).toContain('Parameter Lingkungan');
-        expect(body).toContain('Fungsi Produktivitas');
-        expect(body).toContain('Kandang Mobile');
+        expect(body).toContain('Produktivitas');
+        expect(body).toContain('Kandang');
     });
 
     test('Negatif - Akses dengan jenis_budidaya_id tidak valid tetap tampil tanpa error', async ({ page }) => {

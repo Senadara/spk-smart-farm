@@ -364,7 +364,7 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
 
         // Assert: Check if overdue indicator exists in UI (conditional)
         // Jika ada task overdue, maka badge "Terlambat" akan muncul di stats
-        const overdueStatVisible = await page.getByText('Terlambat').isVisible();
+        const overdueStatVisible = await page.getByText('Terlambat').first().isVisible();
         expect(typeof overdueStatVisible).toBe('boolean'); // Just verify element exists
     });
 
@@ -617,9 +617,7 @@ test.describe.serial('Modul Penugasan - Detail & Report - E2E Tests', () => {
         const taskCard = page.locator('.bg-white.rounded-xl').filter({ hasText: taskTitle }).first();
         await expect(taskCard).toBeVisible();
 
-        // Assert: Task card has hover group class
-        await expect(taskCard).toHaveClass(/group/);
-
+        // Redesign: kartu tidak lagi memakai class "group"; aksi (Mulai/Laporan/Detail) selalu tampil.
         // Assert: Detail link visible
         const detailLink = taskCard.getByRole('link', { name: /Detail/i });
         await expect(detailLink).toBeVisible();

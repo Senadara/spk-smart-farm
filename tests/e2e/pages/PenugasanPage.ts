@@ -27,7 +27,8 @@ export class PenugasanPage {
         this.pageTitle = page.locator('h1').filter({ hasText: /Penugasan|Tindakan/i }).first();
         this.createButton = page.locator('button').filter({ hasText: /Buat Tugas/i }).first();
         this.activeTab = page.locator('button, a').filter({ hasText: /Papan Tugas Aktif|Active/i }).first();
-        this.historyTab = page.locator('button, a').filter({ hasText: /Arsip|Histori/i }).first();
+        // Tab "Arsip & Histori" ditarget via href pasti (hindari match link notifikasi "histori" yang hidden)
+        this.historyTab = page.locator('a[href*="tab=history"]').first();
         this.boardHeading = page.locator('h1, h2').filter({ hasText: /Penugasan|Board|Tugas/i }).first();
         this.historyHeading = page.locator('h1, h2, h3').filter({ hasText: /Histori|Arsip/i }).first();
 
@@ -108,9 +109,16 @@ export class PenugasanPage {
     }
 
     async goToHistoryTab() {
-        await this.historyTab.click();
-        await expect(this.page).toHaveURL(/.*tab=history/);
-        await expect(this.historyHeading).toBeVisible();
+        // Klik tab "Arsip & Histori" via href yang pasti (hindari elemen non-navigasi),
+        // fallback ke navigasi langsung bila tautan tidak ditemukan.
+        const link = this.page.locator('a[href*="tab=history"]').first();
+        if (await link.count() > 0) {
+            await link.click();
+        } else {
+            await this.page.goto('/penugasan?tab=history', { waitUntil: 'domcontentloaded' });
+        }
+        await expect(this.page).toHaveURL(/tab=history/, { timeout: 20000 });
+        await expect(this.historyHeading.first()).toBeVisible({ timeout: 20000 });
     }
 
     async historyRow(title: string): Promise<Locator> {

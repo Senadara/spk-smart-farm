@@ -38,20 +38,20 @@ test.describe('Modul Supplier Recommendations UI - E2E Tests', () => {
           // Act
           await page.goto('/spk-suppliers');
 
-          // Assert - Page elements
-          await expect(page.getByRole('heading', { name: /Katalog Supplier Peternakan/i })).toBeVisible();
+          // Assert - Page elements (desain terbaru: judul "Cari toko, pilih barang, pantau pesanan")
+          await expect(page.getByRole('heading', { name: /Cari toko, pilih barang, pantau pesanan/i })).toBeVisible();
           await expect(page.locator('input[name="search"]')).toBeVisible();
 
-          // Assert - Category filters visible
-          await expect(page.getByRole('link', { name: /Semua/i })).toBeVisible();
-          await expect(page.getByRole('link', { name: /Pakan/i })).toBeVisible();
-          await expect(page.getByRole('link', { name: /Obat/i })).toBeVisible();
-          await expect(page.getByRole('link', { name: /Alat/i })).toBeVisible();
+          // Assert - Category filters visible (Semua / Pakan / Obat & Vaksin / Peralatan)
+          await expect(page.getByRole('link', { name: 'Semua', exact: true })).toBeVisible();
+          await expect(page.getByRole('link', { name: 'Pakan', exact: true })).toBeVisible();
+          await expect(page.getByRole('link', { name: /Obat & Vaksin/i })).toBeVisible();
+          await expect(page.getByRole('link', { name: /Peralatan/i })).toBeVisible();
 
-          // Assert - Quick links to DSS pages
-          await expect(page.getByRole('link', { name: /Konfigurasi AHP/i })).toBeVisible();
-          await expect(page.getByRole('link', { name: /Dashboard SAW/i })).toBeVisible();
-          await expect(page.getByRole('link', { name: /Mode Banding Barang/i })).toBeVisible();
+          // Assert - Quick links (Bandingkan Barang, Atur bobot SPK, Lihat ranking SAW)
+          await expect(page.getByRole('link', { name: /Bandingkan Barang/i })).toBeVisible();
+          await expect(page.getByRole('link', { name: /Atur bobot SPK/i })).toBeVisible();
+          await expect(page.getByRole('link', { name: /Lihat ranking SAW/i })).toBeVisible();
      });
 
      test('Positif - SEARCH suppliers by name', async ({ page }) => {
@@ -85,15 +85,15 @@ test.describe('Modul Supplier Recommendations UI - E2E Tests', () => {
           // Arrange
           await page.goto('/spk-suppliers');
 
-          // Act - Click "Pakan Pokok" filter
-          await page.getByRole('link', { name: /🌽 Pakan Pokok/i }).click();
+          // Act - Click "Pakan" filter
+          await page.getByRole('link', { name: 'Pakan', exact: true }).click();
 
           // Assert
           await expect(page).toHaveURL(/.*category=pakan/);
 
-          // Active filter should be highlighted (bg-emerald-500)
-          const pakanFilter = page.getByRole('link', { name: /🌽 Pakan Pokok/i });
-          await expect(pakanFilter).toHaveClass(/bg-emerald-500/);
+          // Active filter should be highlighted (bg-emerald-600)
+          const pakanFilter = page.getByRole('link', { name: 'Pakan', exact: true });
+          await expect(pakanFilter).toHaveClass(/bg-emerald-600/);
      });
 
      test('Positif - FILTER suppliers by category (obat)', async ({ page }) => {
@@ -107,13 +107,13 @@ test.describe('Modul Supplier Recommendations UI - E2E Tests', () => {
           await page.goto('/spk-suppliers');
 
           // Act
-          await page.getByRole('link', { name: /💊 Obat & Vaksin/i }).click();
+          await page.getByRole('link', { name: /Obat & Vaksin/i }).click();
 
           // Assert
           await expect(page).toHaveURL(/.*category=obat/);
 
-          const obatFilter = page.getByRole('link', { name: /💊 Obat & Vaksin/i });
-          await expect(obatFilter).toHaveClass(/bg-emerald-500/);
+          const obatFilter = page.getByRole('link', { name: /Obat & Vaksin/i });
+          await expect(obatFilter).toHaveClass(/bg-emerald-600/);
      });
 
      test('Positif - DISPLAY supplier cards dengan complete information', async ({ page }) => {
@@ -126,27 +126,19 @@ test.describe('Modul Supplier Recommendations UI - E2E Tests', () => {
           // Act
           await page.goto('/spk-suppliers');
 
-          // Assert - Wait for supplier cards to load
-          const supplierCards = page.locator('a[href*="/spk-suppliers/"]').filter({ hasText: 'Terverifikasi' });
+          // Assert - kartu supplier (desain terbaru: <article> dengan CTA "Lihat Barang")
+          const supplierCards = page.locator('article').filter({ has: page.getByRole('link', { name: /Lihat Barang/i }) });
           await expect(supplierCards.first()).toBeVisible();
 
-          // Assert - Card contains expected elements
           const firstCard = supplierCards.first();
-
-          // Check for logo/image
+          // Logo toko
           await expect(firstCard.locator('img')).toBeVisible();
-
-          // Check for "Terverifikasi" badge
-          await expect(firstCard.getByText('Terverifikasi')).toBeVisible();
-
-          // Check for rating display (star + number)
-          await expect(firstCard.locator('svg.fill-current')).toBeVisible(); // Star icon
-
-          // Check for distance/location
-          await expect(firstCard.locator('text=/km/')).toBeVisible();
-
-          // Check for match score (e.g., "96% Match")
-          await expect(firstCard.locator('text=/Match/')).toBeVisible();
+          // Nama toko (h2)
+          await expect(firstCard.locator('h2')).toBeVisible();
+          // Info jarak
+          await expect(firstCard.getByText(/Jarak Info/i)).toBeVisible();
+          // CTA menuju detail toko
+          await expect(firstCard.getByRole('link', { name: /Lihat Barang/i })).toBeVisible();
      });
 
      test('Positif - CLICK supplier card navigates to detail page', async ({ page }) => {
@@ -159,13 +151,13 @@ test.describe('Modul Supplier Recommendations UI - E2E Tests', () => {
           // Arrange
           await page.goto('/spk-suppliers');
 
-          // Act - Click first supplier card
-          const firstCard = page.locator('a[href*="/spk-suppliers/"]').filter({ hasText: 'Terverifikasi' }).first();
-          await firstCard.click();
+          // Act - Klik CTA "Lihat Barang" pada kartu pertama
+          const firstCard = page.locator('article').filter({ has: page.getByRole('link', { name: /Lihat Barang/i }) }).first();
+          await firstCard.getByRole('link', { name: /Lihat Barang/i }).click();
 
-          // Assert
-          await expect(page).toHaveURL(/.*\/spk-suppliers\/\d+/);
-          await expect(page.getByRole('heading', { name: /Detail Supplier/i })).toBeVisible();
+          // Assert - menuju halaman detail toko (/spk-suppliers/{id})
+          await expect(page).toHaveURL(/\/spk-suppliers\/[\w-]+/);
+          await expect(page.getByText('Toko Supplier', { exact: false }).first()).toBeVisible();
      });
 
      test('Positif - DISPLAY empty state when no suppliers match search', async ({ page }) => {
@@ -182,8 +174,8 @@ test.describe('Modul Supplier Recommendations UI - E2E Tests', () => {
           await page.locator('input[name="search"]').fill('SupplierTidakAda12345');
           await page.locator('input[name="search"]').press('Enter');
 
-          // Assert
-          await expect(page.getByText(/Tidak ada supplier ditemukan/i)).toBeVisible();
+          // Assert - empty state (desain terbaru: "Tidak ada toko ditemukan")
+          await expect(page.getByText(/Tidak ada toko ditemukan/i)).toBeVisible();
      });
 
      // ═══════════════════════════════════════════════════════════════

@@ -34,20 +34,26 @@ test.describe('Data Master Ternak - Form Konfigurasi', () => {
         await expect(dm.envCodeInputs).toHaveCount(before + 1);
     });
 
-    test('Positif - Field parameter (Kode/Nama/Unit) dapat diisi', async ({ page }) => {
-        // Pastikan minimal ada satu baris
+    test('Positif - Pilih kode sensor pada baris parameter mengisi Nama & Unit otomatis', async ({ page }) => {
+        // Desain terbaru: Kode sensor = <select> dari katalog Parameter Sensor.
+        // Memilih kode akan mengisi Nama parameter & Unit secara otomatis (hidden + tampilan).
         if (await dm.envCodeInputs.count() === 0) {
             await dm.addParamButton.click();
         }
-        const codeInput = dm.envCodeInputs.first();
-        const nameInput = page.locator('input[name$="[parameter_name]"]').first();
-        const unitInput = page.locator('input[name$="[unit]"]').first();
-        await codeInput.fill('TEMP');
-        await nameInput.fill('Suhu kandang');
-        await unitInput.fill('C');
-        await expect(codeInput).toHaveValue('TEMP');
-        await expect(nameInput).toHaveValue('Suhu kandang');
-        await expect(unitInput).toHaveValue('C');
+        const codeSelect = dm.envCodeInputs.first();
+        // opsi valid (selain placeholder "" / "Pilih sensor")
+        const optionValues = await codeSelect.locator('option').evaluateAll(
+            (opts) => opts.map((o) => (o as HTMLOptionElement).value).filter((v) => v)
+        );
+        if (optionValues.length === 0) {
+            test.skip(true, 'Katalog Parameter Sensor kosong; tidak ada kode untuk dipilih');
+        }
+        await codeSelect.selectOption(optionValues[0]);
+        await page.waitForTimeout(300);
+        // Nilai kode terpilih & hidden parameter_name terisi otomatis
+        await expect(codeSelect).toHaveValue(optionValues[0]);
+        const hiddenName = page.locator('input[type="hidden"][name$="[parameter_name]"]').first();
+        await expect(hiddenName).not.toHaveValue('');
     });
 
     test('Positif - Section "Fungsi Produktivitas Tetap" tampil dengan daftar fungsi', async ({ page }) => {
@@ -119,32 +125,43 @@ test.describe('FUNC Data Master (pjawab)', () => {
     });
 
     test('DMF001 - Simpan Konfigurasi Data Master VALID -> tersimpan', async ({ page }) => {
-        // pastikan ada minimal 1 baris parameter + 1 fungsi tercentang
-        const codeCount = await page.locator('input[name$="[parameter_code]"]').count();
-        if (codeCount === 0) {
-            await page.getByRole('button', { name: /Tambah Parameter/i }).click();
+        // Desain terbaru: Kode sensor = <select> dari katalog; Nama/Unit auto-fill.
+        const codeSelects = page.locator('select[name^="environment_parameters"][name$="[parameter_code]"]');
+        // pastikan minimal 1 baris parameter dengan kode terpilih
+        if (await codeSelects.count() === 0) {
+            await page.getByRole('button', { name: /Tambah Baris Sensor/i }).click();
             await page.waitForTimeout(400);
-            await page.locator('input[name$="[parameter_code]"]').first().fill('QATEMP');
-            await page.locator('input[name$="[parameter_name]"]').first().fill('QA Suhu Uji');
         }
-        // pastikan minimal 1 fungsi produktivitas tercentang
-        const funcs = page.locator('input[name="productivity_function_ids[]"]');
-        const fCount = await funcs.count();
-        let anyChecked = false;
-        for (let i = 0; i < fCount; i++) { if (await funcs.nth(i).isChecked()) { anyChecked = true; break; } }
-        if (!anyChecked && fCount > 0) await funcs.first().check().catch(() => { });
+        const firstSelect = codeSelects.first();
+        const opts = await firstSelect.locator('option').evaluateAll(
+            (o) => o.map((x) => (x as HTMLOptionElement).value).filter((v) => v)
+        );
+        // jika baris pertama belum ada kode, pilih kode valid pertama
+        if (opts.length > 0 && !(await firstSelect.inputValue())) {
+            await firstSelect.selectOption(opts[0]);
+            await page.waitForTimeout(300);
+        }
+        // set min/max valid pada baris pertama
+        await page.locator('input[name$="[min_value]"]').first().fill('20');
+        await page.locator('input[name$="[max_value]"]').first().fill('30');
+        // pastikan minimal 1 fungsi operasional tercentang
+        const funcOps = page.locator('input[type="checkbox"][name$="[is_active]"]');
+        if (await funcOps.count() > 0) {
+            const f = funcOps.first();
+            if (!(await f.isChecked())) await f.check().catch(() => { });
+        }
         await page.getByRole('button', { name: /Simpan Konfigurasi/i }).click();
         await page.waitForLoadState('domcontentloaded').catch(() => { });
         await page.waitForTimeout(1500);
         const body = await bodyText(page);
-        const ok = /Data Master ternak berhasil disimpan|berhasil disimpan/i.test(body);
-        console.log('DMF001:: simpanSukses=' + ok);
+        const ok = /berhasil disimpan/i.test(body);
+        console.log('DMF001:: simpanSukses=' + ok + ' url=' + page.url());
         expect(ok).toBeTruthy();
         await cap(page, 'MASTER/DMF001_simpan_valid.png');
     });
 
     test('DMF002 - Simpan dengan MIN >= MAX -> ditolak (validasi)', async ({ page }) => {
-        const codeCount = await page.locator('input[name$="[parameter_code]"]').count();
+        const codeCount = await page.locator('select[name^="environment_parameters"][name$="[parameter_code]"]').count();
         expect(codeCount).toBeGreaterThan(0);
         // set min > max pada baris pertama
         await page.locator('input[name$="[min_value]"]').first().fill('999');
@@ -160,18 +177,23 @@ test.describe('FUNC Data Master (pjawab)', () => {
         await cap(page, 'MASTER/DMF002_min_lebih_besar_max.png');
     });
 
-    test('DMF003 - Simpan TANPA fungsi produktivitas -> ditolak (validasi)', async ({ page }) => {
-        const funcs = page.locator('input[name="productivity_function_ids[]"]');
+    test('DMF003 - Fungsi produktivitas OPSIONAL: simpan tanpa fungsi tetap berhasil', async ({ page }) => {
+        // Fakta implementasi (DataMasterController@store): validasi hanya mewajibkan
+        // environment_parameters (min 1); fungsi produktivitas TIDAK diwajibkan (opsional).
+        // Maka menyimpan tanpa mencentang fungsi apa pun harus tetap berhasil.
+        const funcs = page.locator('input[type="checkbox"][name^="productivity_functions"]');
         const fCount = await funcs.count();
         for (let i = 0; i < fCount; i++) { await funcs.nth(i).uncheck().catch(() => { }); }
+        // pastikan baris parameter lingkungan tetap valid (min/max terisi)
+        await page.locator('input[name$="[min_value]"]').first().fill('20');
+        await page.locator('input[name$="[max_value]"]').first().fill('30');
         await page.getByRole('button', { name: /Simpan Konfigurasi/i }).click();
         await page.waitForLoadState('domcontentloaded').catch(() => { });
         await page.waitForTimeout(1500);
         const body = await bodyText(page);
-        const sukses = /Data Master ternak berhasil disimpan/i.test(body);
-        const adaError = /(minimal satu fungsi|fungsi produktivitas|Pilih minimal)/i.test(body);
-        console.log('DMF003:: sukses=' + sukses + ' adaErrorFungsi=' + adaError);
-        expect(sukses).toBeFalsy();
-        await cap(page, 'MASTER/DMF003_tanpa_fungsi.png');
+        const sukses = /berhasil disimpan/i.test(body);
+        console.log('DMF003:: sukses=' + sukses + ' (fungsi opsional) url=' + page.url());
+        expect(sukses).toBeTruthy();
+        await cap(page, 'MASTER/DMF003_tanpa_fungsi_opsional.png');
     });
 });
