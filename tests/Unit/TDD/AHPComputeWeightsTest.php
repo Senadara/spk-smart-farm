@@ -5,6 +5,8 @@ namespace Tests\Unit\TDD;
 use App\Services\AHPService;
 use PHPUnit\Framework\TestCase;
 
+// Tujuan: memastikan bobot prioritas tiap kriteria dihitung adil dan konsisten — total selalu 100%, matriks yang saling bertentangan otomatis ditolak.
+
 class AHPComputeWeightsTest extends TestCase
 {
     private AHPService $service;
@@ -15,7 +17,8 @@ class AHPComputeWeightsTest extends TestCase
         $this->service = new AHPService();
     }
 
-    public function test_computeWeights_matriksKonsistenSempurna_bobotSesuaiRasio(): void
+    // Kasus ideal — semua perbandingan konsisten, bobot keluar sesuai ekspektasi perhitungan AHP
+    public function test_matriks_perbandingan_konsisten(): void
     {
         $matrix = [
             [1, 2, 6],
@@ -33,7 +36,8 @@ class AHPComputeWeightsTest extends TestCase
         $this->assertTrue($r['is_valid']);
     }
 
-    public function test_computeWeights_contohSaaty_crKecilDanValid(): void
+    // Contoh dari buku Saaty — matriks sedikit tidak konsisten tapi masih di bawah batas toleransi (CR < 0,1)
+    public function test_matriks_dengan_sedikit_ketidakonsistenan(): void
     {
         $matrix = [
             [1, 3, 5],
@@ -52,7 +56,8 @@ class AHPComputeWeightsTest extends TestCase
         $this->assertTrue($r['is_valid']);
     }
 
-    public function test_computeWeights_semuaKriteriaSama_bobotMerata(): void
+    // Semua kriteria dianggap sama penting — bobot harus terbagi rata
+    public function test_semua_kriteria_dianggap_sama_penting(): void
     {
         $matrix = [
             [1, 1, 1],
@@ -69,7 +74,8 @@ class AHPComputeWeightsTest extends TestCase
         $this->assertTrue($r['is_valid']);
     }
 
-    public function test_computeWeights_matriksTidakKonsisten_ditolak(): void
+    // Matriks yang saling bertentangan — CR jauh di atas 0,1, sistem harus menolak
+    public function test_matriks_tidak_konsisten_ditolak(): void
     {
         $matrix = [
             [1, 5, 1 / 5],
@@ -84,7 +90,8 @@ class AHPComputeWeightsTest extends TestCase
         $this->assertFalse($r['is_valid']);
     }
 
-    public function test_computeWeights_ukuran2x2_riNolTidakMembagiNol(): void
+    // Matriks 2x2 punya RI = 0, pastikan tidak terjadi pembagian dengan nol
+    public function test_matriks_ukuran_dua_kali_dua_aman_dihitung(): void
     {
         $matrix = [
             [1, 3],
@@ -95,11 +102,12 @@ class AHPComputeWeightsTest extends TestCase
 
         $this->assertEqualsWithDelta(0.75, $r['weights'][0], 1e-6);
         $this->assertEqualsWithDelta(0.25, $r['weights'][1], 1e-6);
-        $this->assertEqualsWithDelta(0.0, $r['cr'], 1e-9); // RI(2)=0 -> guard mengembalikan 0
+        $this->assertEqualsWithDelta(0.0, $r['cr'], 1e-9);
         $this->assertTrue($r['is_valid']);
     }
 
-    public function test_computeWeights_totalBobotSelaluSatu(): void
+    // Sifat dasar AHP: total seluruh bobot harus selalu 1 (100%)
+    public function test_total_bobot_selalu_satu(): void
     {
         $matrix = [
             [1, 3, 5],

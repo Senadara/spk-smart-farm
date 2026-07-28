@@ -5,6 +5,8 @@ namespace Tests\Unit\TDD;
 use App\Services\Fuzzy\CalculateHdp;
 use PHPUnit\Framework\TestCase;
 
+// Tujuan: memastikan persentase produksi telur (HDP) dihitung benar — membandingkan jumlah telur dengan jumlah ayam yang ada.
+
 class CalculateHdpTest extends TestCase
 {
     private CalculateHdp $service;
@@ -15,17 +17,20 @@ class CalculateHdpTest extends TestCase
         $this->service = new CalculateHdp();
     }
 
-    public function test_persenHdp_hitungPersenDuaDesimal(): void
+    // HDP = (jumlah telur ÷ jumlah ayam) × 100%, hasil dalam persen
+    public function test_menghitung_persen_produksi_telur(): void
     {
         $this->assertSame(90.0, $this->service->persenHdp(1800, 2000));
     }
 
-    public function test_persenHdp_produksiPenuh(): void
+    // Kalau semua ayam bertelur, HDP harus 100%
+    public function test_produksi_telur_maksimal(): void
     {
         $this->assertSame(100.0, $this->service->persenHdp(2000, 2000));
     }
 
-    public function test_persenHdp_populasiNolMengembalikanNol(): void
+    // Kandang kosong — kembalikan 0%, jangan error pembagian nol
+    public function test_kandang_kosong_hasil_nol(): void
     {
         $this->assertSame(0.0, $this->service->persenHdp(1800, 0));
     }

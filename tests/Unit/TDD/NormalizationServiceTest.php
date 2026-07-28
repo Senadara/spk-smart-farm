@@ -5,6 +5,8 @@ namespace Tests\Unit\TDD;
 use App\Services\NormalizationService;
 use PHPUnit\Framework\TestCase;
 
+// Tujuan: memastikan peringkat alternatif (misal supplier) dihitung adil ketika kriterianya beda satuan — skor mahal vs murah, besar vs kecil disetarakan dulu sebelum dibandingkan.
+
 class NormalizationServiceTest extends TestCase
 {
     private NormalizationService $svc;
@@ -20,7 +22,8 @@ class NormalizationServiceTest extends TestCase
         return (object) ['parameter_id' => $parameterId, 'value' => $value];
     }
 
-    public function test_computeMinMax_min_dan_max_per_parameter(): void
+    // Fungsi mencari nilai minimum dan maksimum per parameter dari sekumpulan data
+    public function test_mencari_nilai_terendah_dan_tertinggi_per_kriteria(): void
     {
         $rows = [
             $this->row(1, 3000), $this->row(1, 2500), $this->row(1, 2800),
@@ -35,7 +38,8 @@ class NormalizationServiceTest extends TestCase
         $this->assertEqualsWithDelta(90,   $minMax[2]['max'], 1e-9);
     }
 
-    public function test_computeMinMax_nilai_tunggal_min_sama_dengan_max(): void
+    // Kalau cuma ada satu data, min dan max sama
+    public function test_hanya_satu_data_pun_min_dan_max_sama(): void
     {
         $minMax = $this->svc->computeMinMax([$this->row(5, 42.0)]);
 
@@ -43,7 +47,9 @@ class NormalizationServiceTest extends TestCase
         $this->assertEqualsWithDelta(42.0, $minMax[5]['max'], 1e-9);
     }
 
-    public function test_normalizeForEntity_benefit_value_dibagi_max(): void
+    // ---------- Normalisasi SAW ----------
+    // Untuk kriteria benefit: semakin besar semakin baik, dibagi nilai max
+    public function test_kriteria_benefit_skor_dibagi_nilai_tertinggi(): void
     {
         $norm = $this->svc->normalizeForEntity(
             [2 => 80.0], [2 => 'benefit'], [2 => ['min' => 80.0, 'max' => 90.0]]
@@ -51,7 +57,8 @@ class NormalizationServiceTest extends TestCase
         $this->assertEqualsWithDelta(80.0 / 90.0, $norm[2], 1e-9);
     }
 
-    public function test_normalizeForEntity_cost_min_dibagi_value(): void
+    // Untuk kriteria cost: semakin kecil semakin baik, nilai min dibagi skor
+    public function test_kriteria_biaya_skor_terkecil_dibagi_nilai(): void
     {
         $norm = $this->svc->normalizeForEntity(
             [1 => 3000.0], [1 => 'cost'], [1 => ['min' => 2500.0, 'max' => 3000.0]]
@@ -59,7 +66,8 @@ class NormalizationServiceTest extends TestCase
         $this->assertEqualsWithDelta(2500.0 / 3000.0, $norm[1], 1e-9);
     }
 
-    public function test_normalizeForEntity_default_type_benefit(): void
+    // Kalau tipe kriteria tidak ditentukan, default-nya benefit
+    public function test_tipe_tidak_ditentukan_default_ke_benefit(): void
     {
         $norm = $this->svc->normalizeForEntity(
             [7 => 50.0], [], [7 => ['min' => 10.0, 'max' => 100.0]]
@@ -67,7 +75,8 @@ class NormalizationServiceTest extends TestCase
         $this->assertEqualsWithDelta(0.5, $norm[7], 1e-9);
     }
 
-    public function test_normalizeForEntity_benefit_max_nol_aman(): void
+    // Benefit dengan max = 0 — aman tidak error pembagian nol
+    public function test_benefit_dengan_rentang_nol(): void
     {
         $norm = $this->svc->normalizeForEntity(
             [3 => 10.0], [3 => 'benefit'], [3 => ['min' => 0.0, 'max' => 0.0]]
@@ -75,7 +84,8 @@ class NormalizationServiceTest extends TestCase
         $this->assertEqualsWithDelta(0.0, $norm[3], 1e-9);
     }
 
-    public function test_normalizeForEntity_cost_value_nol_aman(): void
+    // Cost dengan value = 0 — aman
+    public function test_biaya_dengan_nilai_nol(): void
     {
         $norm = $this->svc->normalizeForEntity(
             [4 => 0.0], [4 => 'cost'], [4 => ['min' => 5.0, 'max' => 20.0]]
@@ -83,11 +93,12 @@ class NormalizationServiceTest extends TestCase
         $this->assertEqualsWithDelta(0.0, $norm[4], 1e-9);
     }
 
-
-    public function test_saw_pipeline_skor_dan_ranking_benar(): void
+    // ---------- Pipeline SAW lengkap ----------
+    // Simulasi tiga supplier dinilai berdasarkan tiga kriteria, dihitung skor dan di-ranking
+    public function test_pipeline_saw_tiga_supplier_dengan_ranking(): void
     {
         $paramTypes = [1 => 'cost', 2 => 'benefit', 3 => 'benefit'];
-        $weights    = [1 => 0.5, 2 => 0.3, 3 => 0.2]; 
+        $weights    = [1 => 0.5, 2 => 0.3, 3 => 0.2];
 
         $suppliers = [
             'A' => [1 => 3000.0, 2 => 80.0, 3 => 90.0],
