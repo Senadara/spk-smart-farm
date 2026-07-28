@@ -28,6 +28,15 @@ class CalculateMortalitas
             ->whereDate('laporan.createdAt', '>=', $startOfMonth)
             ->count();
 
-        return round(($mati / $populasi) * 100, 3);
+        return $this->persenMortalitas($mati, $populasi);
     }
+
+    public function persenMortalitas(float $mati, float $populasi): float
+{
+    if ($populasi <= 0) {
+        return 0.0;
+    }
+
+    return round(($mati / $populasi) * 100, 3);
+}
 }

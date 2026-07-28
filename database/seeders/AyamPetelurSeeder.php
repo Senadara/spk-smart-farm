@@ -107,6 +107,7 @@ class AyamPetelurSeeder extends Seeder
                     'parameterName' => $name,
                     'unit' => $code === 'TEMP' ? '°C' : ($code === 'HUMID' ? '%' : ($code === 'AMMON' ? 'ppm' : 'lx')),
                     'createdAt' => now(),
+                    'updatedAt' => now(),
                 ]);
                 $paramIds[$code] = $id;
             } else {
@@ -123,6 +124,7 @@ class AyamPetelurSeeder extends Seeder
                 'protocolName' => 'MQTT',
                 'description' => 'MQTT Protocol for Sensor',
                 'createdAt' => now(),
+                'updatedAt' => now(),
             ]);
         } else {
             $protocolId = $protocol->id;
@@ -138,6 +140,7 @@ class AyamPetelurSeeder extends Seeder
                 'mqttBrokerUrl' => 'broker.hivemq.com',
                 'mqttTopic' => 'smartfarm/sensors',
                 'createdAt' => now(),
+                'updatedAt' => now(),
             ]);
         } else {
             $configId = $config->id;
@@ -196,6 +199,7 @@ class AyamPetelurSeeder extends Seeder
                     'deviceName' => 'Sensor Nodes '.$k['nama'],
                     'status' => 'active',
                     'createdAt' => now(),
+                    'updatedAt' => now(),
                 ]);
             } else {
                 $deviceId = $device->id;
@@ -225,10 +229,10 @@ class AyamPetelurSeeder extends Seeder
 
                     $light = ($ts->hour > 5 && $ts->hour < 18) ? rand(200, 300) : rand(10, 30);
 
-                    $sensorInserts[] = ['id' => Str::uuid()->toString(), 'deviceId' => $deviceId, 'parameterId' => $paramIds['TEMP'], 'sensorTimestamp' => $ts->toDateTimeString(), 'value' => $temp, 'createdAt' => now()];
-                    $sensorInserts[] = ['id' => Str::uuid()->toString(), 'deviceId' => $deviceId, 'parameterId' => $paramIds['HUMID'], 'sensorTimestamp' => $ts->toDateTimeString(), 'value' => $humid, 'createdAt' => now()];
-                    $sensorInserts[] = ['id' => Str::uuid()->toString(), 'deviceId' => $deviceId, 'parameterId' => $paramIds['AMMON'], 'sensorTimestamp' => $ts->toDateTimeString(), 'value' => $ammon, 'createdAt' => now()];
-                    $sensorInserts[] = ['id' => Str::uuid()->toString(), 'deviceId' => $deviceId, 'parameterId' => $paramIds['LIGHT'], 'sensorTimestamp' => $ts->toDateTimeString(), 'value' => $light, 'createdAt' => now()];
+                    $sensorInserts[] = ['id' => Str::uuid()->toString(), 'deviceId' => $deviceId, 'parameterId' => $paramIds['TEMP'], 'sensorTimestamp' => $ts->toDateTimeString(), 'value' => $temp, 'createdAt' => now(), 'updatedAt' => now()];
+                    $sensorInserts[] = ['id' => Str::uuid()->toString(), 'deviceId' => $deviceId, 'parameterId' => $paramIds['HUMID'], 'sensorTimestamp' => $ts->toDateTimeString(), 'value' => $humid, 'createdAt' => now(), 'updatedAt' => now()];
+                    $sensorInserts[] = ['id' => Str::uuid()->toString(), 'deviceId' => $deviceId, 'parameterId' => $paramIds['AMMON'], 'sensorTimestamp' => $ts->toDateTimeString(), 'value' => $ammon, 'createdAt' => now(), 'updatedAt' => now()];
+                    $sensorInserts[] = ['id' => Str::uuid()->toString(), 'deviceId' => $deviceId, 'parameterId' => $paramIds['LIGHT'], 'sensorTimestamp' => $ts->toDateTimeString(), 'value' => $light, 'createdAt' => now(), 'updatedAt' => now()];
                 }
                 foreach (array_chunk($sensorInserts, 100) as $chunk) {
                     DB::table('iot_sensor_data')->insert($chunk);

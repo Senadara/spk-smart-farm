@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class SpkFuzzyProfile extends Model
 {
@@ -21,6 +22,7 @@ class SpkFuzzyProfile extends Model
     protected $fillable = [
         'id',
         'commodity_id',
+        'jenis_budidaya_id',
         'name',
         'version',
         'status',
@@ -38,6 +40,11 @@ class SpkFuzzyProfile extends Model
     public function commodity(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Komoditas::class, 'commodity_id');
+    }
+
+    public function jenisBudidaya(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(JenisBudidaya::class, 'jenis_budidaya_id');
     }
 
     public function variables(): \Illuminate\Database\Eloquent\Relations\HasMany
@@ -66,7 +73,32 @@ class SpkFuzzyProfile extends Model
             return self::find($profileId);
         }
 
+        $jenisBudidayaId = self::resolveJenisBudidayaIdFromCoop($coopId)
+            ?: self::resolveJenisBudidayaIdFromCommodity($commodityId);
         $commodityId = $commodityId ?: self::resolveCommodityIdFromCoop($coopId);
+
+        if ($jenisBudidayaId && Schema::hasColumn('spk_fuzzy_profiles', 'jenis_budidaya_id')) {
+            $profile = self::query()
+                ->where('jenis_budidaya_id', $jenisBudidayaId)
+                ->where('is_active', true)
+                ->where('status', 'active')
+                ->latest('updatedAt')
+                ->first();
+
+            if ($profile) {
+                return $profile;
+            }
+
+            $profile = self::query()
+                ->where('jenis_budidaya_id', $jenisBudidayaId)
+                ->whereIn('status', ['review', 'draft', 'active'])
+                ->latest('updatedAt')
+                ->first();
+
+            if ($profile) {
+                return $profile;
+            }
+        }
 
         if ($commodityId) {
             $profile = self::query()
@@ -118,5 +150,27 @@ class SpkFuzzyProfile extends Model
             ->where('isDeleted', 0)
             ->orderBy('nama')
             ->value('id');
+    }
+
+    public static function resolveJenisBudidayaIdFromCoop(?string $coopId): ?string
+    {
+        if (! $coopId || ! Schema::hasTable('unitBudidaya')) {
+            return null;
+        }
+
+        return DB::table('unitBudidaya')
+            ->where('id', $coopId)
+            ->value('jenisBudidayaId');
+    }
+
+    public static function resolveJenisBudidayaIdFromCommodity(?string $commodityId): ?string
+    {
+        if (! $commodityId || ! Schema::hasTable('komoditas')) {
+            return null;
+        }
+
+        return DB::table('komoditas')
+            ->where('id', $commodityId)
+            ->value('jenisBudidayaId');
     }
 }

@@ -26,6 +26,8 @@ class SupplierProduct extends Model
         'kategori',
         'gambar',
         'stok',
+        'minimum_stock',
+        'restock_quantity',
         'satuan',
         'harga',
         'isDeleted',
@@ -35,6 +37,8 @@ class SupplierProduct extends Model
     {
         return [
             'stok' => 'integer',
+            'minimum_stock' => 'integer',
+            'restock_quantity' => 'integer',
             'harga' => 'integer',
             'isDeleted' => 'boolean',
         ];
@@ -53,5 +57,10 @@ class SupplierProduct extends Model
     public function inventoryLinks(): HasMany
     {
         return $this->hasMany(InventorySupplierProductLink::class, 'supplier_product_id');
+    }
+
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(SupplierProductStockMovement::class, 'supplier_product_id');
     }
 }

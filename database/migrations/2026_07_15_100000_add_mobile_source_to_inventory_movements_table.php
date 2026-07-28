@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -24,9 +25,12 @@ return new class extends Migration
             });
         }
 
-        Schema::table('inventory_movements', function (Blueprint $table) {
-            $table->unique(['source_table', 'source_id'], 'inventory_movements_source_unique');
-        });
+        $exists = DB::select("SHOW INDEX FROM inventory_movements WHERE KEY_NAME = 'inventory_movements_source_unique'");
+        if (empty($exists)) {
+            Schema::table('inventory_movements', function (Blueprint $table) {
+                $table->unique(['source_table', 'source_id'], 'inventory_movements_source_unique');
+            });
+        }
     }
 
     public function down(): void

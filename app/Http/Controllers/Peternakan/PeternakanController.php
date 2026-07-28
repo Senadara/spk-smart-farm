@@ -13,6 +13,7 @@ use App\Services\Fuzzy\NarrativeGenerator;
 use App\Services\Health\BarnHealthContextService;
 use App\Services\Health\NodeHealthIndicationClient;
 use App\Services\LivestockMasterConfigService;
+use App\Services\Notifications\LivestockCycleAlertService;
 use App\Services\Notifications\SpkEnvironmentAlertService;
 use App\Services\PeternakanService;
 use App\Services\Spk\SpkFuzzyEvaluationService;
@@ -21,10 +22,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class PeternakanController extends Controller
 {
+    private ?array $activeAfkirCycleConfig = null;
+
     public function __construct(
         protected PeternakanService $peternakanService,
         protected InputResolver $inputResolver,
@@ -33,35 +37,63 @@ class PeternakanController extends Controller
         protected NarrativeGenerator $narrativeGenerator,
         protected SpkFuzzyEvaluationService $fuzzyEvaluationService,
         protected SpkEnvironmentAlertService $environmentAlertService,
+        protected LivestockCycleAlertService $livestockCycleAlertService,
         protected BarnHealthContextService $barnHealthContextService,
         protected NodeHealthIndicationClient $nodeHealthIndicationClient,
         protected LivestockMasterConfigService $livestockMasterConfigService,
     ) {}
+
+    private function applyLivestockContext(Request $request, bool $fromInput = false): void
+    {
+        $this->activeAfkirCycleConfig = null;
+        $jenisTernakId = $fromInput ? $request->input('jenis_ternak_id') : $request->query('jenis_ternak');
+        $komoditasId = $fromInput ? $request->input('komoditas_id') : $request->query('komoditas');
+
+        if ($jenisTernakId) {
+            $this->peternakanService->forJenisTernak($jenisTernakId, $komoditasId);
+
+            return;
+        }
+
+        $this->peternakanService->forKomoditas($komoditasId);
+    }
 
     /**
      * Dashboard utama peternakan - Decision Support & Operations.
      */
     public function index(Request $request)
     {
-        $komoditasId = $request->query('komoditas');
         $chartRange = in_array($request->query('chart_range'), ['30d', '90d', 'ytd'], true)
             ? $request->query('chart_range')
             : '30d';
 
-        $this->peternakanService->forKomoditas($komoditasId);
+        $this->applyLivestockContext($request);
         $activeKomoditasId = $this->peternakanService->getActiveKomoditasId();
+        $activeJenisTernakId = $this->peternakanService->getActiveJenisBudidayaId();
 
         $komoditas = $this->livestockMasterConfigService->livestockCommodities();
         $activeKomoditas = $komoditas->firstWhere('id', $activeKomoditasId);
-        $masterConfigStatus = $this->livestockMasterConfigService->readinessForCommodity($activeKomoditasId);
+        $jenisTernakOptions = $this->livestockMasterConfigService->livestockTypeOptions();
+        $activeJenisTernak = $jenisTernakOptions->firstWhere('id', $activeJenisTernakId);
+        $activeJenisTernakNama = $activeJenisTernak?->nama
+            ?? $activeKomoditas?->jenis_budidaya_nama
+            ?? $activeKomoditas?->nama
+            ?? 'Jenis ternak';
+        $masterConfigStatus = $this->livestockMasterConfigService->summaryForCommodity($activeKomoditasId);
         $masterConfigStatus['data_master_url'] = route('data-master.index', array_filter([
             'jenis_budidaya_id' => $masterConfigStatus['jenis_budidaya_id'] ?? null,
+        ]));
+        $masterConfigStatus['spk_config_url'] = route('settings.fuzzy.index', array_filter([
+            'profile_id' => data_get($masterConfigStatus, 'spk_profile.id'),
         ]));
 
         $barnEnvironment = $this->peternakanService->getBarnEnvironment();
         $barns = $barnEnvironment['barns'];
+        $spkConfigured = (bool) ($masterConfigStatus['spk_configured'] ?? false);
 
-        $fuzzyByBarn = $this->buildFuzzyByBarn($barns);
+        $fuzzyByBarn = $spkConfigured
+            ? $this->buildFuzzyByBarn($barns)
+            : $this->buildMasterBlockedFuzzyByBarn($barns, $masterConfigStatus);
         $defaultBarnId = $barns[0]['id'] ?? 'all';
         $activeFuzzy = $fuzzyByBarn[$defaultBarnId] ?? $fuzzyByBarn['all'] ?? $this->emptyFuzzyPayload();
 
@@ -71,11 +103,17 @@ class PeternakanController extends Controller
             : 'Belum ada evaluasi otomatis';
 
         $dailyReportStatus = $this->peternakanService->getDailyReportStatus();
+        $spkDailySummary = $spkConfigured
+            ? $this->buildDailySpkSummary($activeKomoditasId, $barns, $dailyReportStatus)
+            : $this->masterBlockedSpkSummary($activeKomoditasId, $barns, $masterConfigStatus);
 
         return view('peternakan.dashboard', [
             'komoditas' => $komoditas,
+            'jenisTernakOptions' => $jenisTernakOptions,
             'activeKomoditasId' => $activeKomoditasId,
-            'activeKomoditasNama' => $activeKomoditas?->nama ?? 'Komoditas',
+            'activeJenisTernakId' => $activeJenisTernakId,
+            'activeJenisTernakNama' => $activeJenisTernakNama,
+            'activeKomoditasNama' => $activeJenisTernakNama,
             'chartRange' => $chartRange,
             'kpiMetrics' => $this->peternakanService->getKpiMetrics(),
             'chartData' => $this->peternakanService->getChartData($chartRange),
@@ -89,9 +127,10 @@ class PeternakanController extends Controller
             'productionLog' => $this->peternakanService->getProductionLog(),
             'listKandang' => $this->peternakanService->getListKandang(),
             'dailyReportStatus' => $dailyReportStatus,
-            'spkDailySummary' => $this->buildDailySpkSummary($activeKomoditasId, $barns, $dailyReportStatus),
+            'spkDailySummary' => $spkDailySummary,
             'evaluationTime' => $evaluationTime,
             'hasKomoditas' => $komoditas->isNotEmpty(),
+            'hasJenisTernak' => $jenisTernakOptions->isNotEmpty(),
             'masterConfigStatus' => $masterConfigStatus,
         ]);
     }
@@ -101,12 +140,12 @@ class PeternakanController extends Controller
      */
     public function show(Request $request, $id)
     {
-        $this->peternakanService->forKomoditas($request->query('komoditas'));
+        $this->applyLivestockContext($request);
 
         $barns = $this->peternakanService->getBarnEnvironment()['barns'];
         $barn = collect($barns)->first(fn ($b) => ($b['id'] ?? null) == $id);
         if (! $barn || ($barn['id'] ?? null) === 'no-data') {
-            abort(404, 'Kandang tidak ditemukan untuk komoditas aktif.');
+            abort(404, 'Kandang tidak ditemukan untuk jenis ternak aktif.');
         }
 
         $iotDevices = $this->peternakanService->getBarnIotDevices($barn);
@@ -136,20 +175,23 @@ class PeternakanController extends Controller
             'healthContext' => $this->barnHealthContextService->forBarn($barn['id'], $kpi, $barnDetail['name'] ?? null, $eggProductionDropContext),
             'eggProductionDropError' => ($eggProductionDropResponse['success'] ?? false) ? null : ($eggProductionDropResponse['message'] ?? null),
             'activeKomoditasId' => $this->peternakanService->getActiveKomoditasId(),
+            'activeJenisTernakId' => $this->peternakanService->getActiveJenisBudidayaId(),
+            'activeProductivityCodes' => $this->peternakanService->activeProductivityFunctionCodes(),
         ]);
     }
 
     public function individualProductivity(Request $request, $id)
     {
-        $this->peternakanService->forKomoditas($request->query('komoditas'));
+        $this->applyLivestockContext($request);
 
         $barns = $this->peternakanService->getBarnEnvironment()['barns'];
         $barn = collect($barns)->first(fn ($b) => ($b['id'] ?? null) == $id);
         if (! $barn || ($barn['id'] ?? null) === 'no-data') {
-            abort(404, 'Kandang tidak ditemukan untuk komoditas aktif.');
+            abort(404, 'Kandang tidak ditemukan untuk jenis ternak aktif.');
         }
 
-        $days = in_array((int) $request->query('days'), [7, 14, 30], true)
+        $allowedProductivityPeriods = [7, 14, 30, 90, 180, 365];
+        $days = in_array((int) $request->query('days'), $allowedProductivityPeriods, true)
             ? (int) $request->query('days')
             : 7;
         $threshold = (float) $request->query('threshold', 40);
@@ -170,7 +212,14 @@ class PeternakanController extends Controller
         ]);
 
         $productivity = ($response['success'] ?? false) ? ($response['data'] ?? []) : [];
-        $rows = collect(data_get($productivity, 'rows', []));
+        $enrichedRows = $this->enrichIndividualRowsWithLifecycle(
+            (string) ($barn['id'] ?? ''),
+            data_get($productivity, 'rows', []),
+            now()
+        );
+        $this->dispatchLivestockCycleAlert($barn, $enrichedRows);
+
+        $rows = collect($enrichedRows);
 
         if ($filter === 'indication') {
             $rows = $rows->filter(fn ($row) => (bool) data_get($row, 'isDropIndication'));
@@ -180,6 +229,7 @@ class PeternakanController extends Controller
             'barn' => $this->peternakanService->getBarnDetail($barn),
             'productivity' => $productivity,
             'rows' => $rows->values()->all(),
+            'afkirConfig' => $this->activeAfkirCycleConfig(),
             'filters' => [
                 'days' => $days,
                 'threshold' => $threshold,
@@ -189,6 +239,7 @@ class PeternakanController extends Controller
             ],
             'error' => ($response['success'] ?? false) ? null : ($response['message'] ?? 'Data produktivitas individu belum bisa dibaca.'),
             'activeKomoditasId' => $this->peternakanService->getActiveKomoditasId(),
+            'activeJenisTernakId' => $this->peternakanService->getActiveJenisBudidayaId(),
         ]);
     }
 
@@ -197,13 +248,13 @@ class PeternakanController extends Controller
         abort_unless(
             in_array(session('user.role'), ['pjawab', 'owner', 'admin'], true),
             403,
-            'Hanya penanggung jawab, owner, atau admin yang dapat membuat laporan indikasi kesehatan.'
+            'Hanya penanggung jawab, owner, atau admin yang dapat membuat indikasi pemeriksaan kesehatan.'
         );
 
         $analysisMode = $request->input('analysis_mode') === 'individual_productivity_drop'
             ? 'individual_productivity_drop'
             : null;
-        $days = in_array((int) $request->input('days'), [7, 14, 30], true)
+        $days = in_array((int) $request->input('days'), [7, 14, 30, 90, 180, 365], true)
             ? (int) $request->input('days')
             : 7;
         $threshold = (float) $request->input('threshold', 40);
@@ -224,24 +275,24 @@ class PeternakanController extends Controller
         ]);
 
         if (! ($result['success'] ?? false)) {
-            return back()->with('health_indication_error', $result['message'] ?? 'Gagal membuat laporan indikasi kesehatan.');
+            return back()->with('health_indication_error', $result['message'] ?? 'Gagal membuat indikasi pemeriksaan kesehatan.');
         }
 
         $data = $result['data'] ?? [];
         if (($data['created'] ?? false) === true) {
-            $affectedCount = (int) data_get($data, 'report.affectedObjectCount', 0);
+            $affectedCount = (int) data_get($data, 'indication.affectedObjectCount', 0);
             $objectText = $affectedCount > 0
                 ? " untuk {$affectedCount} ayam terindikasi"
                 : '';
 
-            return back()->with('health_indication_success', "Laporan indikasi sakit otomatis{$objectText} berhasil dibuat dan notifikasi dikirim ke mobile petugas.");
+            return back()->with('health_indication_success', "Indikasi pemeriksaan kesehatan{$objectText} berhasil dibuat dan notifikasi dikirim ke mobile petugas.");
         }
 
         $reason = $data['reason'] ?? null;
         $message = match ($reason) {
             'BELOW_THRESHOLD' => 'Belum dibuat karena persentase ayam tidak bertelur belum melewati ambang 40%.',
-            'DUPLICATE_PERIOD' => 'Laporan indikasi untuk periode ini sudah pernah dibuat.',
-            default => 'Request diproses, tetapi laporan baru tidak dibuat.',
+            'DUPLICATE_PERIOD' => 'Indikasi untuk periode ini sudah pernah dibuat.',
+            default => 'Request diproses, tetapi indikasi baru tidak dibuat.',
         };
 
         return back()->with('health_indication_warning', $message);
@@ -251,9 +302,13 @@ class PeternakanController extends Controller
     {
         return redirect()->route('peternakan.settlement', array_filter([
             'id' => $id,
+            'jenis_ternak' => $request->query('jenis_ternak'),
             'komoditas' => $request->query('komoditas'),
             'start_date' => $request->query('start_date'),
             'end_date' => $request->query('end_date'),
+            'performance' => $request->query('performance'),
+            'afkir' => $request->query('afkir'),
+            'format' => $request->query('format'),
         ]));
     }
 
@@ -263,13 +318,13 @@ class PeternakanController extends Controller
             abort(403, 'Settlement laporan produktivitas hanya tersedia untuk owner/admin.');
         }
 
-        $this->peternakanService->forKomoditas($request->query('komoditas'));
+        $this->applyLivestockContext($request);
         $activeKomoditasId = $this->peternakanService->getActiveKomoditasId();
 
         $barns = $this->peternakanService->getBarnEnvironment()['barns'];
         $barn = collect($barns)->first(fn ($b) => ($b['id'] ?? null) == $id);
         if (! $barn || ($barn['id'] ?? null) === 'no-data') {
-            abort(404, 'Kandang tidak ditemukan untuk komoditas aktif.');
+            abort(404, 'Kandang tidak ditemukan untuk jenis ternak aktif.');
         }
 
         $barn = $this->peternakanService->getBarnDetail($barn);
@@ -280,18 +335,398 @@ class PeternakanController extends Controller
             [$start, $end] = [$end, $start];
         }
 
+        $settlementFilters = $this->normalizeSettlementFilters($request);
         $report = $this->peternakanService->getBarnProductivityHistoryReport(
             $barn,
             $start->toDateString(),
             $end->toDateString()
         );
+        $individualReport = $this->individualSettlementReport($barn, $start, $end, $settlementFilters);
+
+        if ($request->query('format') === 'csv') {
+            return $this->downloadSettlementCsv($barn, $report, $individualReport, $start->toDateString(), $end->toDateString());
+        }
 
         return view('peternakan.settlement', [
             'barn' => $barn,
             'report' => $report,
+            'individualReport' => $individualReport,
             'startDate' => $start->toDateString(),
             'endDate' => $end->toDateString(),
             'activeKomoditasId' => $activeKomoditasId,
+            'activeJenisTernakId' => $this->peternakanService->getActiveJenisBudidayaId(),
+            'settlementFilters' => $settlementFilters,
+        ]);
+    }
+
+    private function normalizeSettlementFilters(Request $request): array
+    {
+        $performance = in_array($request->query('performance'), ['all', 'warning', 'attention', 'normal', 'low_hdp', 'high_hdp'], true)
+            ? $request->query('performance')
+            : 'all';
+        $afkir = in_array($request->query('afkir'), ['all', 'normal', 'due_soon', 'overdue'], true)
+            ? $request->query('afkir')
+            : 'all';
+
+        return compact('performance', 'afkir');
+    }
+
+    private function individualSettlementReport(array $barn, Carbon $start, Carbon $end, array $filters = []): ?array
+    {
+        if (strtolower((string) ($barn['type'] ?? '')) !== 'individu') {
+            return null;
+        }
+
+        $days = max(1, $start->diffInDays($end) + 1);
+        $response = $this->nodeHealthIndicationClient->individualEggProductivity($barn['id'], [
+            'days' => $days,
+            'thresholdPercent' => 40,
+            'startDate' => $start->toDateString(),
+            'endDate' => $end->toDateString(),
+            'sort' => 'name',
+            'direction' => 'asc',
+        ]);
+
+        if (! ($response['success'] ?? false)) {
+            return [
+                'error' => $response['message'] ?? 'Data performa individu belum tersedia.',
+                'rows' => [],
+                'summary' => [],
+                'afkir_config' => $this->activeAfkirCycleConfig(),
+            ];
+        }
+
+        $rows = $this->enrichIndividualRowsWithLifecycle(
+            (string) ($barn['id'] ?? ''),
+            data_get($response, 'data.rows', []),
+            $end
+        );
+        $this->dispatchLivestockCycleAlert($barn, $rows);
+        $totalBeforeFilter = count($rows);
+        $rows = $this->filterIndividualSettlementRows($rows, $filters);
+        $rows = $this->sortIndividualSettlementRows($rows);
+
+        return [
+            'error' => null,
+            'rows' => $rows,
+            'summary' => $response['data'] ?? [],
+            'filters' => $filters,
+            'total_before_filter' => $totalBeforeFilter,
+            'afkir_config' => $this->activeAfkirCycleConfig(),
+        ];
+    }
+
+    private function sortIndividualSettlementRows(array $rows): array
+    {
+        return collect($rows)
+            ->sort(function ($a, $b) {
+                $labelA = $this->individualSettlementRowLabel($a);
+                $labelB = $this->individualSettlementRowLabel($b);
+                $labelCompare = strnatcasecmp($labelA, $labelB);
+
+                if ($labelCompare !== 0) {
+                    return $labelCompare;
+                }
+
+                return strnatcasecmp((string) data_get($a, 'id'), (string) data_get($b, 'id'));
+            })
+            ->values()
+            ->all();
+    }
+
+    private function individualSettlementRowLabel(mixed $row): string
+    {
+        return trim((string) (data_get($row, 'namaId') ?: data_get($row, 'id')));
+    }
+
+    private function enrichIndividualRowsWithLifecycle(string $barnId, array $rows, Carbon $referenceDate): array
+    {
+        if ($rows === []) {
+            return [];
+        }
+
+        $objects = collect();
+
+        try {
+            if ($barnId !== '' && Schema::hasTable('objekBudidaya')) {
+                $ids = collect($rows)
+                    ->map(fn ($row) => data_get($row, 'id'))
+                    ->filter()
+                    ->unique()
+                    ->values();
+
+                if ($ids->isNotEmpty()) {
+                    $columns = collect(['namaId', 'createdAt', 'tanggalMasuk', 'umurMasukMinggu', 'targetAfkirAt', 'batchKode'])
+                        ->filter(fn ($column) => Schema::hasColumn('objekBudidaya', $column))
+                        ->prepend('id')
+                        ->values()
+                        ->all();
+                    $unitColumn = Schema::hasColumn('objekBudidaya', 'unitBudidayaId')
+                        ? 'unitBudidayaId'
+                        : (Schema::hasColumn('objekBudidaya', 'UnitBudidayaId') ? 'UnitBudidayaId' : null);
+
+                    $query = DB::table('objekBudidaya')
+                        ->select($columns)
+                        ->whereIn('id', $ids);
+
+                    if ($unitColumn) {
+                        $query->where($unitColumn, $barnId);
+                    }
+
+                    if (Schema::hasColumn('objekBudidaya', 'isDeleted')) {
+                        $query->where('isDeleted', false);
+                    }
+
+                    $objects = $query->get()->keyBy('id');
+                }
+            }
+        } catch (\Throwable) {
+            $objects = collect();
+        }
+
+        return collect($rows)
+            ->map(function ($row) use ($objects, $referenceDate) {
+                $row = is_array($row) ? $row : (array) $row;
+                $meta = $objects->get((string) data_get($row, 'id'));
+                $row['lifecycle'] = $this->buildLifecycleMeta($row, $meta, $referenceDate);
+
+                return $row;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function buildLifecycleMeta(array $row, mixed $meta, Carbon $referenceDate): array
+    {
+        $afkirConfig = $this->activeAfkirCycleConfig();
+        $targetWeeks = is_numeric($afkirConfig['target_weeks'] ?? null)
+            ? max(1, (int) $afkirConfig['target_weeks'])
+            : null;
+        $warningWeeks = is_numeric($afkirConfig['warning_weeks'] ?? null)
+            ? max(0, (int) $afkirConfig['warning_weeks'])
+            : 8;
+        $afkirLabel = trim((string) ($afkirConfig['label'] ?? 'Afkir / akhir siklus'));
+        $afkirLabel = $afkirLabel !== '' ? $afkirLabel : 'Afkir / akhir siklus';
+        $existing = (array) data_get($row, 'lifecycle', []);
+        $entryDate = $this->parseNullableCarbon(data_get($meta, 'tanggalMasuk'))
+            ?? $this->parseNullableCarbon(data_get($existing, 'entryDate'))
+            ?? $this->parseNullableCarbon(data_get($meta, 'createdAt'));
+        $entryAgeWeeks = $this->nonNegativeInteger(data_get($meta, 'umurMasukMinggu'), data_get($existing, 'entryAgeWeeks', 0));
+        $ageWeeks = data_get($existing, 'ageWeeks');
+
+        if ($entryDate) {
+            $ageWeeks = max(0, $entryAgeWeeks + (int) floor($entryDate->diffInDays($referenceDate, false) / 7));
+        } else {
+            $ageWeeks = $this->nonNegativeInteger($ageWeeks, 0);
+        }
+
+        $targetAfkirAt = $this->parseNullableCarbon(data_get($meta, 'targetAfkirAt'))
+            ?? $this->parseNullableCarbon(data_get($existing, 'targetAfkirDate'));
+
+        if (! $targetAfkirAt && $entryDate && $targetWeeks !== null) {
+            $targetAfkirAt = $entryDate->copy()->addWeeks(max($targetWeeks - $entryAgeWeeks, 0));
+        }
+
+        $afkirWeeksRemaining = $targetAfkirAt
+            ? (int) floor($referenceDate->diffInDays($targetAfkirAt, false) / 7)
+            : data_get($existing, 'afkirWeeksRemaining');
+        $afkirStatus = $this->afkirStatus($afkirWeeksRemaining, data_get($existing, 'afkirStatus', 'normal'), $warningWeeks);
+        $batchCode = trim((string) (data_get($meta, 'batchKode') ?: data_get($existing, 'batchCode')));
+
+        if ($batchCode === '') {
+            $batchCode = $entryDate ? 'Masuk '.$entryDate->toDateString() : 'Batch belum dicatat';
+        }
+
+        return array_merge($existing, [
+            'batchCode' => $batchCode,
+            'entryDate' => $entryDate?->toDateString(),
+            'entryDateLabel' => $this->formatLifecycleDate($entryDate),
+            'entryAgeWeeks' => $entryAgeWeeks,
+            'ageWeeks' => $ageWeeks,
+            'ageLabel' => $ageWeeks.' minggu',
+            'afkirLabel' => $afkirLabel,
+            'afkirTargetWeeks' => $targetWeeks,
+            'afkirWarningWeeks' => $warningWeeks,
+            'targetAfkirDate' => $targetAfkirAt?->toDateString(),
+            'targetAfkirLabel' => $this->formatLifecycleDate($targetAfkirAt),
+            'afkirWeeksRemaining' => $afkirWeeksRemaining,
+            'afkirStatus' => $afkirStatus,
+            'afkirStatusLabel' => $this->afkirStatusLabel($afkirStatus, $afkirWeeksRemaining, $afkirLabel),
+            'phase' => $this->productionPhase((int) $ageWeeks, $afkirStatus, $afkirLabel),
+        ]);
+    }
+
+    private function filterIndividualSettlementRows(array $rows, array $filters): array
+    {
+        $performance = $filters['performance'] ?? 'all';
+        $afkir = $filters['afkir'] ?? 'all';
+
+        return collect($rows)
+            ->filter(function ($row) use ($performance, $afkir) {
+                $passesPerformance = match ($performance) {
+                    'warning' => data_get($row, 'status') === 'warning' || (bool) data_get($row, 'isDropIndication'),
+                    'attention' => data_get($row, 'status') === 'attention',
+                    'normal' => data_get($row, 'status') === 'normal',
+                    'low_hdp' => (float) data_get($row, 'current.layingPercent', 0) < 70,
+                    'high_hdp' => (float) data_get($row, 'current.layingPercent', 0) >= 85,
+                    default => true,
+                };
+                $passesAfkir = $afkir === 'all' || data_get($row, 'lifecycle.afkirStatus', 'normal') === $afkir;
+
+                return $passesPerformance && $passesAfkir;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function parseNullableCarbon(mixed $value): ?Carbon
+    {
+        if (! $value) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse((string) $value);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function nonNegativeInteger(mixed $value, mixed $fallback = 0): int
+    {
+        $candidate = is_numeric($value) ? (int) $value : (is_numeric($fallback) ? (int) $fallback : 0);
+
+        return max(0, $candidate);
+    }
+
+    private function afkirStatus(mixed $weeksRemaining, string $fallback = 'normal', int $warningWeeks = 8): string
+    {
+        if (! is_numeric($weeksRemaining)) {
+            return in_array($fallback, ['normal', 'due_soon', 'overdue'], true) ? $fallback : 'normal';
+        }
+
+        if ((int) $weeksRemaining < 0) {
+            return 'overdue';
+        }
+
+        return (int) $weeksRemaining <= $warningWeeks ? 'due_soon' : 'normal';
+    }
+
+    private function afkirStatusLabel(string $status, mixed $weeksRemaining, string $label): string
+    {
+        if ($status === 'overdue') {
+            return is_numeric($weeksRemaining)
+                ? 'Lewat '.abs((int) $weeksRemaining).' minggu'
+                : 'Lewat target';
+        }
+
+        if ($status === 'due_soon') {
+            return is_numeric($weeksRemaining)
+                ? (int) $weeksRemaining.' minggu lagi'
+                : 'Mendekati '.Str::lower($label);
+        }
+
+        return is_numeric($weeksRemaining)
+            ? (int) $weeksRemaining.' minggu lagi'
+            : $label.' aman';
+    }
+
+    private function productionPhase(int $ageWeeks, string $afkirStatus, string $label): string
+    {
+        if ($afkirStatus === 'overdue') {
+            return 'Lewat target '.Str::lower($label);
+        }
+
+        if ($afkirStatus === 'due_soon') {
+            return 'Mendekati '.Str::lower($label);
+        }
+
+        if ($ageWeeks < 18) {
+            return 'Grower';
+        }
+
+        return $ageWeeks <= 45 ? 'Produksi awal/puncak' : 'Produksi lanjut';
+    }
+
+    private function activeAfkirCycleConfig(): array
+    {
+        return $this->activeAfkirCycleConfig ??= $this->livestockMasterConfigService
+            ->afkirConfigForJenis($this->peternakanService->getActiveJenisBudidayaId());
+    }
+
+    private function dispatchLivestockCycleAlert(array $barn, array $rows): void
+    {
+        try {
+            $this->livestockCycleAlertService->dispatchForBarnRows(
+                $barn,
+                $rows,
+                $this->activeAfkirCycleConfig(),
+                $this->peternakanService->getActiveKomoditasId(),
+                $this->peternakanService->getActiveJenisBudidayaId()
+            );
+        } catch (\Throwable) {
+            // Notifikasi tidak boleh menggagalkan halaman laporan produktivitas.
+        }
+    }
+
+    private function formatLifecycleDate(?Carbon $date): ?string
+    {
+        return $date?->locale('id')->translatedFormat('d M Y');
+    }
+
+    private function downloadSettlementCsv(array $barn, array $report, ?array $individualReport, string $startDate, string $endDate)
+    {
+        $filename = 'settlement-'.$barn['id'].'-'.$startDate.'-'.$endDate.'.csv';
+
+        return response()->streamDownload(function () use ($report, $individualReport) {
+            $output = fopen('php://output', 'w');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, ['Settlement Produktivitas Kandang']);
+            fputcsv($output, ['Tanggal', 'Telur', 'Egg kg', 'Pakan kg', 'FI g/ekor', 'Mati', 'HDP %', 'HHEP %', 'FCR', 'Catatan']);
+
+            foreach ($report['rows'] ?? [] as $row) {
+                fputcsv($output, [
+                    $row['date_iso'] ?? $row['date_label'] ?? '',
+                    $row['eggs'] ?? 0,
+                    $row['egg_mass_kg'] ?? 0,
+                    $row['feed_kg'] ?? 0,
+                    $row['feed_intake'] ?? 0,
+                    $row['mortality'] ?? 0,
+                    $row['hdp'] ?? 0,
+                    $row['hhep'] ?? 0,
+                    $row['fcr'] ?? 0,
+                    $row['note'] ?? '',
+                ]);
+            }
+
+            if ($individualReport !== null) {
+                $afkirLabel = (string) data_get($individualReport, 'afkir_config.label', 'Afkir');
+                fputcsv($output, []);
+                fputcsv($output, ['Performa Individu Ternak']);
+                fputcsv($output, ['ID', 'Nama', 'Batch', 'Tanggal Masuk', 'Umur', 'Target '.$afkirLabel, 'Status '.$afkirLabel, 'HDP Periode %', 'HDP Pembanding %', 'Hari Tidak Bertelur', 'Penurunan %', 'Penurunan Poin', 'Status']);
+
+                foreach ($individualReport['rows'] ?? [] as $row) {
+                    fputcsv($output, [
+                        data_get($row, 'id'),
+                        data_get($row, 'namaId'),
+                        data_get($row, 'lifecycle.batchCode'),
+                        data_get($row, 'lifecycle.entryDate'),
+                        data_get($row, 'lifecycle.ageLabel'),
+                        data_get($row, 'lifecycle.targetAfkirDate'),
+                        data_get($row, 'lifecycle.afkirStatusLabel'),
+                        data_get($row, 'current.layingPercent', 0),
+                        data_get($row, 'previous.layingPercent', 0),
+                        data_get($row, 'current.nonLayingDays', 0),
+                        data_get($row, 'dropPercent', 0),
+                        data_get($row, 'dropPoints', 0),
+                        data_get($row, 'status'),
+                    ]);
+                }
+            }
+
+            fclose($output);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 
@@ -305,20 +740,23 @@ class PeternakanController extends Controller
     }
 
     /**
-     * POST /peternakan/evaluate-all - jalankan fuzzy untuk semua kandang komoditas aktif.
+     * POST /peternakan/evaluate-all - jalankan fuzzy untuk semua kandang jenis ternak aktif.
      */
     public function evaluateAll(Request $request): JsonResponse
     {
-        $this->peternakanService->forKomoditas($request->input('komoditas_id'));
-        $masterConfigStatus = $this->livestockMasterConfigService->readinessForCommodity($this->peternakanService->getActiveKomoditasId());
+        $this->applyLivestockContext($request, true);
+        $masterConfigStatus = $this->livestockMasterConfigService->summaryForCommodity($this->peternakanService->getActiveKomoditasId());
+        $masterConfigStatus['spk_config_url'] = route('settings.fuzzy.index', array_filter([
+            'profile_id' => data_get($masterConfigStatus, 'spk_profile.id'),
+        ]));
 
-        if (! ($masterConfigStatus['configured'] ?? false)) {
+        if (! ($masterConfigStatus['spk_configured'] ?? false)) {
             return response()->json([
                 'success' => false,
                 'processed' => 0,
                 'errors' => [[
                     'coop_id' => null,
-                    'message' => 'Data Master ternak belum lengkap. Lengkapi parameter lingkungan dan fungsi produktivitas sebelum menjalankan SPK.',
+                    'message' => $masterConfigStatus['spk_message'] ?? 'Konfigurasi SPK belum lengkap. Lengkapi Pengaturan Fuzzy sebelum menjalankan SPK.',
                 ]],
                 'evaluation_time' => null,
             ], 422);
@@ -409,6 +847,92 @@ class PeternakanController extends Controller
         return $map;
     }
 
+    private function buildMasterBlockedFuzzyByBarn(array $barns, array $masterConfigStatus): array
+    {
+        $payload = [];
+
+        foreach ($barns as $barn) {
+            if (($barn['id'] ?? null) === 'no-data') {
+                continue;
+            }
+
+            $payload[$barn['id']] = $this->masterBlockedFuzzyPayload($masterConfigStatus);
+        }
+
+        $payload['all'] = $this->masterBlockedFuzzyPayload($masterConfigStatus);
+
+        return $payload;
+    }
+
+    private function masterBlockedFuzzyPayload(array $masterConfigStatus): array
+    {
+        $message = $masterConfigStatus['spk_message'] ?? 'Konfigurasikan Pengaturan Fuzzy terlebih dahulu agar card SPK dapat menampilkan input yang valid.';
+        $spkConfigUrl = $masterConfigStatus['spk_config_url'] ?? '#';
+
+        return [
+            'fuzzySensors' => [
+                'lingkungan' => [],
+                'produktivitas' => [],
+            ],
+            'spkResults' => [
+                'lingkungan' => [
+                    'status' => 'BELUM SIAP',
+                    'statusColor' => 'gray',
+                    'score' => 0,
+                    'scoreColor' => 'gray',
+                    'title' => 'Menunggu Konfigurasi SPK',
+                    'description' => $message,
+                    'link' => $spkConfigUrl,
+                ],
+                'produktivitas' => [
+                    'status' => 'BELUM SIAP',
+                    'statusColor' => 'gray',
+                    'score' => 0,
+                    'scoreColor' => 'gray',
+                    'title' => 'Card produktivitas belum aktif',
+                    'description' => 'Tambahkan variabel input produktivitas dan sumber datanya di Pengaturan Fuzzy.',
+                    'link' => $spkConfigUrl,
+                ],
+                'gabungan' => [
+                    'status' => 'SPK CONFIG',
+                    'statusColor' => 'gray',
+                    'score' => 0,
+                    'scoreColor' => 'gray',
+                    'title' => 'Konfigurasi diperlukan',
+                    'description' => $message,
+                    'link' => $spkConfigUrl,
+                    'isMain' => true,
+                ],
+            ],
+            'spider' => ['labels' => [], 'values' => []],
+            'indicators' => [],
+        ];
+    }
+
+    private function masterBlockedSpkSummary(?string $commodityId, array $barns, array $masterConfigStatus): array
+    {
+        return [
+            'status' => 'Butuh Konfigurasi SPK',
+            'tone' => 'amber',
+            'score' => null,
+            'analyses_today' => 0,
+            'last_update' => null,
+            'last_update_human' => null,
+            'hints' => array_values(array_filter(array_unique(array_merge(
+                [$masterConfigStatus['spk_message'] ?? 'Lengkapi Pengaturan Fuzzy sebelum menjalankan SPK.'],
+                $masterConfigStatus['spk_hints'] ?? []
+            )))),
+            'active_tasks' => 0,
+            'needs_action_count' => 0,
+            'barn_count' => collect($barns)->where('id', '!=', 'no-data')->count(),
+            'action_candidates' => [],
+            'spk_url' => route('spk.dashboard', array_filter([
+                'komoditas' => $commodityId,
+            ])),
+            'tasks_url' => route('spk.tasks.index', ['tab' => 'active']),
+        ];
+    }
+
     private function buildDailySpkSummary(?string $commodityId, array $barns, array $dailyReportStatus): array
     {
         $query = SpkFuzzyLog::query()
@@ -430,7 +954,16 @@ class PeternakanController extends Controller
             ? $todayLogs
             : collect($latestLog ? [$latestLog] : []);
 
-        $problemLogs = $sourceLogs->filter(fn (SpkFuzzyLog $log) => $this->spkLogNeedsAction($log));
+        $candidateSourceLogs = $sourceLogs->filter(fn (SpkFuzzyLog $log) => filled($log->unit_budidaya_id));
+        if ($candidateSourceLogs->isEmpty()) {
+            $candidateSourceLogs = $sourceLogs;
+        }
+
+        $problemLogs = $candidateSourceLogs
+            ->filter(fn (SpkFuzzyLog $log) => $this->spkLogNeedsAction($log))
+            ->sortByDesc(fn (SpkFuzzyLog $log) => $log->createdAt?->timestamp ?? 0)
+            ->unique(fn (SpkFuzzyLog $log) => $this->spkActionCandidateFingerprint($log))
+            ->values();
 
         $activeTaskCount = SpkActionTask::withoutGlobalScopes()
             ->whereIn('status', ['todo', 'in_progress'])
@@ -525,13 +1058,46 @@ class PeternakanController extends Controller
             || (float) ($log->output_value ?? 0) < 70;
     }
 
+    private function spkActionCandidateFingerprint(SpkFuzzyLog $log): string
+    {
+        return implode('|', [
+            $log->unit_budidaya_id ?: 'global',
+            $this->normalizeSpkActionToken($log->status_lingkungan),
+            $this->normalizeSpkActionToken($log->status_kesehatan),
+            $this->normalizeSpkActionToken($log->diagnosis_kausalitas),
+        ]);
+    }
+
+    private function normalizeSpkActionToken(mixed $value): string
+    {
+        $token = Str::of((string) $value)
+            ->lower()
+            ->replaceMatches('/\s+/', ' ')
+            ->trim()
+            ->toString();
+
+        return $token !== '' ? $token : '-';
+    }
+
+    private function hasMeaningfulSpkLabel(mixed $value): bool
+    {
+        return ! in_array($this->normalizeSpkActionToken($value), [
+            '-',
+            'n/a',
+            'na',
+            'unknown',
+            'tidak diketahui',
+        ], true);
+    }
+
     private function formatSpkActionCandidate(SpkFuzzyLog $log, ?string $commodityId): array
     {
         $score = round((float) ($log->output_value ?? 0), 1);
-        $title = $log->diagnosis_kausalitas
-            ?: $log->status_kesehatan
-            ?: $log->status_lingkungan
-            ?: 'Perlu pemeriksaan';
+        $title = collect([
+            $log->diagnosis_kausalitas,
+            $log->status_kesehatan,
+            $log->status_lingkungan,
+        ])->first(fn ($value) => $this->hasMeaningfulSpkLabel($value)) ?: 'Evaluasi SPK perlu dilengkapi';
 
         $description = NarrativeGenerator::sanitizePlainText($log->recommendation)
             ?: NarrativeGenerator::sanitizePlainText($log->narrative)
@@ -545,7 +1111,7 @@ class PeternakanController extends Controller
 
         return [
             'id' => $log->id,
-            'barn' => $log->unitBudidaya?->nama ?? 'Global',
+            'barn' => $log->unitBudidaya?->nama ?? 'Semua kandang',
             'title' => $title,
             'description' => Str::limit($description, 140),
             'score' => $score,
@@ -595,6 +1161,7 @@ class PeternakanController extends Controller
         $kesehatScore = round((float) ($kesehatan['value'] ?? 0), 1);
         $gabScore = round(min($lingkScore, $kesehatScore), 1);
         $sensorCards = $this->sensorCardMapper->fromResult($result);
+        $environmentCards = $this->peternakanService->filterEnvironmentCardsByMaster($sensorCards['lingkungan'] ?? []);
         $spkLink = route('spk.dashboard', array_filter([
             'komoditas' => $this->peternakanService->getActiveKomoditasId(),
             'coop_id' => $barn['id'] ?? null,
@@ -614,12 +1181,19 @@ class PeternakanController extends Controller
             ['label' => 'Amonia',     'percent' => round($ammoPct),  'status' => $amonia > 20 ? 'warning' : 'normal', 'statusLabel' => round($amonia, 1).' ppm - '.(isset($fuzzLingk['amonia']) && $fuzzLingk['amonia'] ? array_search(max($fuzzLingk['amonia']), $fuzzLingk['amonia']) : '-')],
         ];
 
-        $productivityCards = $sensorCards['produktivitas'] ?? [];
+        $productivityCards = $this->peternakanService->filterProductivityCardsByMaster($sensorCards['produktivitas'] ?? []);
+        $productivityFallback = $this->cachedProduktivitasData($barn['id'] ?? null);
+        $productivityIndicators = $productivityCards
+            ? $this->sensorCardMapper->toIndicators($productivityCards)
+            : ($productivityFallback['indicators'] ?? []);
+        $productivitySpider = $productivityCards
+            ? $this->sensorCardMapper->toSpider($productivityCards)
+            : ($productivityFallback['spider'] ?? ['labels' => [], 'values' => []]);
 
         return [
             'fuzzySensors' => [
-                'lingkungan' => $sensorCards['lingkungan'] ?? [],
-                'produktivitas' => $productivityCards,
+                'lingkungan' => $environmentCards,
+                'produktivitas' => $productivityCards ?: ($productivityFallback['productivitySensors'] ?? []),
             ],
             'spkResults' => [
                 'lingkungan' => [
@@ -651,8 +1225,8 @@ class PeternakanController extends Controller
                     'isMain' => true,
                 ],
             ],
-            'spider' => $this->sensorCardMapper->toSpider($productivityCards),
-            'indicators' => $this->sensorCardMapper->toIndicators($productivityCards),
+            'spider' => $productivitySpider,
+            'indicators' => $productivityIndicators,
         ];
     }
 

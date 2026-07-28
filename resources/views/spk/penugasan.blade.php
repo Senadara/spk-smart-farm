@@ -26,7 +26,7 @@
         @endif
 
         <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div class="h-1 bg-gradient-to-r from-emerald-500 via-sky-500 to-indigo-500"></div>
+            <div class="h-1 bg-emerald-500"></div>
             <div class="flex flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between">
                 <div>
                     <div class="flex flex-wrap items-center gap-2">
@@ -65,39 +65,52 @@
         </div>
 
         @if($isPjawab)
+            @php
+                $healthPlans = $healthTaskPlans ?? collect();
+                $hasHealthPlans = $healthPlans->isNotEmpty();
+                $hasSpkPlans = $taskPlans->isNotEmpty();
+            @endphp
             <div class="overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-sm">
                 <div class="flex flex-col gap-3 border-b border-emerald-100 bg-emerald-50/70 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                        <h2 class="text-sm font-bold text-slate-900">Planning Penugasan Petugas</h2>
-                        <p class="mt-0.5 text-xs text-slate-500">Rekomendasi ini dibuat dari log SPK terbaru yang belum memiliki tugas aktif.</p>
+                        <h2 class="text-sm font-bold text-slate-900">Saran Tugas Baru</h2>
+                        <p class="mt-0.5 text-xs text-slate-500">Saran digabung per kandang agar tidak terlihat dobel.</p>
                     </div>
-                    <a href="{{ route('spk.dashboard') }}" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50">
-                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3h2v18h-2zM4 13h2v8H4zM18 8h2v13h-2z"/></svg>
-                        Analisa SPK
-                    </a>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-emerald-700">
+                            {{ $healthPlans->count() + $taskPlans->count() }} saran siap dibuat
+                        </span>
+                        <a href="{{ route('spk.dashboard') }}" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3h2v18h-2zM4 13h2v8H4zM18 8h2v13h-2z"/></svg>
+                            Analisa SPK
+                        </a>
+                    </div>
                 </div>
 
-                @if(($healthTaskPlans ?? collect())->isNotEmpty())
-                    <div class="border-b border-amber-100 bg-amber-50/50 px-4 py-4">
+                @if($hasHealthPlans)
+                    <div class="border-b border-slate-100 px-4 py-4">
                         <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
                             <div>
-                                <h3 class="text-sm font-bold text-slate-900">Planning Pemeriksaan Kesehatan</h3>
-                                <p class="text-xs text-slate-500">Dibuat dari laporan sakit, kematian, produktivitas, pakan, dan SPK web tanpa mengubah input mobile.</p>
+                                <h3 class="text-sm font-bold text-slate-900">Pemeriksaan Kesehatan</h3>
+                                <p class="text-xs text-slate-500">Dari laporan kandang dan indikator kesehatan.</p>
                             </div>
-                            <span class="text-[11px] font-semibold text-amber-700">{{ $healthTaskPlans->count() }} kandidat tugas</span>
+                            <span class="rounded-full border border-amber-100 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700">
+                                {{ $healthPlans->count() }} saran
+                            </span>
                         </div>
                         <div class="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-                            @foreach($healthTaskPlans as $plan)
-                                <div class="flex min-h-[180px] flex-col justify-between rounded-xl border border-amber-100 bg-white p-4 shadow-sm">
+                            @foreach($healthPlans as $plan)
+                                <div class="flex min-h-[180px] flex-col justify-between rounded-xl border border-amber-100 bg-white p-4 shadow-sm transition hover:border-amber-200 hover:shadow-md">
                                     <div class="space-y-3">
                                         <div class="flex items-start justify-between gap-3">
                                             <div>
                                                 <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">{{ $plan['barn'] }}</p>
                                                 <h4 class="mt-1 text-sm font-bold leading-snug text-slate-900">{{ $plan['status'] }}</h4>
                                             </div>
-                                            <span class="shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold {{ $plan['priorityClass'] }}">
-                                                {{ $plan['priorityLabel'] }}
-                                            </span>
+                                            <div class="flex shrink-0 flex-col items-end gap-1">
+                                                <span class="rounded-full border border-amber-100 bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase text-amber-700">Kesehatan</span>
+                                                <span class="rounded-full border px-2 py-1 text-[10px] font-bold {{ $plan['priorityClass'] }}">{{ $plan['priorityLabel'] }}</span>
+                                            </div>
                                         </div>
 
                                         <p class="text-xs leading-relaxed text-slate-600">{{ $plan['summary'] }}</p>
@@ -112,10 +125,14 @@
                                         </div>
                                     </div>
 
-                                    <div class="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                                        <span class="text-[11px] font-semibold text-slate-500">Petugas: {{ $plan['assignee'] }}</span>
-                                        <a href="{{ $plan['url'] }}" class="inline-flex items-center justify-center rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-700">
-                                            Buat Tugas
+                                    <div class="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                                        <div class="text-[11px] font-semibold text-slate-500">
+                                            <span class="block">Petugas: {{ $plan['assignee'] }}</span>
+                                            <span class="block">Tenggat {{ \Carbon\Carbon::parse($plan['due_date'])->format('d M Y') }}</span>
+                                        </div>
+                                        <a href="{{ $plan['url'] }}" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-700">
+                                            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                                            Jadikan Tugas
                                         </a>
                                     </div>
                                 </div>
@@ -124,43 +141,61 @@
                     </div>
                 @endif
 
-                <div class="grid gap-3 p-4 lg:grid-cols-2 2xl:grid-cols-3">
-                    @forelse($taskPlans as $plan)
-                        <div class="flex min-h-[190px] flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 transition hover:border-emerald-200 hover:shadow-sm">
-                            <div class="space-y-3">
-                                <div class="flex items-start justify-between gap-3">
-                                    <div>
-                                        <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">{{ $plan['barn'] }}</p>
-                                        <h3 class="mt-1 text-sm font-bold leading-snug text-slate-900">{{ $plan['title'] }}</h3>
-                                    </div>
-                                    <span class="shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold {{ $plan['priorityClass'] }}">
-                                        {{ $plan['priorityLabel'] }}
-                                    </span>
-                                </div>
-
-                                <p class="text-xs leading-relaxed text-slate-600">{{ $plan['recommendation'] }}</p>
-
-                                <div class="grid grid-cols-2 gap-2 text-[11px]">
-                                    <div class="rounded-lg bg-slate-50 px-3 py-2">
-                                        <span class="block font-bold uppercase tracking-wide text-slate-400">Alasan</span>
-                                        <span class="mt-0.5 block text-slate-700">{{ $plan['reason'] }}</span>
-                                    </div>
-                                    <div class="rounded-lg bg-sky-50 px-3 py-2">
-                                        <span class="block font-bold uppercase tracking-wide text-sky-500">Petugas</span>
-                                        <span class="mt-0.5 block text-slate-700">{{ $plan['assignee'] }}</span>
-                                    </div>
-                                </div>
+                @if($hasSpkPlans)
+                    <div class="px-4 py-4">
+                        <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900">Tindak Lanjut SPK</h3>
+                                <p class="text-xs text-slate-500">Dari hasil fuzzy terbaru yang belum punya tugas aktif.</p>
                             </div>
-
-                            <div class="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                                <span class="text-[11px] font-semibold text-slate-500">Tenggat {{ \Carbon\Carbon::parse($plan['due_date'])->format('d M Y') }}</span>
-                                <a href="{{ $plan['url'] }}" class="inline-flex items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-700">
-                                    Buat Tugas
-                                </a>
-                            </div>
+                            <span class="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+                                {{ $taskPlans->count() }} saran
+                            </span>
                         </div>
-                    @empty
-                        <div class="col-span-full rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center">
+
+                        <div class="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+                            @foreach($taskPlans as $plan)
+                                <div class="flex min-h-[190px] flex-col justify-between rounded-xl border border-emerald-100 bg-white p-4 transition hover:border-emerald-200 hover:shadow-md">
+                                    <div class="space-y-3">
+                                        <div class="flex items-start justify-between gap-3">
+                                            <div>
+                                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">{{ $plan['barn'] }}</p>
+                                                <h3 class="mt-1 text-sm font-bold leading-snug text-slate-900">{{ $plan['title'] }}</h3>
+                                            </div>
+                                            <div class="flex shrink-0 flex-col items-end gap-1">
+                                                <span class="rounded-full border border-emerald-100 bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase text-emerald-700">SPK</span>
+                                                <span class="rounded-full border px-2 py-1 text-[10px] font-bold {{ $plan['priorityClass'] }}">{{ $plan['priorityLabel'] }}</span>
+                                            </div>
+                                        </div>
+
+                                        <p class="text-xs leading-relaxed text-slate-600">{{ $plan['recommendation'] }}</p>
+
+                                        <div class="grid grid-cols-1 gap-2 text-[11px] sm:grid-cols-2">
+                                            <div class="rounded-lg bg-slate-50 px-3 py-2">
+                                                <span class="block font-bold uppercase tracking-wide text-slate-400">Alasan</span>
+                                                <span class="mt-0.5 block text-slate-700">{{ $plan['reason'] }}</span>
+                                            </div>
+                                            <div class="rounded-lg bg-sky-50 px-3 py-2">
+                                                <span class="block font-bold uppercase tracking-wide text-sky-500">Petugas</span>
+                                                <span class="mt-0.5 block text-slate-700">{{ $plan['assignee'] }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                                        <span class="text-[11px] font-semibold text-slate-500">Tenggat {{ \Carbon\Carbon::parse($plan['due_date'])->format('d M Y') }}</span>
+                                        <a href="{{ $plan['url'] }}" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700">
+                                            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                                            Jadikan Tugas
+                                        </a>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @elseif(! $hasHealthPlans)
+                    <div class="p-4">
+                        <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center">
                             <p class="text-sm font-semibold text-slate-700">
                                 {{ $users->isEmpty() ? 'Belum ada petugas aktif untuk menerima tugas.' : 'Belum ada planning tugas baru dari log SPK terbaru.' }}
                             </p>
@@ -168,8 +203,8 @@
                                 {{ $users->isEmpty() ? 'Tambahkan akun petugas terlebih dahulu agar rekomendasi bisa langsung ditugaskan.' : 'Semua log SPK terbaru sudah stabil atau sudah memiliki tugas aktif.' }}
                             </p>
                         </div>
-                    @endforelse
-                </div>
+                    </div>
+                @endif
             </div>
         @elseif($isPetugas)
             <div class="rounded-xl border border-sky-100 bg-sky-50/70 px-5 py-4">
@@ -393,7 +428,7 @@
                         </div>
                         <div>
                             <label class="mb-1 block text-xs font-semibold text-slate-600">Tenggat Waktu</label>
-                            <input type="date" name="due_date" value="{{ old('due_date', $prefill['due_date']) }}" class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none">
+                            <input type="date" name="due_date" value="{{ old('due_date', $prefill['due_date']) }}" min="{{ now()->toDateString() }}" class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none">
                         </div>
                     </div>
 

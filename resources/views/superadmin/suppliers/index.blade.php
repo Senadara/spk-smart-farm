@@ -38,13 +38,13 @@
         </div>
     </section>
 
-    <section class="grid grid-cols-1 gap-3 md:grid-cols-3">
+    <section class="flex gap-2 overflow-x-auto pb-1">
         @foreach($tabs as $key => $tab)
             <a href="{{ route('superadmin.suppliers.index', ['status' => $key]) }}"
-                class="rounded-xl border p-4 transition {{ $status === $key ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white hover:bg-slate-50' }}"
+                class="inline-flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-bold transition {{ $status === $key ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50' }}"
                 style="text-decoration:none;">
-                <p class="text-xs font-bold uppercase tracking-wider text-slate-400">{{ $tab['label'] }}</p>
-                <p class="mt-2 text-2xl font-black text-slate-900">{{ number_format($counts[$key] ?? 0) }}</p>
+                <span>{{ $tab['label'] }}</span>
+                <span class="rounded-full bg-white px-2 py-0.5 text-xs font-black text-slate-900">{{ number_format($counts[$key] ?? 0) }}</span>
             </a>
         @endforeach
     </section>
@@ -55,11 +55,11 @@
                 <h2 class="font-bold text-slate-900">Daftar toko supplier</h2>
                 <p class="mt-1 text-xs text-slate-500">Status saat ini: {{ $tabs[$status]['label'] ?? 'Menunggu' }}.</p>
             </div>
-            <form method="GET" action="{{ route('superadmin.suppliers.index') }}" class="flex flex-col gap-2 sm:flex-row">
+            <form method="GET" action="{{ route('superadmin.suppliers.index') }}" class="flex min-w-[260px] flex-1 flex-wrap items-center gap-2 lg:flex-none">
                 <input type="hidden" name="status" value="{{ $status }}">
                 <input name="search" value="{{ request('search') }}" placeholder="Cari toko, alamat, kategori..."
-                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm sm:w-80">
-                <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white">Cari</button>
+                    class="h-10 min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 text-sm lg:w-80 lg:flex-none">
+                <button class="h-10 flex-1 rounded-lg bg-slate-900 px-4 text-sm font-bold text-white sm:flex-none">Cari</button>
             </form>
         </div>
 
@@ -87,19 +87,33 @@
                         </div>
                     </dl>
 
-                    <div class="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                    @if($store->approvalReason)
+                        <div class="mt-3 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                            <span class="font-bold">Alasan/catatan:</span> {{ $store->approvalReason }}
+                        </div>
+                    @endif
+
+                    <div class="mt-4 grid gap-3 border-t border-slate-100 pt-3">
                         @if($store->tokoStatus !== 'active')
-                            <form method="POST" action="{{ route('superadmin.supplier-stores.approve', $store) }}">
+                            <form method="POST" action="{{ route('superadmin.supplier-stores.approve', $store) }}" class="rounded-lg border border-emerald-100 bg-emerald-50 p-3">
                                 @csrf
                                 @method('PATCH')
-                                <button class="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700">Setujui</button>
+                                <label class="block">
+                                    <span class="text-[11px] font-bold uppercase text-emerald-700">Catatan approval opsional</span>
+                                    <input name="reason" class="mt-1 w-full rounded-lg border border-emerald-200 px-3 py-2 text-xs" placeholder="Contoh: Data toko sudah lengkap">
+                                </label>
+                                <button class="mt-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700">Setujui & Kirim Email</button>
                             </form>
                         @endif
                         @if($store->tokoStatus !== 'reject')
-                            <form method="POST" action="{{ route('superadmin.supplier-stores.reject', $store) }}" onsubmit="return confirm('Tolak supplier ini? Toko tidak akan tampil untuk owner.');">
+                            <form method="POST" action="{{ route('superadmin.supplier-stores.reject', $store) }}" class="rounded-lg border border-rose-100 bg-rose-50 p-3" onsubmit="return confirm('Tolak supplier ini? Toko tidak akan tampil untuk owner.');">
                                 @csrf
                                 @method('PATCH')
-                                <button class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100">Tolak</button>
+                                <label class="block">
+                                    <span class="text-[11px] font-bold uppercase text-rose-700">Alasan penolakan *</span>
+                                    <textarea name="reason" rows="2" required minlength="5" class="mt-1 w-full rounded-lg border border-rose-200 px-3 py-2 text-xs" placeholder="Jelaskan data yang perlu diperbaiki"></textarea>
+                                </label>
+                                <button class="mt-2 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100">Tolak & Kirim Email</button>
                             </form>
                         @endif
                     </div>

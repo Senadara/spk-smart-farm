@@ -23,12 +23,17 @@ class LivestockMasterConfig extends Model
         'commodity_id',
         'status',
         'notes',
+        'afkir_label',
+        'afkir_target_weeks',
+        'afkir_warning_weeks',
         'configured_by',
         'configured_at',
     ];
 
     protected $casts = [
         'configured_at' => 'datetime',
+        'afkir_target_weeks' => 'integer',
+        'afkir_warning_weeks' => 'integer',
     ];
 
     public function environmentParameters()

@@ -7,12 +7,12 @@
 
 @php
     $colorMap = [
-        'blue'    => ['bg' => '#EBF5FF', 'text' => '#1E40AF', 'icon' => '#3B82F6'],
+        'blue'    => ['bg' => '#F0F9FF', 'text' => '#0369A1', 'icon' => '#0EA5E9'],
         'emerald' => ['bg' => '#ECFDF5', 'text' => '#065F46', 'icon' => '#10B981'],
         'gray'    => ['bg' => '#F3F4F6', 'text' => '#374151', 'icon' => '#6B7280'],
         'amber'   => ['bg' => '#FFFBEB', 'text' => '#92400E', 'icon' => '#F59E0B'],
-        'purple'  => ['bg' => '#F5F3FF', 'text' => '#5B21B6', 'icon' => '#8B5CF6'],
-        'rose'    => ['bg' => '#FFF1F2', 'text' => '#9F1239', 'icon' => '#F43F5E'],
+        'purple'  => ['bg' => '#F8FAFC', 'text' => '#334155', 'icon' => '#64748B'],
+        'rose'    => ['bg' => '#FEF2F2', 'text' => '#991B1B', 'icon' => '#EF4444'],
     ];
     $c = $colorMap[$color] ?? $colorMap['blue'];
 

@@ -33,7 +33,7 @@ return new class extends Migration
             ['id' => self::DEFAULT_SETTING_ID],
             [
                 'is_enabled' => false,
-                'schedule_times' => json_encode(['07:00']),
+                'schedule_times' => json_encode(['07:00', '16:00']),
                 'days' => 7,
                 'threshold_percent' => 40,
                 'target_role' => 'petugas',

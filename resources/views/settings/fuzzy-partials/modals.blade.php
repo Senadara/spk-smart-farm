@@ -2,13 +2,14 @@
 <div x-show="modal === 'addProfile'" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
     <div class="fixed inset-0 bg-black/40" @click="modal = null"></div>
     <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-xl p-6 z-10" @click.stop>
-        <h3 class="text-lg font-bold text-gray-900 mb-4">Tambah Profile Fuzzy</h3>
+        <h3 class="text-lg font-bold text-gray-900 mb-1">Tambah Template Fuzzy</h3>
+        <p class="mb-4 text-sm text-gray-500">Template dibuat per jenis ternak. Input utama akan disinkronkan dari Data Master jenis ternak tersebut.</p>
         <form action="{{ route('settings.fuzzy.profiles.store') }}" method="POST">
             @csrf
             <div class="space-y-4">
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Nama Profile *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nama Template *</label>
                         <input type="text" name="name" required placeholder="Ayam Broiler - v1" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                     <div>
@@ -18,13 +19,14 @@
                 </div>
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Komoditas</label>
-                        <select name="commodity_id" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
-                            <option value="">Tanpa komoditas</option>
-                            @foreach($commodities as $commodity)
-                                <option value="{{ $commodity->id }}">{{ $commodity->nama }}</option>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Jenis Ternak *</label>
+                        <select name="jenis_budidaya_id" required class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-[var(--color-primary)] transition-all">
+                            <option value="">Pilih jenis ternak</option>
+                            @foreach($livestockTypes as $type)
+                                <option value="{{ $type->id }}" {{ $type->id === ($activeJenisBudidayaId ?? null) ? 'selected' : '' }}>{{ $type->nama }}</option>
                             @endforeach
                         </select>
+                        <p class="mt-1 text-[11px] text-gray-400">Komoditas legacy akan dipilih otomatis dari jenis ternak ini.</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Status *</label>
@@ -47,7 +49,7 @@
             </div>
             <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-4">
                 <button type="button" @click="modal = null" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">Batal</button>
-                <button type="submit" class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">Simpan Profile</button>
+                <button type="submit" class="px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] rounded-xl hover:opacity-90 transition-opacity">Simpan Template</button>
             </div>
         </form>
     </div>
@@ -56,11 +58,22 @@
 <div x-show="modal === 'addVariable'" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
     <div class="fixed inset-0 bg-black/40" @click="modal = null"></div>
     <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 z-10" @click.stop>
-        <h3 class="text-lg font-bold text-gray-900 mb-4">Tambah Variabel</h3>
+        <h3 class="text-lg font-bold text-gray-900 mb-1">Tambah Variabel Tambahan</h3>
+        <p class="mb-4 text-sm text-gray-500">Gunakan ini hanya untuk parameter khusus yang belum tersedia di Data Master.</p>
         <form action="{{ route('settings.fuzzy.variables.store') }}" method="POST">
             @csrf
             <input type="hidden" name="profile_id" value="{{ $activeProfileId }}">
             <div class="space-y-4">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div class="rounded-xl border border-sky-100 bg-sky-50 p-3">
+                        <div class="text-xs font-bold uppercase tracking-wide text-sky-700">Input</div>
+                        <p class="mt-1 text-xs leading-5 text-sky-800">Nilai masuk ke engine. Setelah dibuat, hubungkan sumbernya di tab Sumber Data.</p>
+                    </div>
+                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                        <div class="text-xs font-bold uppercase tracking-wide text-gray-700">Output</div>
+                        <p class="mt-1 text-xs leading-5 text-gray-600">Hasil engine yang dipakai rule. Biasanya sudah tersedia default.</p>
+                    </div>
+                </div>
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Nama *</label>
@@ -318,7 +331,7 @@
     <div class="fixed inset-0 bg-black/40" @click="modal = null"></div>
     <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 z-10 max-h-[90vh] overflow-y-auto" @click.stop>
         <h3 class="text-lg font-bold text-gray-900 mb-1">Edit Rule IF-THEN</h3>
-        <p class="mb-4 text-sm text-gray-500">Pastikan kondisi dan output berasal dari profil fuzzy yang sama.</p>
+        <p class="mb-4 text-sm text-gray-500">Pastikan kondisi dan output berasal dari template fuzzy yang sama.</p>
         <form :action="`{{ url('/settings/fuzzy/rules') }}/${editRule.id}`" method="POST">
             @csrf @method('PUT')
             <div class="space-y-4">

@@ -142,6 +142,7 @@ class BarnHealthContextService
                 ];
 
                 return [
+                    'coop_id' => $barn->id,
                     'barn' => $barn->nama,
                     'status' => $context['status_label'],
                     'summary' => $context['summary'],
@@ -274,7 +275,7 @@ class BarnHealthContextService
                 'title' => 'Indikasi ayam tidak bertelur tinggi',
                 'message' => number_format($percent, 1, ',', '.')."% ayam ({$count}/{$active}) tidak bertelur selama {$days} hari, melewati ambang ".number_format($threshold, 0, ',', '.').'%.',
                 'source' => 'detailPanen + objekBudidaya',
-                'action' => 'Buat laporan indikasi sakit otomatis dan minta petugas menjalankan checklist kesehatan di mobile.',
+                'action' => 'Buat indikasi pemeriksaan kesehatan dan minta petugas menjalankan checklist kesehatan di mobile.',
             ]];
         }
 
@@ -636,11 +637,11 @@ class BarnHealthContextService
     private function priorityClass(string $priority): string
     {
         return [
-            'urgent' => 'bg-red-50 text-red-700 border-red-200',
+            'urgent' => 'bg-rose-50 text-rose-700 border-rose-200',
             'high' => 'bg-amber-50 text-amber-700 border-amber-200',
-            'medium' => 'bg-blue-50 text-blue-700 border-blue-200',
+            'medium' => 'bg-sky-50 text-sky-700 border-sky-200',
             'low' => 'bg-slate-50 text-slate-600 border-slate-200',
-        ][$priority] ?? 'bg-blue-50 text-blue-700 border-blue-200';
+        ][$priority] ?? 'bg-sky-50 text-sky-700 border-sky-200';
     }
 
     private function hasTable(string $table): bool

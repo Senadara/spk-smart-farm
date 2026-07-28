@@ -22,6 +22,7 @@ class SupplierStore extends Model
         'userId',
         'nama',
         'phone',
+        'notificationEmail',
         'alamat',
         'latitude',
         'longitude',
@@ -30,6 +31,9 @@ class SupplierStore extends Model
         'kategori',
         'isDeleted',
         'tokoStatus',
+        'approvalReason',
+        'registrationNotifiedAt',
+        'approvalNotifiedAt',
         'TypeToko',
     ];
 
@@ -39,6 +43,8 @@ class SupplierStore extends Model
             'latitude' => 'float',
             'longitude' => 'float',
             'isDeleted' => 'boolean',
+            'registrationNotifiedAt' => 'datetime',
+            'approvalNotifiedAt' => 'datetime',
         ];
     }
 

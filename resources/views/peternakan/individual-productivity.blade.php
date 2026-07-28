@@ -16,6 +16,7 @@
         $avgPrevious = (float) data_get($productivity, 'averagePreviousLayingPercent', 0);
         $avgDrop = (float) data_get($productivity, 'averageDropPercent', 0);
         $canCreateHealthIndication = in_array(data_get(session('user'), 'role'), ['pjawab', 'owner', 'admin'], true);
+        $afkirLabel = data_get($afkirConfig ?? [], 'label', 'Afkir');
         $sortLabels = [
             'drop' => 'Penurunan terbesar',
             'drop_points' => 'Selisih persen terbesar',
@@ -30,7 +31,7 @@
         <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
                 <div class="flex flex-wrap items-center gap-2">
-                    <a href="{{ route('peternakan.show', array_filter(['id' => $barn['id'], 'komoditas' => $activeKomoditasId])) }}" class="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 no-underline">
+                    <a href="{{ route('peternakan.show', array_filter(['id' => $barn['id'], 'jenis_ternak' => $activeJenisTernakId ?? null, 'komoditas' => $activeKomoditasId])) }}" class="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 no-underline">
                         <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
                         Detail Kandang
                     </a>
@@ -54,7 +55,7 @@
                     <input type="hidden" name="direction" value="{{ $filters['direction'] }}">
                     <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600 sm:w-auto">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
-                        Buat Laporan Indikasi
+                        Kirim Indikasi Pemeriksaan
                     </button>
                 </form>
             @endif
@@ -110,12 +111,15 @@
                 @if($activeKomoditasId)
                     <input type="hidden" name="komoditas" value="{{ $activeKomoditasId }}">
                 @endif
+                @if($activeJenisTernakId ?? null)
+                    <input type="hidden" name="jenis_ternak" value="{{ $activeJenisTernakId }}">
+                @endif
 
                 <label class="block">
                     <span class="text-xs font-bold text-slate-500">Periode</span>
                     <select name="days" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                        @foreach([7, 14, 30] as $day)
-                            <option value="{{ $day }}" @selected((int) $filters['days'] === $day)>{{ $day }} hari</option>
+                        @foreach([7 => '7 hari', 14 => '14 hari', 30 => '30 hari', 90 => '3 bulan', 180 => '6 bulan', 365 => '1 tahun'] as $day => $label)
+                            <option value="{{ $day }}" @selected((int) $filters['days'] === $day)>{{ $label }}</option>
                         @endforeach
                     </select>
                 </label>
@@ -170,10 +174,12 @@
             </div>
 
             <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
+                <table class="w-full min-w-[1120px] text-sm">
                     <thead class="bg-slate-50">
                         <tr class="text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
                             <th class="px-4 py-3">Ayam</th>
+                            <th class="px-4 py-3">Batch / Umur</th>
+                            <th class="px-4 py-3">Target {{ $afkirLabel }}</th>
                             <th class="px-4 py-3 text-right">HDP Sekarang</th>
                             <th class="px-4 py-3 text-right">HDP Sebelumnya</th>
                             <th class="px-4 py-3 text-right">Hari Tidak Bertelur</th>
@@ -195,11 +201,26 @@
                                     'attention' => 'Pantau',
                                     default => 'Normal',
                                 };
+                                $afkirStatus = data_get($row, 'lifecycle.afkirStatus', 'normal');
+                                $afkirClass = match ($afkirStatus) {
+                                    'overdue' => 'bg-red-50 text-red-700',
+                                    'due_soon' => 'bg-amber-50 text-amber-700',
+                                    default => 'bg-emerald-50 text-emerald-700',
+                                };
                             @endphp
                             <tr class="hover:bg-slate-50/60">
                                 <td class="px-4 py-3">
                                     <p class="font-bold text-slate-900">{{ data_get($row, 'namaId') }}</p>
                                     <p class="mt-0.5 text-[11px] text-slate-400 font-mono">{{ data_get($row, 'id') }}</p>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <p class="font-bold text-slate-800">{{ data_get($row, 'lifecycle.batchCode', '-') }}</p>
+                                    <p class="mt-0.5 text-[11px] text-slate-500">{{ data_get($row, 'lifecycle.ageLabel', '-') }} - {{ data_get($row, 'lifecycle.phase', '-') }}</p>
+                                    <p class="mt-0.5 text-[11px] text-slate-400">Masuk: {{ data_get($row, 'lifecycle.entryDateLabel', data_get($row, 'lifecycle.entryDate', '-')) ?: '-' }}</p>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <p class="font-semibold text-slate-800">{{ data_get($row, 'lifecycle.targetAfkirLabel', data_get($row, 'lifecycle.targetAfkirDate', '-')) ?: '-' }}</p>
+                                    <span class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold {{ $afkirClass }}">{{ data_get($row, 'lifecycle.afkirStatusLabel', '-') }}</span>
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     <p class="font-black text-slate-900">{{ number_format((float) data_get($row, 'current.layingPercent', 0), 1, ',', '.') }}%</p>
@@ -224,7 +245,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="px-4 py-10 text-center text-sm text-slate-500">
+                                <td colspan="8" class="px-4 py-10 text-center text-sm text-slate-500">
                                     Tidak ada data sesuai filter saat ini.
                                 </td>
                             </tr>

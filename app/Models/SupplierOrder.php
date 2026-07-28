@@ -24,6 +24,8 @@ class SupplierOrder extends Model
         'userId',
         'tokoId',
         'status',
+        'statusReason',
+        'statusChangedAt',
         'totalHarga',
         'isDeleted',
         'MidtransOrderId',
@@ -35,6 +37,7 @@ class SupplierOrder extends Model
         return [
             'totalHarga' => 'integer',
             'isDeleted' => 'boolean',
+            'statusChangedAt' => 'datetime',
         ];
     }
 

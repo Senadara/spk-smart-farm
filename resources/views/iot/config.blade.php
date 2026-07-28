@@ -213,12 +213,21 @@
                                                     title="Edit">
                                                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                                 </button>
-                                                <form action="{{ route('iot.connections.destroy', $cc->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Hapus koneksi ini?\nKoneksi yang masih dipakai device tidak bisa dihapus.');">
-                                                    @csrf @method('DELETE')
-                                                    <button type="submit" class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Hapus">
+                                                @php($connectionDeviceCount = (int) ($cc->devices_count ?? 0))
+                                                @if($connectionDeviceCount > 0)
+                                                    <button type="button" disabled
+                                                        class="w-8 h-8 flex cursor-not-allowed items-center justify-center rounded-lg border-none bg-gray-50 text-gray-300"
+                                                        title="Koneksi masih dipakai {{ $connectionDeviceCount }} device. Pindahkan device terlebih dahulu.">
                                                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                     </button>
-                                                </form>
+                                                @else
+                                                    <form action="{{ route('iot.connections.destroy', $cc->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Hapus koneksi ini?');">
+                                                        @csrf @method('DELETE')
+                                                        <button type="submit" class="w-8 h-8 flex items-center justify-center rounded-lg bg-transparent border-none cursor-pointer text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Hapus">
+                                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                        </button>
+                                                    </form>
+                                                @endif
                                             </div>
                                         </td>
                                     </tr>
@@ -420,9 +429,9 @@
                         <input type="number" name="mqttPort" placeholder="8883" min="1" max="65535" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                     <div x-show="connectionMode === 'MQTT'" x-cloak class="sm:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Default MQTT Topic</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Default MQTT Topic / Pola Topic</label>
                         <input type="text" name="mqttTopic" placeholder="smartfarm/devices/{deviceCode}/sensors atau smartfarm/sensors/#" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
-                        <p class="text-xs text-gray-400 mt-1">Bisa pakai {deviceCode} untuk membuat topic otomatis per device. Topic per device tetap bisa diisi di menu Device.</p>
+                        <p class="text-xs text-gray-400 mt-1">Dipakai sebagai topic subscribe jika device tidak punya topic khusus. Bisa pakai {deviceCode} untuk membuat topic otomatis per device.</p>
                     </div>
                     <div x-show="connectionMode === 'MQTT'" x-cloak>
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">MQTT Client ID</label>
@@ -588,7 +597,7 @@
                         <input type="number" name="mqttPort" x-model="editConnection.mqttPort" min="1" max="65535" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                     <div x-show="connectionMode === 'MQTT'" x-cloak class="sm:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Default MQTT Topic</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Default MQTT Topic / Pola Topic</label>
                         <input type="text" name="mqttTopic" x-model="editConnection.mqttTopic" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-all">
                     </div>
                     <div x-show="connectionMode === 'MQTT'" x-cloak>

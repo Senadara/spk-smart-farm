@@ -26,7 +26,7 @@
             <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-sm font-black text-emerald-700">2</span>
             <div>
                 <h2 class="text-base font-semibold text-gray-900">Sumber Data</h2>
-                <p class="text-xs text-gray-500">Hubungkan input SPK ke data aktual.</p>
+                <p class="text-xs text-gray-500">Hubungkan input SPK ke data aktual dari IoT, laporan, atau fungsi sistem.</p>
             </div>
         </div>
         <button type="button" @click="openAddSource()"
@@ -34,6 +34,21 @@
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
             Atur Sumber
         </button>
+    </div>
+
+    <div class="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+            <div class="text-xs font-bold uppercase tracking-wide text-emerald-700">IoT Sensor</div>
+            <p class="mt-1 text-xs leading-5 text-emerald-800">Kode sensor dan threshold berasal dari Data Master jenis ternak. Device kandang cukup dimapping di menu IoT.</p>
+        </div>
+        <div class="rounded-xl border border-sky-100 bg-sky-50 p-3">
+            <div class="text-xs font-bold uppercase tracking-wide text-sky-700">Laporan Mobile</div>
+            <p class="mt-1 text-xs leading-5 text-sky-800">Metric panen, FCR, dan mortalitas dibaca dari laporan harian dan fungsi produktivitas backend.</p>
+        </div>
+        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div class="text-xs font-bold uppercase tracking-wide text-gray-700">Function Produktivitas</div>
+            <p class="mt-1 text-xs leading-5 text-gray-600">HDP, FCR, egg mass, dan fungsi lain mengikuti pilihan produktivitas pada Data Master.</p>
+        </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -254,7 +269,7 @@
                             @endforeach
                         </select>
                         @if(empty($availableFunctions))
-                            <p class="mt-2 text-xs leading-5 text-amber-700">Belum ada fungsi produktivitas aktif dari Data Master untuk komoditas ini.</p>
+                            <p class="mt-2 text-xs leading-5 text-amber-700">Belum ada katalog fungsi produktivitas. Jalankan migration/seeder terbaru.</p>
                         @endif
                     </div>
 

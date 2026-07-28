@@ -25,18 +25,25 @@ class HealthSchedulerController extends Controller
     public function update(Request $request)
     {
         $validated = $request->validate([
-            'schedule_times' => ['required', 'string'],
+            'morning_time' => ['required', 'date_format:H:i'],
+            'afternoon_time' => ['required', 'date_format:H:i'],
             'days' => ['required', 'integer', 'in:7,14,30'],
             'threshold_percent' => ['required', 'numeric', 'min:1', 'max:100'],
             'target_role' => ['required', 'in:petugas,pjawab,owner,all'],
         ]);
 
-        $scheduleTimes = $this->parseScheduleTimes($validated['schedule_times']);
+        $scheduleTimes = $this->parseScheduleTimes($validated['morning_time'].','.$validated['afternoon_time']);
 
-        if (empty($scheduleTimes)) {
+        if (count($scheduleTimes) !== 2) {
             return back()
                 ->withInput()
-                ->withErrors(['schedule_times' => 'Isi minimal satu jam valid, contoh: 07:00 atau 07:00, 12:30.']);
+                ->withErrors(['morning_time' => 'Isi jam pagi dan sore dengan format valid.']);
+        }
+
+        if ($scheduleTimes[0] >= $scheduleTimes[1]) {
+            return back()
+                ->withInput()
+                ->withErrors(['afternoon_time' => 'Jam pengecekan sore harus lebih akhir dari jam pagi.']);
         }
 
         $exists = DB::table('spk_health_scheduler_settings')
@@ -80,18 +87,23 @@ class HealthSchedulerController extends Controller
 
         $summary = data_get($result, 'data.summary', []);
         $processed = (int) data_get($summary, 'processedUnitCount', 0);
-        $created = (int) data_get($summary, 'createdReportCount', 0);
+        $created = (int) data_get($summary, 'createdIndicationCount', data_get($summary, 'createdReportCount', 0));
         $affected = (int) data_get($summary, 'affectedObjectCount', 0);
         $reminders = (int) data_get($summary, 'reminderNotificationCount', 0);
         $duplicateUnits = collect(data_get($summary, 'units', []))
             ->where('reason', 'DUPLICATE_PERIOD')
             ->count();
+        $harvestNotReadyUnits = collect(data_get($summary, 'units', []))
+            ->where('reason', 'HARVEST_NOT_READY')
+            ->count();
 
-        $message = "Uji scheduler selesai. {$processed} kandang dicek, {$created} laporan dibuat untuk {$affected} ayam.";
+        $message = "Uji scheduler selesai. {$processed} kandang dicek, {$created} indikasi dibuat untuk {$affected} ayam.";
         if ($reminders > 0) {
-            $message .= " {$reminders} notifikasi pengingat dikirim untuk indikasi yang sudah punya laporan.";
+            $message .= " {$reminders} notifikasi pengingat dikirim untuk indikasi yang masih pending.";
+        } elseif ($harvestNotReadyUnits > 0) {
+            $message .= " {$harvestNotReadyUnits} kandang dilewati karena panen pagi/sore hari ini belum lengkap.";
         } elseif ($created === 0 && $duplicateUnits > 0) {
-            $message .= " Ada {$duplicateUnits} kandang yang dilewati karena laporan periode ini sudah pernah dibuat.";
+            $message .= " Ada {$duplicateUnits} kandang yang dilewati karena indikasi periode ini sudah pernah dibuat.";
         }
 
         return redirect()
@@ -109,8 +121,10 @@ class HealthSchedulerController extends Controller
             return [
                 'id' => self::DEFAULT_SETTING_ID,
                 'is_enabled' => false,
-                'schedule_times' => ['07:00'],
-                'schedule_times_text' => '07:00',
+                'schedule_times' => ['07:00', '16:00'],
+                'schedule_times_text' => '07:00, 16:00',
+                'morning_time' => '07:00',
+                'afternoon_time' => '16:00',
                 'days' => 7,
                 'threshold_percent' => 40,
                 'target_role' => 'petugas',
@@ -120,13 +134,20 @@ class HealthSchedulerController extends Controller
             ];
         }
 
-        $times = $this->decodeJson($row->schedule_times) ?: ['07:00'];
+        $times = $this->decodeJson($row->schedule_times) ?: ['07:00', '16:00'];
+        $times = $this->parseScheduleTimes(implode(',', $times));
+        if (count($times) < 2) {
+            $times = array_values(array_unique(array_merge($times, ['16:00'])));
+            sort($times);
+        }
 
         return [
             'id' => $row->id,
             'is_enabled' => (bool) $row->is_enabled,
             'schedule_times' => $times,
             'schedule_times_text' => implode(', ', $times),
+            'morning_time' => $times[0] ?? '07:00',
+            'afternoon_time' => $times[1] ?? '16:00',
             'days' => (int) $row->days,
             'threshold_percent' => (float) $row->threshold_percent,
             'target_role' => $row->target_role ?: 'petugas',

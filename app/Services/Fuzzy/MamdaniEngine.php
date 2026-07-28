@@ -6,13 +6,14 @@ use App\Models\SpkFuzzyVariable;
 use App\Models\SpkFuzzyRule;
 use App\Models\SpkFuzzyProfile;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * MamdaniEngine — Cascaded 3-Engine Fuzzy Inference System.
  *
  * Arsitektur:
  *   Engine 1 (group=lingkungan): Suhu+Kelembapan+Amonia → Status Lingkungan
- *   Engine 2 (group=kesehatan) : HDP+Pakan+Mortalitas  → Indeks Kesehatan
+ *   Engine 2 (group=kesehatan) : HDP+FCR+Mortalitas  → Indeks Kesehatan
  *   Engine 3 (group=kausalitas): Label E1 + Label E2   → Diagnosis Kausalitas (lookup)
  */
 class MamdaniEngine
@@ -46,6 +47,7 @@ class MamdaniEngine
             'profile'    => $profile ? [
                 'id' => $profile->id,
                 'commodity_id' => $profile->commodity_id,
+                'jenis_budidaya_id' => $profile->jenis_budidaya_id,
                 'name' => $profile->name,
                 'version' => $profile->version,
                 'status' => $profile->status,
@@ -300,6 +302,8 @@ class MamdaniEngine
      */
     public function lookupKausalitas(string $lingkLabel, string $kesehatanLabel, ?string $profileId = null): array
     {
+        $lookupLingkungan = LayerChickenFuzzyTemplateDefinition::causalityLookupLabel($lingkLabel, 'lingkungan');
+        $lookupKesehatan = LayerChickenFuzzyTemplateDefinition::causalityLookupLabel($kesehatanLabel, 'kesehatan');
         $rules = $this->loadRules('kausalitas', $profileId);
 
         foreach ($rules as $rule) {
@@ -307,11 +311,11 @@ class MamdaniEngine
             $hasKesehatan = false;
 
             foreach ($rule['conditions'] as $cond) {
-                if (($cond['variable_name'] ?? null) === 'label_lingkungan' && ($cond['set_name'] ?? null) === $lingkLabel) {
+                if (($cond['variable_name'] ?? null) === 'label_lingkungan' && ($cond['set_name'] ?? null) === $lookupLingkungan) {
                     $hasLingk = true;
                 }
 
-                if (($cond['variable_name'] ?? null) === 'label_kesehatan' && ($cond['set_name'] ?? null) === $kesehatanLabel) {
+                if (($cond['variable_name'] ?? null) === 'label_kesehatan' && ($cond['set_name'] ?? null) === $lookupKesehatan) {
                     $hasKesehatan = true;
                 }
             }
@@ -322,6 +326,10 @@ class MamdaniEngine
                     'diagnosis'      => $rule['diagnosis'] ?? '-',
                     'recommendation' => $rule['recommendation'] ?? '-',
                     'matched_rule'   => $rule['name'] ?? null,
+                    'lookup_labels'  => [
+                        'lingkungan' => $lookupLingkungan,
+                        'kesehatan' => $lookupKesehatan,
+                    ],
                 ];
             }
         }
@@ -332,6 +340,10 @@ class MamdaniEngine
             'diagnosis'      => 'Kombinasi kondisi belum terdefinisi',
             'recommendation' => 'Lakukan evaluasi manual',
             'matched_rule'   => null,
+            'lookup_labels'  => [
+                'lingkungan' => $lookupLingkungan,
+                'kesehatan' => $lookupKesehatan,
+            ],
         ];
     }
 
@@ -369,6 +381,7 @@ class MamdaniEngine
                 'outputSet',
             ])->where('group', $group)
                 ->when($profileId, fn ($query) => $query->where('profile_id', $profileId))
+                ->when(Schema::hasColumn('spk_fuzzy_rules', 'is_active'), fn ($query) => $query->where('is_active', true))
                 ->get();
 
             return $rules->map(function ($rule) {

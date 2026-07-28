@@ -24,6 +24,7 @@ class LivestockEnvironmentParameter extends Model
         'parameter_code',
         'parameter_name',
         'unit',
+        'icon_key',
         'min_value',
         'max_value',
         'fallback_value',

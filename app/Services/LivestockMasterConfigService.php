@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\IotParameter;
+use App\Services\Fuzzy\LayerChickenFuzzyTemplateDefinition;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -9,6 +11,8 @@ use Illuminate\Support\Str;
 
 class LivestockMasterConfigService
 {
+    private ?bool $environmentIconColumnExists = null;
+
     public function hasSchema(): bool
     {
         return Schema::hasTable('livestock_master_configs')
@@ -26,6 +30,13 @@ class LivestockMasterConfigService
                 'output_unit' => '%',
                 'description' => 'Persentase produksi harian terhadap populasi aktif.',
                 'required_inputs' => ['panen.jumlah', 'unitBudidaya.jumlah'],
+            ],
+            'hhep' => [
+                'name' => 'HHEP - Hen Housed Egg Production',
+                'service_class' => 'App\\Services\\Fuzzy\\CalculateHhep',
+                'output_unit' => '%',
+                'description' => 'Persentase produksi harian terhadap estimasi populasi awal kandang.',
+                'required_inputs' => ['panen.jumlah', 'unitBudidaya.jumlah', 'kematian.id'],
             ],
             'feed_intake' => [
                 'name' => 'Pakan per ekor per hari',
@@ -47,6 +58,27 @@ class LivestockMasterConfigService
                 'output_unit' => 'rasio',
                 'description' => 'Rasio pakan terhadap egg mass dari panen.',
                 'required_inputs' => ['harianTernak.pakan', 'panen.berat'],
+            ],
+            'egg_mass' => [
+                'name' => 'Egg Mass / Berat panen harian',
+                'service_class' => 'App\\Services\\Fuzzy\\CalculateEggMass',
+                'output_unit' => 'kg',
+                'description' => 'Total berat telur yang dipanen harian dari laporan mobile.',
+                'required_inputs' => ['panen.berat'],
+            ],
+            'avg_egg_weight' => [
+                'name' => 'Berat rata-rata telur',
+                'service_class' => 'App\\Services\\Fuzzy\\CalculateAverageEggWeight',
+                'output_unit' => 'g/butir',
+                'description' => 'Rata-rata berat telur harian dari total berat panen dibagi jumlah butir.',
+                'required_inputs' => ['panen.berat', 'panen.jumlah'],
+            ],
+            'flock_age' => [
+                'name' => 'Umur biologis flock',
+                'service_class' => 'App\\Services\\Fuzzy\\CalculateFlockAge',
+                'output_unit' => 'minggu',
+                'description' => 'Rata-rata umur biologis kandang aktif dari input mobile atau tanggal kandang dibuat.',
+                'required_inputs' => ['unitBudidaya.umurMinggu', 'unitBudidaya.createdAt'],
             ],
         ];
     }
@@ -90,6 +122,31 @@ class LivestockMasterConfigService
             ->get(['id', 'nama', 'tipe']);
     }
 
+    public function livestockTypeOptions(): Collection
+    {
+        $types = $this->livestockTypes();
+        if ($types->isEmpty()) {
+            return collect();
+        }
+
+        $commoditiesByJenis = $this->livestockCommodities()->groupBy('jenisBudidayaId');
+
+        return $types->map(function ($type) use ($commoditiesByJenis) {
+            $commodities = $commoditiesByJenis->get($type->id, collect())->values();
+            $primaryCommodity = $commodities->first(fn ($commodity) => str_contains(strtolower((string) $commodity->nama), 'layer'))
+                ?? $commodities->first();
+
+            return (object) [
+                'id' => $type->id,
+                'nama' => $type->nama,
+                'tipe' => $type->tipe,
+                'primary_commodity_id' => $primaryCommodity?->id,
+                'commodity_count' => $commodities->count(),
+                'commodities' => $commodities,
+            ];
+        })->values();
+    }
+
     public function livestockCommodities(): Collection
     {
         if (! Schema::hasTable('komoditas') || ! Schema::hasTable('jenisBudidaya')) {
@@ -119,6 +176,15 @@ class LivestockMasterConfigService
             ->all();
     }
 
+    public function livestockJenisBudidayaIds(): array
+    {
+        return $this->livestockTypes()
+            ->pluck('id')
+            ->filter()
+            ->values()
+            ->all();
+    }
+
     public function isLivestockCommodity(?string $commodityId): bool
     {
         if (! $commodityId) {
@@ -142,6 +208,40 @@ class LivestockMasterConfigService
         }
 
         return $commodities->first()?->id;
+    }
+
+    public function resolveLivestockJenisBudidayaId(?string $requestedId): ?string
+    {
+        $types = $this->livestockTypes();
+
+        if ($requestedId && $types->contains('id', $requestedId)) {
+            return $requestedId;
+        }
+
+        $layer = $types->first(fn ($type) => str_contains(strtolower((string) $type->nama), 'layer')
+            || str_contains(strtolower((string) $type->nama), 'petelur'));
+
+        return $layer?->id ?? $types->first()?->id;
+    }
+
+    public function resolveLivestockCommodityIdForJenis(?string $jenisBudidayaId, ?string $requestedId = null): ?string
+    {
+        if (! $jenisBudidayaId) {
+            return $this->resolveLivestockCommodityId($requestedId);
+        }
+
+        $commodities = $this->livestockCommodities()
+            ->where('jenisBudidayaId', $jenisBudidayaId)
+            ->values();
+
+        if ($requestedId && $commodities->contains('id', $requestedId)) {
+            return $requestedId;
+        }
+
+        $layer = $commodities->first(fn ($commodity) => str_contains(strtolower((string) $commodity->nama), 'layer')
+            || str_contains(strtolower((string) $commodity->nama), 'petelur'));
+
+        return $layer?->id ?? $commodities->first()?->id;
     }
 
     public function firstLivestockJenisBudidayaId(): ?string
@@ -200,6 +300,10 @@ class LivestockMasterConfigService
             'selectedFunctionIds' => $selectedConfig
                 ? $this->selectedFunctionIdsForConfig((string) $selectedConfig->id)
                 : [],
+            'selectedOperationalFunctionIds' => $selectedConfig
+                ? $this->selectedOperationalFunctionIdsForConfig((string) $selectedConfig->id)
+                : [],
+            'afkirConfig' => $this->afkirConfigForJenis($selectedJenisBudidayaId),
             'productivityFunctions' => $this->productivityCatalog(),
         ];
     }
@@ -213,6 +317,50 @@ class LivestockMasterConfigService
         return DB::table('livestock_master_configs')
             ->where('jenis_budidaya_id', $jenisBudidayaId)
             ->first();
+    }
+
+    public function afkirConfigForCommodity(?string $commodityId): array
+    {
+        $jenisBudidayaId = null;
+        if ($commodityId) {
+            $jenisBudidayaId = $this->livestockCommodities()
+                ->firstWhere('id', $commodityId)
+                ?->jenisBudidayaId;
+        }
+
+        return $this->afkirConfigForJenis($jenisBudidayaId);
+    }
+
+    public function afkirConfigForJenis(?string $jenisBudidayaId): array
+    {
+        $type = $jenisBudidayaId
+            ? $this->livestockTypes()->firstWhere('id', $jenisBudidayaId)
+            : null;
+        $defaults = $this->defaultAfkirCycleSettings($type?->nama);
+
+        if (! $jenisBudidayaId || ! $this->hasSchema()) {
+            return $defaults;
+        }
+
+        $config = $this->configForJenis($jenisBudidayaId);
+        if (! $config || ! Schema::hasColumn('livestock_master_configs', 'afkir_target_weeks')) {
+            return $defaults;
+        }
+
+        $targetWeeks = $this->nullableInteger($config->afkir_target_weeks ?? null);
+        $warningWeeks = Schema::hasColumn('livestock_master_configs', 'afkir_warning_weeks')
+            ? $this->nullableInteger($config->afkir_warning_weeks ?? null)
+            : null;
+        $label = Schema::hasColumn('livestock_master_configs', 'afkir_label')
+            ? trim((string) ($config->afkir_label ?? ''))
+            : '';
+
+        return [
+            'label' => $label !== '' ? $label : $defaults['label'],
+            'target_weeks' => $targetWeeks ?? $defaults['target_weeks'],
+            'warning_weeks' => $warningWeeks ?? $defaults['warning_weeks'],
+            'is_configured' => $targetWeeks !== null,
+        ];
     }
 
     public function readinessForCommodity(?string $commodityId): array
@@ -243,25 +391,27 @@ class LivestockMasterConfigService
 
         $config = $this->configForJenis($jenisBudidayaId);
         if (! $config) {
-            return $this->emptyReadiness('missing_config', 'Belum terhubung Data Master', 'Konfigurasikan parameter lingkungan dan fungsi produktivitas untuk jenis ternak ini.');
+            return $this->emptyReadiness('missing_config', 'Belum terhubung Data Master', 'Konfigurasikan parameter lingkungan untuk jenis ternak ini.');
         }
 
         $environmentCount = DB::table('livestock_environment_parameters')
             ->where('config_id', $config->id)
             ->where('is_active', true)
+            ->where('required_for_fuzzy', true)
             ->count();
 
         $functionCount = DB::table('livestock_productivity_function_configs')
             ->where('config_id', $config->id)
             ->where('is_active', true)
+            ->where('required_for_fuzzy', true)
             ->count();
 
         $hints = [];
         if ($environmentCount === 0) {
-            $hints[] = 'Parameter lingkungan belum dipilih.';
+            $hints[] = 'Belum ada parameter lingkungan yang dicentang untuk Fuzzy.';
         }
         if ($functionCount === 0) {
-            $hints[] = 'Fungsi produktivitas belum dipilih.';
+            $hints[] = 'Belum ada parameter produktivitas yang dicentang untuk Fuzzy.';
         }
 
         $isReady = $config->status === 'configured' && $environmentCount > 0 && $functionCount > 0;
@@ -271,8 +421,8 @@ class LivestockMasterConfigService
             'configured' => $isReady,
             'title' => $isReady ? 'Terhubung Data Master' : 'Data Master belum lengkap',
             'message' => $isReady
-                ? 'Jenis ternak ini sudah punya parameter lingkungan dan fungsi produktivitas.'
-                : 'Lengkapi Data Master sebelum menghubungkan device IoT dan konfigurasi fuzzy.',
+                ? 'Jenis ternak ini sudah punya parameter lingkungan dan produktivitas dari Data Master.'
+                : 'Lengkapi parameter lingkungan dan produktivitas Data Master sebelum menghubungkan device IoT dan konfigurasi fuzzy.',
             'environment_count' => $environmentCount,
             'function_count' => $functionCount,
             'config_id' => $config->id,
@@ -283,44 +433,463 @@ class LivestockMasterConfigService
 
     public function configuredIotParametersForCommodity(?string $commodityId = null, bool $fallbackToAll = true): Collection
     {
+        $jenisBudidayaId = null;
+        if ($commodityId) {
+            $jenisBudidayaId = $this->livestockCommodities()
+                ->firstWhere('id', $commodityId)
+                ?->jenisBudidayaId;
+        }
+
+        return $this->configuredIotParametersForJenis($jenisBudidayaId, $fallbackToAll);
+    }
+
+    public function configuredIotParametersForJenis(?string $jenisBudidayaId = null, bool $fallbackToAll = true): Collection
+    {
         if (! Schema::hasTable('iot_parameter')) {
             return collect();
         }
 
+        $columns = $this->iotParameterColumns();
         $parameterIds = collect();
 
         if (! $this->hasSchema()) {
-            return DB::table('iot_parameter')->orderBy('parameterCode')->get(['id', 'parameterCode', 'parameterName', 'unit']);
+            return $fallbackToAll
+                ? IotParameter::query()->orderBy('parameterCode')->get($columns)
+                : collect();
         }
 
-        if ($this->hasSchema()) {
-            $query = DB::table('livestock_environment_parameters')
-                ->join('livestock_master_configs', 'livestock_master_configs.id', '=', 'livestock_environment_parameters.config_id')
-                ->where('livestock_environment_parameters.is_active', true)
-                ->whereNotNull('livestock_environment_parameters.parameter_id');
+        $query = DB::table('livestock_environment_parameters')
+            ->join('livestock_master_configs', 'livestock_master_configs.id', '=', 'livestock_environment_parameters.config_id')
+            ->where('livestock_environment_parameters.is_active', true)
+            ->where('livestock_environment_parameters.required_for_iot', true)
+            ->whereNotNull('livestock_environment_parameters.parameter_id');
 
-            if ($commodityId) {
-                $commodity = $this->livestockCommodities()->firstWhere('id', $commodityId);
-                if (! $commodity) {
-                    return collect();
-                }
-
-                $query->where('livestock_master_configs.jenis_budidaya_id', $commodity->jenisBudidayaId);
-            }
-
-            $parameterIds = $query->pluck('livestock_environment_parameters.parameter_id')->filter()->unique()->values();
+        if ($jenisBudidayaId) {
+            $query->where('livestock_master_configs.jenis_budidaya_id', $jenisBudidayaId);
         }
+
+        $parameterIds = $query->pluck('livestock_environment_parameters.parameter_id')->filter()->unique()->values();
 
         if ($parameterIds->isNotEmpty()) {
-            return DB::table('iot_parameter')
+            return IotParameter::query()
                 ->whereIn('id', $parameterIds->all())
                 ->orderBy('parameterCode')
-                ->get(['id', 'parameterCode', 'parameterName', 'unit']);
+                ->get($columns);
         }
 
         return $fallbackToAll
-            ? DB::table('iot_parameter')->orderBy('parameterCode')->get(['id', 'parameterCode', 'parameterName', 'unit'])
+            ? IotParameter::query()->orderBy('parameterCode')->get($columns)
             : collect();
+    }
+
+    private function iotParameterColumns(): array
+    {
+        $columns = ['id', 'parameterCode', 'parameterName', 'unit'];
+
+        if (Schema::hasColumn('iot_parameter', 'description')) {
+            $columns[] = 'description';
+        }
+
+        return $columns;
+    }
+
+    public function configuredEnvironmentParametersForCommodity(?string $commodityId = null, bool $fallbackToDefault = true): Collection
+    {
+        $jenisBudidayaId = null;
+        if ($commodityId) {
+            $jenisBudidayaId = $this->livestockCommodities()
+                ->firstWhere('id', $commodityId)
+                ?->jenisBudidayaId;
+        }
+
+        return $this->configuredEnvironmentParametersForJenis($jenisBudidayaId, $fallbackToDefault);
+    }
+
+    public function configuredEnvironmentParametersForJenis(?string $jenisBudidayaId = null, bool $fallbackToDefault = true): Collection
+    {
+        return $this->configuredEnvironmentParametersForJenisWithFuzzy($jenisBudidayaId, $fallbackToDefault, false);
+    }
+
+    public function fuzzyEnvironmentParametersForJenis(?string $jenisBudidayaId = null, bool $fallbackToDefault = false): Collection
+    {
+        return $this->configuredEnvironmentParametersForJenisWithFuzzy($jenisBudidayaId, $fallbackToDefault, true);
+    }
+
+    private function configuredEnvironmentParametersForJenisWithFuzzy(?string $jenisBudidayaId, bool $fallbackToDefault, bool $onlyFuzzy): Collection
+    {
+        if (! $this->hasSchema()) {
+            $rows = $fallbackToDefault
+                ? collect($this->defaultEnvironmentRows())->map(fn ($row) => (object) $row)
+                : collect();
+
+            return $onlyFuzzy ? $rows->where('required_for_fuzzy', true)->values() : $rows;
+        }
+
+        $config = $jenisBudidayaId ? $this->configForJenis($jenisBudidayaId) : null;
+
+        if (! $config) {
+            $rows = $fallbackToDefault
+                ? collect($this->defaultEnvironmentRows())->map(fn ($row) => (object) $row)
+                : collect();
+
+            return $onlyFuzzy ? $rows->where('required_for_fuzzy', true)->values() : $rows;
+        }
+
+        $rows = $this->environmentRowsForConfig((string) $config->id);
+        if ($onlyFuzzy) {
+            $rows = $rows->where('required_for_fuzzy', true)->values();
+        } else {
+            $rows = $rows->where('required_for_iot', true)->values();
+        }
+
+        return $rows->isNotEmpty() || ! $fallbackToDefault
+            ? $rows
+            : collect($this->defaultEnvironmentRows())
+                ->map(fn ($row) => (object) $row)
+                ->when($onlyFuzzy, fn ($defaults) => $defaults->where('required_for_fuzzy', true)->values());
+    }
+
+    public function selectedProductivityFunctionCodesForCommodity(?string $commodityId): array
+    {
+        $jenisBudidayaId = null;
+        if ($commodityId) {
+            $jenisBudidayaId = $this->livestockCommodities()
+                ->firstWhere('id', $commodityId)
+                ?->jenisBudidayaId;
+        }
+
+        return $this->selectedProductivityFunctionCodesForJenis($jenisBudidayaId);
+    }
+
+    public function selectedProductivityFunctionCodesForJenis(?string $jenisBudidayaId): array
+    {
+        $this->ensureDefaultFunctionCatalog();
+
+        if (! $jenisBudidayaId || ! $this->hasSchema()) {
+            return [];
+        }
+
+        $config = $this->configForJenis($jenisBudidayaId);
+        if (! $config) {
+            return [];
+        }
+
+        return DB::table('livestock_productivity_function_configs')
+            ->join('livestock_productivity_functions', 'livestock_productivity_functions.id', '=', 'livestock_productivity_function_configs.function_id')
+            ->where('livestock_productivity_function_configs.config_id', $config->id)
+            ->where('livestock_productivity_function_configs.is_active', true)
+            ->where('livestock_productivity_functions.is_active', true)
+            ->orderBy('livestock_productivity_function_configs.sort_order')
+            ->orderBy('livestock_productivity_functions.name')
+            ->pluck('livestock_productivity_functions.code')
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    public function configuredProductivityFunctionsForJenis(?string $jenisBudidayaId): Collection
+    {
+        return $this->configuredProductivityFunctionsForJenisWithFuzzy($jenisBudidayaId, false);
+    }
+
+    public function fuzzyProductivityFunctionsForJenis(?string $jenisBudidayaId): Collection
+    {
+        return $this->configuredProductivityFunctionsForJenisWithFuzzy($jenisBudidayaId, true);
+    }
+
+    private function configuredProductivityFunctionsForJenisWithFuzzy(?string $jenisBudidayaId, bool $onlyFuzzy): Collection
+    {
+        $this->ensureDefaultFunctionCatalog();
+
+        if (! $jenisBudidayaId || ! $this->hasSchema()) {
+            return collect();
+        }
+
+        $config = $this->configForJenis($jenisBudidayaId);
+        if (! $config) {
+            return collect();
+        }
+
+        return DB::table('livestock_productivity_function_configs')
+            ->join('livestock_productivity_functions', 'livestock_productivity_functions.id', '=', 'livestock_productivity_function_configs.function_id')
+            ->where('livestock_productivity_function_configs.config_id', $config->id)
+            ->where('livestock_productivity_function_configs.is_active', true)
+            ->when($onlyFuzzy, fn ($query) => $query->where('livestock_productivity_function_configs.required_for_fuzzy', true))
+            ->where('livestock_productivity_functions.is_active', true)
+            ->orderBy('livestock_productivity_function_configs.sort_order')
+            ->orderBy('livestock_productivity_functions.name')
+            ->get([
+                'livestock_productivity_functions.id',
+                'livestock_productivity_functions.code',
+                'livestock_productivity_functions.name',
+                'livestock_productivity_functions.service_class',
+                'livestock_productivity_functions.output_unit',
+                'livestock_productivity_functions.description',
+                'livestock_productivity_functions.required_inputs',
+                'livestock_productivity_function_configs.aggregation_scope',
+                'livestock_productivity_function_configs.required_for_fuzzy',
+                'livestock_productivity_function_configs.sort_order',
+            ]);
+    }
+
+    public function configuredProductivityFunctionCodesForCommodity(?string $commodityId): array
+    {
+        return $this->configuredSpkInputParametersForCommodity($commodityId, 'kesehatan', true)
+            ->pluck('code')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function configuredSpkInputKeysForCommodity(?string $commodityId, ?string $group = null): array
+    {
+        return $this->configuredSpkInputParametersForCommodity($commodityId, $group, true)
+            ->flatMap(fn (array $row) => array_filter([
+                $row['variable_name'] ?? null,
+                $row['code'] ?? null,
+                $row['source_code'] ?? null,
+                $row['name'] ?? null,
+            ]))
+            ->map(fn ($value) => strtolower((string) $value))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function configuredSpkInputParametersForCommodity(?string $commodityId, ?string $group = null, bool $requireSource = true): Collection
+    {
+        if (! Schema::hasTable('spk_fuzzy_profiles') || ! Schema::hasTable('spk_fuzzy_variables')) {
+            return collect();
+        }
+
+        if ($requireSource && ! Schema::hasTable('spk_fuzzy_input_sources')) {
+            return collect();
+        }
+
+        $profile = $this->activeFuzzyProfileForCommodity($commodityId);
+        if (! $profile) {
+            return collect();
+        }
+
+        $query = DB::table('spk_fuzzy_variables')
+            ->where('spk_fuzzy_variables.profile_id', $profile->id)
+            ->where('spk_fuzzy_variables.type', 'input')
+            ->where('spk_fuzzy_variables.group', '!=', 'kausalitas')
+            ->when($group, fn ($q) => $q->where('spk_fuzzy_variables.group', $group));
+
+        if (Schema::hasTable('spk_fuzzy_input_sources')) {
+            $query->leftJoin('spk_fuzzy_input_sources', 'spk_fuzzy_input_sources.variable_id', '=', 'spk_fuzzy_variables.id');
+            if ($requireSource) {
+                $query->whereNotNull('spk_fuzzy_input_sources.id');
+            }
+        }
+
+        $selects = [
+            'spk_fuzzy_variables.id',
+            'spk_fuzzy_variables.name as variable_name',
+            'spk_fuzzy_variables.group',
+            'spk_fuzzy_variables.unit',
+            'spk_fuzzy_variables.description',
+        ];
+
+        if (Schema::hasTable('spk_fuzzy_input_sources')) {
+            $selects = array_merge($selects, [
+                'spk_fuzzy_input_sources.id as source_id',
+                'spk_fuzzy_input_sources.source_type',
+                'spk_fuzzy_input_sources.source_name',
+                'spk_fuzzy_input_sources.field_name',
+                'spk_fuzzy_input_sources.function_name',
+                'spk_fuzzy_input_sources.extra_config',
+            ]);
+        } else {
+            $selects = array_merge($selects, [
+                DB::raw('NULL as source_id'),
+                DB::raw('NULL as source_type'),
+                DB::raw('NULL as source_name'),
+                DB::raw('NULL as field_name'),
+                DB::raw('NULL as function_name'),
+                DB::raw('NULL as extra_config'),
+            ]);
+        }
+
+        return $query
+            ->orderByRaw("CASE spk_fuzzy_variables.`group` WHEN 'lingkungan' THEN 1 WHEN 'kesehatan' THEN 2 ELSE 3 END")
+            ->orderBy('spk_fuzzy_variables.name')
+            ->get($selects)
+            ->map(fn ($row) => $this->formatSpkInputParameter($row))
+            ->values();
+    }
+
+    public function spkConfigurationStatusForCommodity(?string $commodityId): array
+    {
+        $profile = $this->activeFuzzyProfileForCommodity($commodityId);
+
+        if (! $profile) {
+            return [
+                'configured' => false,
+                'title' => 'Konfigurasi SPK belum dibuat',
+                'message' => 'Buat profil Fuzzy Mamdani dan atur variabel input sebelum SPK dijalankan.',
+                'profile' => null,
+                'environment_parameters' => [],
+                'productivity_parameters' => [],
+                'environment_count' => 0,
+                'productivity_count' => 0,
+                'missing_source_count' => 0,
+                'rule_counts' => ['lingkungan' => 0, 'kesehatan' => 0, 'kausalitas' => 0],
+                'hints' => ['Belum ada profil fuzzy aktif untuk komoditas ini.'],
+            ];
+        }
+
+        $allInputs = $this->configuredSpkInputParametersForCommodity($commodityId, null, false);
+        $configuredInputs = $allInputs->whereNotNull('source_id')->values();
+        $environmentInputs = $configuredInputs->where('group', 'lingkungan')->values();
+        $productivityInputs = $configuredInputs->where('group', 'kesehatan')->values();
+        $missingSourceCount = $allInputs->whereNull('source_id')->count();
+        $ruleCounts = $this->fuzzyRuleCountsForProfile((string) $profile->id);
+
+        $environmentReady = $environmentInputs->isNotEmpty()
+            && $allInputs->where('group', 'lingkungan')->whereNull('source_id')->isEmpty()
+            && ($ruleCounts['lingkungan'] ?? 0) > 0;
+        $productivityReady = $productivityInputs->isNotEmpty()
+            && $allInputs->where('group', 'kesehatan')->whereNull('source_id')->isEmpty()
+            && ($ruleCounts['kesehatan'] ?? 0) > 0;
+        $causalityReady = ($ruleCounts['kausalitas'] ?? 0) > 0;
+        $isReady = $environmentReady && $productivityReady && $causalityReady;
+
+        $hints = [];
+        if ($environmentInputs->isEmpty()) {
+            $hints[] = 'Belum ada input lingkungan yang tersambung di Pengaturan Fuzzy.';
+        }
+        if ($productivityInputs->isEmpty()) {
+            $hints[] = 'Belum ada input produktivitas yang tersambung di Pengaturan Fuzzy.';
+        }
+        if ($missingSourceCount > 0) {
+            $hints[] = "{$missingSourceCount} variabel input belum memiliki sumber data.";
+        }
+        foreach (['lingkungan' => 'lingkungan', 'kesehatan' => 'produktivitas', 'kausalitas' => 'kausalitas'] as $key => $label) {
+            if (($ruleCounts[$key] ?? 0) === 0) {
+                $hints[] = "Rule {$label} belum dikonfigurasi.";
+            }
+        }
+
+        return [
+            'configured' => $isReady,
+            'title' => $isReady ? 'SPK siap dijalankan' : 'Konfigurasi SPK belum lengkap',
+            'message' => $isReady
+                ? 'Parameter aktif SPK sudah mengikuti variabel dan sumber data pada profil fuzzy.'
+                : 'Lengkapi variabel input, sumber data, dan rule pada Pengaturan Fuzzy sebelum menjalankan SPK.',
+            'profile' => [
+                'id' => $profile->id,
+                'name' => $profile->name,
+                'version' => $profile->version,
+                'status' => $profile->status,
+                'is_active' => (bool) $profile->is_active,
+            ],
+            'environment_parameters' => $environmentInputs->values()->all(),
+            'productivity_parameters' => $productivityInputs->values()->all(),
+            'environment_count' => $environmentInputs->count(),
+            'productivity_count' => $productivityInputs->count(),
+            'missing_source_count' => $missingSourceCount,
+            'rule_counts' => $ruleCounts,
+            'hints' => $hints,
+        ];
+    }
+
+    public function summaryForCommodity(?string $commodityId): array
+    {
+        $readiness = $this->readinessForCommodity($commodityId);
+        $configId = $readiness['config_id'] ?? null;
+
+        $environmentParameters = collect();
+        $productivityFunctions = collect();
+
+        if ($configId && $this->hasSchema()) {
+            $environmentColumns = [
+                'parameter_code',
+                'parameter_name',
+                'unit',
+                'min_value',
+                'max_value',
+                'fallback_value',
+                'stale_minutes',
+                'required_for_iot',
+                'required_for_fuzzy',
+            ];
+
+            if ($this->environmentIconColumnExists()) {
+                $environmentColumns[] = 'icon_key';
+            }
+
+            $environmentParameters = DB::table('livestock_environment_parameters')
+                ->where('config_id', $configId)
+                ->where('is_active', true)
+                ->where('required_for_iot', true)
+                ->orderBy('sort_order')
+                ->orderBy('parameter_name')
+                ->get($environmentColumns)
+                ->map(fn ($row) => [
+                    'code' => (string) $row->parameter_code,
+                    'name' => (string) $row->parameter_name,
+                    'unit' => (string) ($row->unit ?? ''),
+                    'icon_key' => (string) ($row->icon_key ?? 'sensor'),
+                    'min' => $row->min_value,
+                    'max' => $row->max_value,
+                    'fallback' => $row->fallback_value,
+                    'stale_minutes' => $row->stale_minutes,
+                    'required_for_iot' => (bool) $row->required_for_iot,
+                    'required_for_fuzzy' => (bool) $row->required_for_fuzzy,
+                ]);
+
+            $productivityFunctions = DB::table('livestock_productivity_function_configs')
+                ->join('livestock_productivity_functions', 'livestock_productivity_functions.id', '=', 'livestock_productivity_function_configs.function_id')
+                ->where('livestock_productivity_function_configs.config_id', $configId)
+                ->where('livestock_productivity_function_configs.is_active', true)
+                ->where('livestock_productivity_functions.is_active', true)
+                ->orderBy('livestock_productivity_function_configs.sort_order')
+                ->orderBy('livestock_productivity_functions.name')
+                ->get([
+                    'livestock_productivity_functions.code',
+                    'livestock_productivity_functions.name',
+                    'livestock_productivity_functions.output_unit',
+                    'livestock_productivity_functions.description',
+                    'livestock_productivity_functions.required_inputs',
+                ])
+                ->map(fn ($row) => [
+                    'code' => (string) $row->code,
+                    'name' => (string) $row->name,
+                    'unit' => (string) ($row->output_unit ?? ''),
+                    'description' => (string) ($row->description ?? ''),
+                    'required_inputs' => json_decode((string) $row->required_inputs, true) ?: [],
+                ]);
+        }
+
+        $spkStatus = $this->spkConfigurationStatusForCommodity($commodityId);
+
+        return array_merge($readiness, [
+            'data_master_configured' => (bool) ($readiness['configured'] ?? false),
+            'data_master_title' => $readiness['title'] ?? null,
+            'data_master_message' => $readiness['message'] ?? null,
+            'data_master_environment_count' => $environmentParameters->count(),
+            'data_master_function_count' => $productivityFunctions->count(),
+            'master_productivity_functions' => $productivityFunctions->values()->all(),
+            'environment_parameters' => $environmentParameters->values()->all(),
+            'afkir_config' => $this->afkirConfigForCommodity($commodityId),
+            'productivity_functions' => $spkStatus['productivity_parameters'],
+            'environment_count' => $environmentParameters->count(),
+            'function_count' => $spkStatus['productivity_count'],
+            'spk_configured' => $spkStatus['configured'],
+            'spk_title' => $spkStatus['title'],
+            'spk_message' => $spkStatus['message'],
+            'spk_profile' => $spkStatus['profile'],
+            'spk_environment_parameters' => $spkStatus['environment_parameters'],
+            'spk_productivity_parameters' => $spkStatus['productivity_parameters'],
+            'spk_environment_count' => $spkStatus['environment_count'],
+            'spk_productivity_count' => $spkStatus['productivity_count'],
+            'spk_missing_source_count' => $spkStatus['missing_source_count'],
+            'spk_rule_counts' => $spkStatus['rule_counts'],
+            'spk_hints' => $spkStatus['hints'],
+        ]);
     }
 
     public function availableProductivityFunctionMap(?string $commodityId = null): array
@@ -328,27 +897,6 @@ class LivestockMasterConfigService
         $this->ensureDefaultFunctionCatalog();
 
         if (! $this->hasSchema()) {
-            return $this->defaultFunctionMap();
-        }
-
-        if ($commodityId) {
-            $commodity = $this->livestockCommodities()->firstWhere('id', $commodityId);
-            $config = $commodity ? $this->configForJenis((string) $commodity->jenisBudidayaId) : null;
-
-            if ($config) {
-                $rows = DB::table('livestock_productivity_function_configs')
-                    ->join('livestock_productivity_functions', 'livestock_productivity_functions.id', '=', 'livestock_productivity_function_configs.function_id')
-                    ->where('livestock_productivity_function_configs.config_id', $config->id)
-                    ->where('livestock_productivity_function_configs.is_active', true)
-                    ->where('livestock_productivity_functions.is_active', true)
-                    ->orderBy('livestock_productivity_function_configs.sort_order')
-                    ->orderBy('livestock_productivity_functions.name')
-                    ->pluck('livestock_productivity_functions.name', 'livestock_productivity_functions.service_class')
-                    ->toArray();
-
-                return $rows;
-            }
-
             return [];
         }
 
@@ -394,27 +942,58 @@ class LivestockMasterConfigService
                 ->map(fn ($row) => $this->normalizeEnvironmentRow((array) $row))
                 ->filter(fn ($row) => $row['parameter_code'] !== '' && $row['parameter_name'] !== '')
                 ->values();
-            $functionIds = collect($data['productivity_function_ids'] ?? [])
-                ->filter()
-                ->unique()
+            $productivityRows = collect($data['productivity_functions'] ?? [])
+                ->map(fn ($row) => $this->normalizeProductivityFunctionRow((array) $row))
+                ->filter(fn ($row) => $row['function_id'] !== '')
+                ->unique('function_id')
                 ->values();
+
+            if ($productivityRows->isEmpty() && ! empty($data['productivity_function_ids'] ?? [])) {
+                $productivityRows = collect($data['productivity_function_ids'])
+                    ->filter()
+                    ->unique()
+                    ->map(fn ($functionId) => [
+                        'function_id' => (string) $functionId,
+                        'is_active' => true,
+                        'required_for_fuzzy' => true,
+                        'aggregation_scope' => 'today',
+                    ])
+                    ->values();
+            }
+
+            $functionIds = $productivityRows->pluck('function_id')->filter()->unique()->values();
 
             $config = $this->configForJenis($jenisBudidayaId);
             $configId = $config?->id ?: (string) Str::uuid();
             $now = now();
 
+            $configPayload = [
+                'id' => $configId,
+                'commodity_id' => $commodityId,
+                'status' => $environmentRows->isNotEmpty() ? 'configured' : 'draft',
+                'notes' => $data['notes'] ?? null,
+                'configured_by' => $data['configured_by'] ?? null,
+                'configured_at' => $environmentRows->isNotEmpty() || $productivityRows->where('is_active', true)->isNotEmpty() ? $now : null,
+                'createdAt' => $config?->createdAt ?? $now,
+                'updatedAt' => $now,
+            ];
+
+            if (Schema::hasColumn('livestock_master_configs', 'afkir_label')) {
+                $label = trim((string) ($data['afkir_label'] ?? ''));
+                $configPayload['afkir_label'] = $label !== '' ? $label : $this->defaultAfkirCycleSettings($this->livestockTypes()->firstWhere('id', $jenisBudidayaId)?->nama)['label'];
+            }
+
+            if (Schema::hasColumn('livestock_master_configs', 'afkir_target_weeks')) {
+                $configPayload['afkir_target_weeks'] = $this->nullableInteger($data['afkir_target_weeks'] ?? null);
+            }
+
+            if (Schema::hasColumn('livestock_master_configs', 'afkir_warning_weeks')) {
+                $configPayload['afkir_warning_weeks'] = $this->nullableInteger($data['afkir_warning_weeks'] ?? null) ?? 4;
+            }
+
             DB::table('livestock_master_configs')->updateOrInsert(
                 ['jenis_budidaya_id' => $jenisBudidayaId],
-                [
-                    'id' => $configId,
-                    'commodity_id' => $commodityId,
-                    'status' => $environmentRows->isNotEmpty() && $functionIds->isNotEmpty() ? 'configured' : 'draft',
-                    'notes' => $data['notes'] ?? null,
-                    'configured_by' => $data['configured_by'] ?? null,
-                    'configured_at' => $environmentRows->isNotEmpty() || $functionIds->isNotEmpty() ? $now : null,
-                    'createdAt' => $config?->createdAt ?? $now,
-                    'updatedAt' => $now,
-                ]
+                $configPayload
             );
 
             $activeCodes = [];
@@ -426,24 +1005,30 @@ class LivestockMasterConfigService
                     ->where('parameter_code', $row['parameter_code'])
                     ->value('id') ?: (string) Str::uuid();
 
+                $environmentPayload = [
+                    'id' => $environmentId,
+                    'parameter_id' => $parameterId,
+                    'parameter_name' => $row['parameter_name'],
+                    'unit' => $row['unit'],
+                    'min_value' => $row['min_value'],
+                    'max_value' => $row['max_value'],
+                    'fallback_value' => $row['fallback_value'],
+                    'stale_minutes' => $row['stale_minutes'],
+                    'required_for_iot' => $row['required_for_iot'],
+                    'required_for_fuzzy' => $row['required_for_fuzzy'],
+                    'sort_order' => $index,
+                    'is_active' => true,
+                    'createdAt' => $now,
+                    'updatedAt' => $now,
+                ];
+
+                if ($this->environmentIconColumnExists()) {
+                    $environmentPayload['icon_key'] = $row['icon_key'];
+                }
+
                 DB::table('livestock_environment_parameters')->updateOrInsert(
                     ['config_id' => $configId, 'parameter_code' => $row['parameter_code']],
-                    [
-                        'id' => $environmentId,
-                        'parameter_id' => $parameterId,
-                        'parameter_name' => $row['parameter_name'],
-                        'unit' => $row['unit'],
-                        'min_value' => $row['min_value'],
-                        'max_value' => $row['max_value'],
-                        'fallback_value' => $row['fallback_value'],
-                        'stale_minutes' => $row['stale_minutes'],
-                        'required_for_iot' => $row['required_for_iot'],
-                        'required_for_fuzzy' => $row['required_for_fuzzy'],
-                        'sort_order' => $index,
-                        'is_active' => true,
-                        'createdAt' => $now,
-                        'updatedAt' => $now,
-                    ]
+                    $environmentPayload
                 );
 
                 $this->syncCommodityParameter($commodityId, $parameterId, $row);
@@ -462,22 +1047,27 @@ class LivestockMasterConfigService
             $validFunctions = DB::table('livestock_productivity_functions')
                 ->whereIn('id', $functionIds->all())
                 ->where('is_active', true)
-                ->get(['id']);
+                ->get(['id'])
+                ->keyBy('id');
 
-            foreach ($validFunctions as $index => $function) {
+            foreach ($productivityRows as $index => $row) {
+                if (! isset($validFunctions[$row['function_id']])) {
+                    continue;
+                }
+
                 $functionConfigId = DB::table('livestock_productivity_function_configs')
                     ->where('config_id', $configId)
-                    ->where('function_id', $function->id)
+                    ->where('function_id', $row['function_id'])
                     ->value('id') ?: (string) Str::uuid();
 
                 DB::table('livestock_productivity_function_configs')->updateOrInsert(
-                    ['config_id' => $configId, 'function_id' => $function->id],
+                    ['config_id' => $configId, 'function_id' => $row['function_id']],
                     [
                         'id' => $functionConfigId,
-                        'required_for_fuzzy' => true,
-                        'aggregation_scope' => 'today',
+                        'required_for_fuzzy' => $row['required_for_fuzzy'],
+                        'aggregation_scope' => $row['aggregation_scope'],
                         'sort_order' => $index,
-                        'is_active' => true,
+                        'is_active' => $row['is_active'],
                         'createdAt' => $now,
                         'updatedAt' => $now,
                     ]
@@ -490,52 +1080,206 @@ class LivestockMasterConfigService
 
     public function defaultEnvironmentRows(): array
     {
+        return LayerChickenFuzzyTemplateDefinition::masterEnvironmentRows();
+    }
+
+    private function activeFuzzyProfileForCommodity(?string $commodityId): ?object
+    {
+        if (! Schema::hasTable('spk_fuzzy_profiles')) {
+            return null;
+        }
+
+        $jenisBudidayaId = null;
+        if ($commodityId) {
+            $jenisBudidayaId = $this->livestockCommodities()
+                ->firstWhere('id', $commodityId)
+                ?->jenisBudidayaId;
+        }
+
+        if ($jenisBudidayaId && Schema::hasColumn('spk_fuzzy_profiles', 'jenis_budidaya_id')) {
+            $profile = DB::table('spk_fuzzy_profiles')
+                ->where('jenis_budidaya_id', $jenisBudidayaId)
+                ->where('is_active', true)
+                ->where('status', 'active')
+                ->orderByDesc('updatedAt')
+                ->first();
+
+            if ($profile) {
+                return $profile;
+            }
+
+            $profile = DB::table('spk_fuzzy_profiles')
+                ->where('jenis_budidaya_id', $jenisBudidayaId)
+                ->whereIn('status', ['review', 'draft', 'active'])
+                ->orderByDesc('updatedAt')
+                ->first();
+
+            if ($profile) {
+                return $profile;
+            }
+        }
+
+        if ($commodityId) {
+            $profile = DB::table('spk_fuzzy_profiles')
+                ->where('commodity_id', $commodityId)
+                ->where('is_active', true)
+                ->where('status', 'active')
+                ->orderByDesc('updatedAt')
+                ->first();
+
+            if ($profile) {
+                return $profile;
+            }
+
+            $profile = DB::table('spk_fuzzy_profiles')
+                ->where('commodity_id', $commodityId)
+                ->whereIn('status', ['review', 'draft', 'active'])
+                ->orderByDesc('updatedAt')
+                ->first();
+
+            if ($profile) {
+                return $profile;
+            }
+        }
+
+        return DB::table('spk_fuzzy_profiles')
+            ->where('is_active', true)
+            ->where('status', 'active')
+            ->orderByDesc('updatedAt')
+            ->first()
+            ?: DB::table('spk_fuzzy_profiles')->orderByDesc('updatedAt')->first();
+    }
+
+    private function fuzzyRuleCountsForProfile(string $profileId): array
+    {
+        $empty = ['lingkungan' => 0, 'kesehatan' => 0, 'kausalitas' => 0];
+        if (! Schema::hasTable('spk_fuzzy_rules')) {
+            return $empty;
+        }
+
+        $counts = DB::table('spk_fuzzy_rules')
+            ->where('profile_id', $profileId)
+            ->select('group', DB::raw('COUNT(*) as total'))
+            ->groupBy('group')
+            ->pluck('total', 'group')
+            ->toArray();
+
+        foreach ($empty as $group => $default) {
+            $empty[$group] = (int) ($counts[$group] ?? $default);
+        }
+
+        return $empty;
+    }
+
+    private function formatSpkInputParameter(object $row): array
+    {
+        $extraConfig = $row->extra_config ?? null;
+        if (is_string($extraConfig)) {
+            $extraConfig = json_decode($extraConfig, true) ?: [];
+        }
+        if (! is_array($extraConfig)) {
+            $extraConfig = [];
+        }
+
+        $sourceCode = match ($row->source_type ?? null) {
+            'iot' => $extraConfig['parameterCode'] ?? null,
+            'report_metric' => $extraConfig['metricCode'] ?? null,
+            'function' => $row->function_name ?? null,
+            'database' => trim((string) (($row->source_name ?? '').'.'.($row->field_name ?? '')), '.'),
+            default => null,
+        };
+
+        $code = $row->group === 'kesehatan'
+            ? $this->productivityCodeForSpkInput($row, $extraConfig)
+            : strtolower((string) ($sourceCode ?: $row->variable_name));
+
         return [
-            [
-                'parameter_code' => 'TEMP',
-                'parameter_name' => 'Suhu',
-                'unit' => 'C',
-                'min_value' => 20,
-                'max_value' => 28,
-                'fallback_value' => 26,
-                'stale_minutes' => 30,
-                'required_for_iot' => true,
-                'required_for_fuzzy' => true,
-            ],
-            [
-                'parameter_code' => 'HUMID',
-                'parameter_name' => 'Kelembaban',
-                'unit' => '%',
-                'min_value' => 50,
-                'max_value' => 70,
-                'fallback_value' => 65,
-                'stale_minutes' => 30,
-                'required_for_iot' => true,
-                'required_for_fuzzy' => true,
-            ],
-            [
-                'parameter_code' => 'AMMON',
-                'parameter_name' => 'Amonia',
-                'unit' => 'ppm',
-                'min_value' => 0,
-                'max_value' => 15,
-                'fallback_value' => 5,
-                'stale_minutes' => 30,
-                'required_for_iot' => true,
-                'required_for_fuzzy' => true,
-            ],
-            [
-                'parameter_code' => 'LIGHT',
-                'parameter_name' => 'Cahaya',
-                'unit' => 'lx',
-                'min_value' => 15,
-                'max_value' => 50,
-                'fallback_value' => 250,
-                'stale_minutes' => 30,
-                'required_for_iot' => true,
-                'required_for_fuzzy' => false,
-            ],
+            'id' => (string) $row->id,
+            'variable_name' => (string) $row->variable_name,
+            'group' => (string) $row->group,
+            'code' => $code,
+            'name' => $this->humanizeSpkInputName($row),
+            'unit' => (string) ($row->unit ?? ''),
+            'description' => (string) ($row->description ?? ''),
+            'source_id' => $row->source_id ?? null,
+            'source_type' => $row->source_type ?? null,
+            'source_code' => $sourceCode,
         ];
+    }
+
+    private function productivityCodeForSpkInput(object $row, array $extraConfig): string
+    {
+        if (($row->source_type ?? null) === 'function' && ! empty($row->function_name)) {
+            $code = $this->productivityFunctionCodeByClass((string) $row->function_name);
+            if ($code) {
+                return $code;
+            }
+        }
+
+        $text = strtolower(trim((string) ($row->variable_name.' '.$row->description.' '.($row->source_name ?? '').' '.($row->field_name ?? '').' '.($extraConfig['metricCode'] ?? ''))));
+
+        return match (true) {
+            str_contains($text, 'hhep') => 'hhep',
+            str_contains($text, 'hdp') => 'hdp',
+            str_contains($text, 'fcr') => 'fcr',
+            str_contains($text, 'flock') || str_contains($text, 'umur') || str_contains($text, 'age') => 'flock_age',
+            str_contains($text, 'egg_mass') || str_contains($text, 'egg mass') || str_contains($text, 'massa_telur') => 'egg_mass',
+            str_contains($text, 'avg_egg') || str_contains($text, 'berat_rata') || str_contains($text, 'rata') => 'avg_egg_weight',
+            str_contains($text, 'feed') || str_contains($text, 'pakan') => 'feed_intake',
+            str_contains($text, 'mortal') || str_contains($text, 'kematian') => 'mortalitas',
+            default => Str::snake((string) $row->variable_name),
+        };
+    }
+
+    private function productivityFunctionCodeByClass(string $className): ?string
+    {
+        if (! Schema::hasTable('livestock_productivity_functions')) {
+            foreach ($this->defaultProductivityFunctions() as $code => $meta) {
+                if (($meta['service_class'] ?? null) === $className) {
+                    return $code;
+                }
+            }
+
+            return null;
+        }
+
+        return DB::table('livestock_productivity_functions')
+            ->where('service_class', $className)
+            ->where('is_active', true)
+            ->value('code');
+    }
+
+    private function humanizeSpkInputName(object $row): string
+    {
+        if (($row->source_type ?? null) === 'function' && ! empty($row->function_name)) {
+            $label = $this->productivityFunctionLabelByClass((string) $row->function_name);
+            if ($label) {
+                return $label;
+            }
+        }
+
+        return Str::of((string) $row->variable_name)
+            ->replace('_', ' ')
+            ->title()
+            ->toString();
+    }
+
+    private function productivityFunctionLabelByClass(string $className): ?string
+    {
+        if (! Schema::hasTable('livestock_productivity_functions')) {
+            foreach ($this->defaultProductivityFunctions() as $meta) {
+                if (($meta['service_class'] ?? null) === $className) {
+                    return $meta['name'] ?? null;
+                }
+            }
+
+            return null;
+        }
+
+        return DB::table('livestock_productivity_functions')
+            ->where('service_class', $className)
+            ->where('is_active', true)
+            ->value('name');
     }
 
     private function environmentRowsForConfig(string $configId): Collection
@@ -565,9 +1309,39 @@ class LivestockMasterConfigService
         return DB::table('livestock_productivity_function_configs')
             ->where('config_id', $configId)
             ->where('is_active', true)
+            ->where('required_for_fuzzy', true)
             ->pluck('function_id')
             ->values()
             ->all();
+    }
+
+    private function selectedOperationalFunctionIdsForConfig(string $configId): array
+    {
+        if (! $this->hasSchema()) {
+            return [];
+        }
+
+        return DB::table('livestock_productivity_function_configs')
+            ->where('config_id', $configId)
+            ->where('is_active', true)
+            ->pluck('function_id')
+            ->values()
+            ->all();
+    }
+
+    private function normalizeProductivityFunctionRow(array $row): array
+    {
+        $requiredForFuzzy = (bool) ($row['required_for_fuzzy'] ?? false);
+        $isActive = (bool) ($row['is_active'] ?? false) || $requiredForFuzzy;
+
+        return [
+            'function_id' => trim((string) ($row['function_id'] ?? '')),
+            'is_active' => $isActive,
+            'required_for_fuzzy' => $isActive && $requiredForFuzzy,
+            'aggregation_scope' => in_array(($row['aggregation_scope'] ?? 'today'), ['today', 'week', 'month'], true)
+                ? $row['aggregation_scope']
+                : 'today',
+        ];
     }
 
     private function defaultCommodityIdForJenis(string $jenisBudidayaId): ?string
@@ -590,12 +1364,6 @@ class LivestockMasterConfigService
             ->first();
 
         if ($existing) {
-            DB::table('iot_parameter')->where('id', $existing->id)->update([
-                'parameterName' => $row['parameter_name'],
-                'unit' => $row['unit'],
-                'description' => 'Dikelola dari Data Master ternak.',
-            ]);
-
             return (string) $existing->id;
         }
 
@@ -642,16 +1410,20 @@ class LivestockMasterConfigService
 
     private function normalizeEnvironmentRow(array $row): array
     {
+        $requiredForFuzzy = (bool) ($row['required_for_fuzzy'] ?? false);
+        $requiredForOperational = (bool) ($row['required_for_iot'] ?? true) || $requiredForFuzzy;
+
         return [
             'parameter_code' => $this->normalizeParameterCode($row['parameter_code'] ?? ''),
             'parameter_name' => trim((string) ($row['parameter_name'] ?? '')),
             'unit' => $this->nullableString($row['unit'] ?? null),
+            'icon_key' => $this->normalizeIconKey($row['icon_key'] ?? 'sensor'),
             'min_value' => $this->nullableFloat($row['min_value'] ?? null),
             'max_value' => $this->nullableFloat($row['max_value'] ?? null),
             'fallback_value' => $this->nullableFloat($row['fallback_value'] ?? null),
             'stale_minutes' => max(1, min(10080, (int) ($row['stale_minutes'] ?? 30))),
-            'required_for_iot' => (bool) ($row['required_for_iot'] ?? true),
-            'required_for_fuzzy' => (bool) ($row['required_for_fuzzy'] ?? false),
+            'required_for_iot' => $requiredForOperational,
+            'required_for_fuzzy' => $requiredForOperational && $requiredForFuzzy,
         ];
     }
 
@@ -662,6 +1434,26 @@ class LivestockMasterConfigService
         $value = preg_replace('/_+/', '_', $value) ?: '';
 
         return trim($value, '_');
+    }
+
+    private function normalizeIconKey(mixed $value): string
+    {
+        $value = strtolower(trim((string) $value));
+        $value = preg_replace('/[^a-z0-9_-]+/', '', $value) ?: '';
+
+        return in_array($value, ['sensor', 'gauge', 'air', 'water', 'light', 'alert'], true)
+            ? $value
+            : 'sensor';
+    }
+
+    private function environmentIconColumnExists(): bool
+    {
+        if ($this->environmentIconColumnExists === null) {
+            $this->environmentIconColumnExists = Schema::hasTable('livestock_environment_parameters')
+                && Schema::hasColumn('livestock_environment_parameters', 'icon_key');
+        }
+
+        return $this->environmentIconColumnExists;
     }
 
     private function nullableString(mixed $value): ?string
@@ -678,6 +1470,54 @@ class LivestockMasterConfigService
         }
 
         return is_numeric($value) ? (float) $value : null;
+    }
+
+    private function nullableInteger(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return is_numeric($value) ? max(0, (int) $value) : null;
+    }
+
+    private function defaultAfkirCycleSettings(?string $typeName = null): array
+    {
+        $name = strtolower((string) $typeName);
+
+        if (str_contains($name, 'petelur') || str_contains($name, 'layer')) {
+            return [
+                'label' => 'Afkir layer',
+                'target_weeks' => 80,
+                'warning_weeks' => 8,
+                'is_configured' => false,
+            ];
+        }
+
+        if (str_contains($name, 'potong') || str_contains($name, 'broiler') || str_contains($name, 'pedaging')) {
+            return [
+                'label' => 'Akhir siklus panen',
+                'target_weeks' => 6,
+                'warning_weeks' => 1,
+                'is_configured' => false,
+            ];
+        }
+
+        if (str_contains($name, 'lele') || str_contains($name, 'ikan')) {
+            return [
+                'label' => 'Akhir siklus panen',
+                'target_weeks' => 12,
+                'warning_weeks' => 2,
+                'is_configured' => false,
+            ];
+        }
+
+        return [
+            'label' => 'Afkir / akhir siklus',
+            'target_weeks' => null,
+            'warning_weeks' => 4,
+            'is_configured' => false,
+        ];
     }
 
     private function defaultFunctionMap(): array

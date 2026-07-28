@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Fuzzy\InputResolver;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -17,7 +18,8 @@ class PeternakanService
     private ?bool $unitBudidayaHasUmurMinggu = null;
 
     public function __construct(
-        protected LivestockMasterConfigService $livestockMasterConfigService
+        protected LivestockMasterConfigService $livestockMasterConfigService,
+        protected InputResolver $fuzzyInputResolver
     ) {}
 
     public function forKomoditas(?string $komoditasId): self
@@ -30,6 +32,17 @@ class PeternakanService
         $this->activeJenisBudidayaId = $komod?->jenisBudidayaId
             ?? $this->livestockMasterConfigService->firstLivestockJenisBudidayaId();
 
+        $this->cachedBarnEnvironment = null;
+
+        return $this;
+    }
+
+    public function forJenisTernak(?string $jenisBudidayaId, ?string $komoditasId = null): self
+    {
+        $this->activeJenisBudidayaId = $this->livestockMasterConfigService
+            ->resolveLivestockJenisBudidayaId($jenisBudidayaId);
+        $this->activeKomoditasId = $this->livestockMasterConfigService
+            ->resolveLivestockCommodityIdForJenis($this->activeJenisBudidayaId, $komoditasId);
         $this->cachedBarnEnvironment = null;
 
         return $this;
@@ -94,6 +107,44 @@ class PeternakanService
         }
 
         return 0;
+    }
+
+    private function barnPhotoUrl(?string $image): string
+    {
+        $fallback = asset('images/barn-placeholder.jpg');
+        $value = trim((string) $image);
+
+        if ($value === '' || $value === '-' || str_starts_with($value, 'system://')) {
+            return $fallback;
+        }
+
+        if (preg_match('/^https?:\/\//i', $value)) {
+            return $value;
+        }
+
+        if (str_starts_with($value, '//')) {
+            return request()->getScheme().':'.$value;
+        }
+
+        $path = ltrim(str_replace('\\', '/', $value), '/');
+
+        if ($path === '') {
+            return $fallback;
+        }
+
+        if (str_starts_with($path, 'public/')) {
+            return asset('storage/'.substr($path, 7));
+        }
+
+        if (str_starts_with($path, 'storage/') || str_starts_with($path, 'images/')) {
+            return asset($path);
+        }
+
+        if (str_starts_with($path, 'uploads/') || str_starts_with($path, 'upload/')) {
+            return url('/'.$path);
+        }
+
+        return asset('storage/'.$path);
     }
 
     public function getDailyReportStatus(): array
@@ -266,13 +317,381 @@ class PeternakanService
 
     private function thresholdFor(array $thresholds, string $code): array
     {
-        foreach ([$code, 'AMMON', 'AMMONIA', 'AMMA', 'LIGHT', 'LUX'] as $key) {
+        foreach ($this->environmentCodeAliases($code) as $key) {
             if (isset($thresholds[$key])) {
                 return $thresholds[$key];
             }
         }
 
         return ['min' => null, 'max' => null];
+    }
+
+    public function activeProductivityFunctionCodes(): array
+    {
+        if (! $this->livestockMasterConfigService->hasSchema()) {
+            return [];
+        }
+
+        return $this->livestockMasterConfigService
+            ->selectedProductivityFunctionCodesForCommodity($this->activeKomoditasId);
+    }
+
+    public function filterProductivityCardsByMaster(array $cards, string $labelKey = 'label'): array
+    {
+        $selectedCodes = $this->activeProductivityFunctionCodes();
+        if (empty($selectedCodes)) {
+            return [];
+        }
+
+        return array_values(array_filter($cards, function (array $card) use ($selectedCodes, $labelKey) {
+            $code = $card['code'] ?? $this->productivityCodeForLabel((string) ($card[$labelKey] ?? ''));
+
+            return $code && in_array($code, $selectedCodes, true);
+        }));
+    }
+
+    public function filterEnvironmentCardsByMaster(array $cards): array
+    {
+        if (! $this->livestockMasterConfigService->hasSchema()) {
+            return [];
+        }
+
+        $allowedTokens = $this->livestockMasterConfigService
+            ->configuredSpkInputKeysForCommodity($this->activeKomoditasId, 'lingkungan');
+
+        if (empty($allowedTokens)) {
+            return [];
+        }
+
+        return array_values(array_filter($cards, function (array $card) use ($allowedTokens) {
+            $haystack = strtolower(trim(($card['key'] ?? '').' '.($card['label'] ?? '')));
+            if ($haystack === '') {
+                return false;
+            }
+
+            foreach ($allowedTokens as $token) {
+                if ($token !== '' && str_contains($haystack, $token)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }));
+    }
+
+    private function productivityCodeForLabel(string $label): ?string
+    {
+        $label = strtolower($label);
+
+        return match (true) {
+            str_contains($label, 'hhep') => 'hhep',
+            str_contains($label, 'hdp') => 'hdp',
+            str_contains($label, 'fcr') => 'fcr',
+            str_contains($label, 'umur') || str_contains($label, 'flock') => 'flock_age',
+            str_contains($label, 'egg mass') => 'egg_mass',
+            str_contains($label, 'berat rata') || str_contains($label, 'average egg') => 'avg_egg_weight',
+            str_contains($label, 'feed') || str_contains($label, 'pakan') => 'feed_intake',
+            str_contains($label, 'mortal') || str_contains($label, 'kematian') => 'mortalitas',
+            default => null,
+        };
+    }
+
+    private function environmentCodeAliases(string $code): array
+    {
+        $code = strtoupper(trim($code));
+
+        return match ($code) {
+            'TEMP', 'SUHU', 'TEMPERATURE' => ['TEMP', 'SUHU', 'TEMPERATURE', 'suhu', 'temperature'],
+            'HUMID', 'HUMIDITY', 'KELEMBAPAN' => ['HUMID', 'HUMIDITY', 'KELEMBAPAN', 'kelembapan', 'humidity'],
+            'AMMON', 'AMMONIA', 'AMMA', 'NH3', 'AMONIA' => ['AMMON', 'AMMONIA', 'AMMA', 'NH3', 'AMONIA', 'amonia', 'ammonia'],
+            'LIGHT', 'LUX', 'CAHAYA' => ['LIGHT', 'LUX', 'CAHAYA', 'cahaya', 'light', 'lux'],
+            default => [$code, strtolower($code)],
+        };
+    }
+
+    private function sensorValueFromMap(array $mapped, string $code): float
+    {
+        $value = $this->sensorValueFromMapOrNull($mapped, $code);
+
+        return $value === null ? 0.0 : $value;
+    }
+
+    private function sensorValueFromMapOrNull(array $mapped, string $code): ?float
+    {
+        foreach ($this->environmentCodeAliases($code) as $alias) {
+            if (array_key_exists($alias, $mapped)) {
+                return (float) $mapped[$alias];
+            }
+
+            $upperAlias = strtoupper($alias);
+            if (array_key_exists($upperAlias, $mapped)) {
+                return (float) $mapped[$upperAlias];
+            }
+        }
+
+        return null;
+    }
+
+    private function sensorSourceFromMap(array $sources, string $code): array
+    {
+        foreach ($this->environmentCodeAliases($code) as $alias) {
+            if (array_key_exists($alias, $sources)) {
+                return (array) $sources[$alias];
+            }
+
+            $upperAlias = strtoupper($alias);
+            if (array_key_exists($upperAlias, $sources)) {
+                return (array) $sources[$upperAlias];
+            }
+        }
+
+        return ['type' => 'missing', 'label' => null];
+    }
+
+    private function latestSensorReadingsForDevices(array $devices): array
+    {
+        if (empty($devices) || ! Schema::hasTable('iot_sensor_data') || ! Schema::hasTable('iot_parameter')) {
+            return [];
+        }
+
+        $query = DB::table('iot_sensor_data')
+            ->join('iot_parameter', 'iot_sensor_data.parameterId', '=', 'iot_parameter.id')
+            ->whereIn('iot_sensor_data.deviceId', $devices)
+            ->orderBy('iot_sensor_data.sensorTimestamp', 'desc')
+            ->limit(100);
+
+        if (Schema::hasColumn('iot_sensor_data', 'isDeleted')) {
+            $query->where('iot_sensor_data.isDeleted', 0);
+        }
+
+        $readings = [];
+        foreach ($query->get(['iot_sensor_data.value', 'iot_sensor_data.sensorTimestamp', 'iot_parameter.parameterCode']) as $row) {
+            $code = strtoupper((string) $row->parameterCode);
+            if ($code === '' || isset($readings[$code])) {
+                continue;
+            }
+
+            $readings[$code] = [
+                'value' => (float) $row->value,
+                'timestamp' => Carbon::parse($row->sensorTimestamp),
+            ];
+        }
+
+        return $readings;
+    }
+
+    private function sensorReadingFromMap(array $readings, string $code): ?array
+    {
+        foreach ($this->environmentCodeAliases($code) as $alias) {
+            $upperAlias = strtoupper($alias);
+            if (isset($readings[$upperAlias])) {
+                return $readings[$upperAlias];
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveFuzzyEnvironmentSensorValues(?string $coopId): array
+    {
+        try {
+            $inputs = $this->fuzzyInputResolver->resolve($coopId, $this->activeKomoditasId);
+            $parameters = $this->livestockMasterConfigService
+                ->configuredSpkInputParametersForCommodity($this->activeKomoditasId, 'lingkungan', true);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $values = [];
+        foreach ($parameters as $parameter) {
+            if (($parameter['source_type'] ?? null) !== 'iot') {
+                continue;
+            }
+
+            $code = strtoupper((string) ($parameter['source_code'] ?? $parameter['code'] ?? ''));
+            $variableName = (string) ($parameter['variable_name'] ?? '');
+            if ($code === '' || $variableName === '' || ! array_key_exists($variableName, $inputs)) {
+                continue;
+            }
+
+            $values[$code] = (float) $inputs[$variableName];
+        }
+
+        return $values;
+    }
+
+    private function parameterFallbackValue(object $parameter, string $code): ?float
+    {
+        if (is_numeric($parameter->fallback_value ?? null)) {
+            return (float) $parameter->fallback_value;
+        }
+
+        return match (strtoupper($code)) {
+            'TEMP', 'SUHU', 'TEMPERATURE' => 26.0,
+            'HUMID', 'HUMIDITY', 'KELEMBAPAN' => 65.0,
+            'AMMON', 'AMMONIA', 'AMMA', 'NH3', 'AMONIA' => 5.0,
+            'LIGHT', 'LUX', 'CAHAYA' => 250.0,
+            default => null,
+        };
+    }
+
+    private function environmentSensorContextForBarn(?string $coopId, array $devices, iterable $environmentParams): array
+    {
+        $latestReadings = $this->latestSensorReadingsForDevices($devices);
+        $fuzzyFallbackValues = $this->resolveFuzzyEnvironmentSensorValues($coopId);
+        $mapped = [];
+        $sources = [];
+
+        foreach ($environmentParams as $parameter) {
+            $code = strtoupper((string) ($parameter->parameter_code ?? $parameter->code ?? ''));
+            if ($code === '') {
+                continue;
+            }
+
+            $reading = $this->sensorReadingFromMap($latestReadings, $code);
+            $staleMinutes = max(1, (int) ($parameter->stale_minutes ?? 30));
+            $isFresh = $reading
+                && ($reading['timestamp'] ?? now())->gte(now()->subMinutes($staleMinutes));
+
+            if ($isFresh) {
+                $mapped[$code] = (float) $reading['value'];
+                $sources[$code] = ['type' => 'actual', 'label' => null];
+                continue;
+            }
+
+            $fuzzyValue = $this->sensorValueFromMapOrNull($fuzzyFallbackValues, $code);
+            if ($fuzzyValue !== null) {
+                $mapped[$code] = $fuzzyValue;
+                $sources[$code] = ['type' => 'fallback', 'label' => 'Default SPK'];
+                continue;
+            }
+
+            $fallback = $this->parameterFallbackValue($parameter, $code);
+            if ($fallback !== null) {
+                $mapped[$code] = $fallback;
+                $sources[$code] = ['type' => 'fallback', 'label' => 'Default konfigurasi'];
+                continue;
+            }
+
+            if ($reading) {
+                $mapped[$code] = (float) $reading['value'];
+                $sources[$code] = ['type' => 'stale', 'label' => 'Data lama'];
+            }
+        }
+
+        return [$mapped, $sources];
+    }
+
+    private function sensorPercent(float $value, ?float $min, ?float $max): int
+    {
+        if ($value <= 0) {
+            return 0;
+        }
+
+        if ($max !== null && $max > 0) {
+            return (int) min(100, max(0, round(($value / $max) * 100)));
+        }
+
+        if ($min !== null && $min > 0) {
+            return (int) min(100, max(0, round(($value / $min) * 100)));
+        }
+
+        return (int) min(100, max(0, round($value)));
+    }
+
+    private function formatSensorValue(float $value, ?string $unit): string
+    {
+        $formatted = rtrim(rtrim(number_format($value, 1, '.', ''), '0'), '.');
+
+        return trim($formatted.' '.($unit ?? ''));
+    }
+
+    private function configuredEnvironmentForBarn(iterable $environmentParams, array $thresholds, array $mapped, array $statusLabels, array $sources = []): array
+    {
+        $sensorCards = [];
+        $statuses = [];
+        $summary = [
+            'avg_temp' => '-',
+            'humidity' => '-',
+            'ammonia' => '-',
+            'ammonia_ok' => true,
+            'lux' => '-',
+            'temp_status' => 'normal',
+            'humidity_status' => 'normal',
+            'ammonia_status' => 'normal',
+            'lux_status' => 'normal',
+            'parameters' => [],
+        ];
+        $temp = 0.0;
+        $displaySensor = null;
+
+        foreach ($environmentParams as $parameter) {
+            $code = strtoupper((string) ($parameter->parameter_code ?? $parameter->code ?? ''));
+            $name = (string) ($parameter->parameter_name ?? $parameter->name ?? $code);
+            $unit = (string) ($parameter->unit ?? '');
+            if ($code === '' || $name === '') {
+                continue;
+            }
+
+            $threshold = $this->thresholdFor($thresholds, $code);
+            $value = $this->sensorValueFromMap($mapped, $code);
+            $source = $this->sensorSourceFromMap($sources, $code);
+            $sensorStatus = $this->evaluateSensorStatus($value, $threshold['min'] ?? null, $threshold['max'] ?? null);
+            $displayValue = $this->formatSensorValue($value, $unit);
+            $card = [
+                'code' => $code,
+                'label' => $name.' ('.$displayValue.')',
+                'name' => $name,
+                'value' => round($value, 2),
+                'valueLabel' => $displayValue,
+                'unit' => $unit,
+                'iconKey' => (string) ($parameter->icon_key ?? 'sensor'),
+                'percent' => $this->sensorPercent($value, $threshold['min'] ?? null, $threshold['max'] ?? null),
+                'status' => $sensorStatus,
+                'statusLabel' => $statusLabels[$sensorStatus] ?? $sensorStatus,
+                'min' => $threshold['min'] ?? null,
+                'max' => $threshold['max'] ?? null,
+                'dataSource' => $source['type'] ?? 'missing',
+                'dataSourceLabel' => $source['label'] ?? null,
+                'isFallback' => ($source['type'] ?? null) === 'fallback',
+            ];
+
+            $sensorCards[] = $card;
+            $summary['parameters'][] = $card;
+            $statuses[] = $sensorStatus;
+            $displaySensor ??= $card;
+
+            $aliases = $this->environmentCodeAliases($code);
+            if (in_array('TEMP', $aliases, true)) {
+                $temp = round($value, 1);
+                $summary['avg_temp'] = $displayValue;
+                $summary['temp_status'] = $sensorStatus;
+                $displaySensor = $card;
+            }
+            if (in_array('HUMID', $aliases, true)) {
+                $summary['humidity'] = $displayValue;
+                $summary['humidity_status'] = $sensorStatus;
+            }
+            if (in_array('AMMON', $aliases, true)) {
+                $summary['ammonia'] = $displayValue;
+                $summary['ammonia_ok'] = $sensorStatus === 'normal';
+                $summary['ammonia_status'] = $sensorStatus;
+            }
+            if (in_array('LIGHT', $aliases, true)) {
+                $summary['lux'] = $displayValue;
+                $summary['lux_status'] = $sensorStatus;
+            }
+        }
+
+        return [
+            'applies' => true,
+            'temp' => $temp,
+            'display_sensor_label' => $displaySensor['name'] ?? 'Sensor',
+            'display_sensor_value' => $displaySensor['valueLabel'] ?? '-',
+            'status' => empty($statuses) ? 'normal' : $this->worstStatus(...$statuses),
+            'sensors' => $sensorCards,
+            'summary' => $summary,
+        ];
     }
 
     public function getBarnDetail(array $barn): array
@@ -284,9 +703,11 @@ class PeternakanService
                 'totalBirds' => '-',
                 'capacity' => '-',
                 'breed' => '-',
+                'type' => '-',
                 'startDate' => '-',
                 'location' => '-',
                 'photo' => asset('images/barn-placeholder.jpg'),
+                'photoFallback' => asset('images/barn-placeholder.jpg'),
             ]);
         }
 
@@ -302,9 +723,11 @@ class PeternakanService
                 'totalBirds' => '-',
                 'capacity' => '-',
                 'breed' => '-',
+                'type' => '-',
                 'startDate' => '-',
                 'location' => '-',
                 'photo' => asset('images/barn-placeholder.jpg'),
+                'photoFallback' => asset('images/barn-placeholder.jpg'),
             ]);
         }
 
@@ -316,14 +739,43 @@ class PeternakanService
             'totalBirds' => number_format((float) ($coop->jumlah ?? 0), 0, ',', '.'),
             'capacity' => number_format((float) ($coop->kapasitas ?? 0), 0, ',', '.'),
             'breed' => $coop->breedName ?? '-',
+            'type' => $coop->tipe ?? ($barn['type'] ?? '-'),
             'startDate' => $createdAt->format('Y-m-d'),
             'location' => $coop->lokasi ?? '-',
-            'photo' => $coop->gambar ? asset('storage/'.$coop->gambar) : asset('images/barn-placeholder.jpg'),
+            'photo' => $this->barnPhotoUrl($coop->gambar ?? null),
+            'photoFallback' => asset('images/barn-placeholder.jpg'),
         ]);
     }
 
     public function getBarnSensors(array $barn): array
     {
+        if (empty($barn['id']) || $barn['id'] === 'no-data') {
+            return [];
+        }
+
+        if (! empty($barn['sensors']) && is_array($barn['sensors'])) {
+            return array_values(array_map(function (array $sensor) {
+                return [
+                    'code' => $sensor['code'] ?? null,
+                    'label' => $sensor['name'] ?? $sensor['label'] ?? 'Sensor',
+                    'value' => is_numeric($sensor['value'] ?? null) ? (float) $sensor['value'] : 0.0,
+                    'valueLabel' => $sensor['valueLabel'] ?? null,
+                    'unit' => $sensor['unit'] ?? '',
+                    'min' => $sensor['min'] ?? 0,
+                    'max' => $sensor['max'] ?? 100,
+                    'idealMin' => $sensor['min'] ?? 0,
+                    'idealMax' => $sensor['max'] ?? 100,
+                    'status' => $sensor['status'] ?? 'normal',
+                    'iconKey' => $sensor['iconKey'] ?? 'sensor',
+                    'dataSource' => $sensor['dataSource'] ?? 'missing',
+                    'dataSourceLabel' => $sensor['dataSourceLabel'] ?? null,
+                    'isFallback' => (bool) ($sensor['isFallback'] ?? false),
+                ];
+            }, $barn['sensors']));
+        }
+
+        return [];
+
         if (empty($barn['id']) || $barn['id'] === 'no-data') {
             return [
                 ['label' => 'Suhu', 'value' => 0, 'unit' => '°C', 'min' => 18, 'max' => 30, 'idealMin' => 20, 'idealMax' => 28, 'status' => 'normal', 'icon' => '🌡️'],
@@ -845,7 +1297,13 @@ class PeternakanService
                 $mortality[] = 0;
             }
 
-            return ['labels' => $labels, 'hdp' => $hdp, 'hhep' => $hhep, 'fcr' => $fcr, 'feedIntake' => $feedIntake, 'mortality' => $mortality];
+            return $this->productivityTrendPayload($labels, [
+                'hdp' => $hdp,
+                'hhep' => $hhep,
+                'fcr' => $fcr,
+                'feed_intake' => $feedIntake,
+                'mortalitas' => $mortality,
+            ]);
         }
 
         $startDate = now()->subDays(29)->toDateString();
@@ -902,13 +1360,48 @@ class PeternakanService
             $mortality[] = round($_mortality, 2);
         }
 
-        return [
-            'labels' => $labels,
+        return $this->productivityTrendPayload($labels, [
             'hdp' => $hdp,
             'hhep' => $hhep,
             'fcr' => $fcr,
-            'feedIntake' => $feedIntake,
-            'mortality' => $mortality,
+            'feed_intake' => $feedIntake,
+            'mortalitas' => $mortality,
+        ]);
+    }
+
+    private function productivityTrendPayload(array $labels, array $dataByCode): array
+    {
+        $seriesConfig = [
+            'hdp' => ['label' => 'HDP (%)', 'short_label' => 'HDP', 'color' => '#10B981', 'axis' => 'y'],
+            'hhep' => ['label' => 'HHEP (%)', 'short_label' => 'HHEP', 'color' => '#0EA5E9', 'axis' => 'y'],
+            'fcr' => ['label' => 'FCR', 'short_label' => 'FCR', 'color' => '#64748B', 'axis' => 'y1'],
+            'feed_intake' => ['label' => 'Feed Intake (g)', 'short_label' => 'Feed Intake', 'color' => '#F59E0B', 'axis' => 'y'],
+            'mortalitas' => ['label' => 'Mortalitas (%)', 'short_label' => 'Mortalitas', 'color' => '#EF4444', 'axis' => 'y1'],
+        ];
+
+        $activeCodes = $this->activeProductivityFunctionCodes();
+
+        $series = collect($seriesConfig)
+            ->filter(fn ($config, string $code) => in_array($code, $activeCodes, true))
+            ->map(fn (array $config, string $code) => [
+                'code' => $code,
+                'label' => $config['label'],
+                'short_label' => $config['short_label'],
+                'color' => $config['color'],
+                'axis' => $config['axis'],
+                'data' => $dataByCode[$code] ?? [],
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'labels' => $labels,
+            'hdp' => $dataByCode['hdp'] ?? [],
+            'hhep' => $dataByCode['hhep'] ?? [],
+            'fcr' => $dataByCode['fcr'] ?? [],
+            'feedIntake' => $dataByCode['feed_intake'] ?? [],
+            'mortality' => $dataByCode['mortalitas'] ?? [],
+            'series' => $series,
         ];
     }
 
@@ -1321,6 +1814,10 @@ class PeternakanService
 
     public function getKpiMetrics(): array
     {
+        if (empty($this->activeProductivityFunctionCodes())) {
+            return [];
+        }
+
         $today = now()->toDateString();
         $yesterday = now()->subDay()->toDateString();
         $currentMonth = now()->startOfMonth()->toDateString();
@@ -1333,14 +1830,16 @@ class PeternakanService
             : (float) DB::table('unitBudidaya')->whereIn('id', $activeCoopIds)->sum('jumlah');
 
         if (empty($activeCoopIds) || $totalAyamHidup <= 0) {
-            return [
-                ['label' => 'HDP %', 'value' => '0%', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
-                ['label' => 'FCR', 'value' => '0', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
-                ['label' => 'Umur Biologis', 'value' => '0', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
-                ['label' => 'Feed Intake', 'value' => '0g', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
-                ['label' => 'Egg Mass', 'value' => '0kg', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
-                ['label' => 'Mortality', 'value' => '0%', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
-            ];
+            return $this->filterProductivityCardsByMaster([
+                ['code' => 'hdp', 'label' => 'HDP %', 'value' => '0%', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
+                ['code' => 'hhep', 'label' => 'HHEP %', 'value' => '0%', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
+                ['code' => 'fcr', 'label' => 'FCR', 'value' => '0', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
+                ['code' => 'flock_age', 'label' => 'Umur Biologis', 'value' => '0 Mgg', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
+                ['code' => 'feed_intake', 'label' => 'Feed Intake', 'value' => '0g', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
+                ['code' => 'egg_mass', 'label' => 'Egg Mass', 'value' => '0kg', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
+                ['code' => 'avg_egg_weight', 'label' => 'Berat Rata-rata', 'value' => '0g', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
+                ['code' => 'mortalitas', 'label' => 'Mortality', 'value' => '0%', 'trend' => ['direction' => 'stable', 'value' => 'No data', 'status' => 'neutral']],
+            ]);
         }
 
         $panenToday = DB::table('panen')
@@ -1385,6 +1884,8 @@ class PeternakanService
 
         $hdpToday = $totalAyamHidup > 0 ? round(($totalTelurToday / $totalAyamHidup) * 100, 1) : 0;
         $hdpYesterday = $totalAyamHidup > 0 ? round(($totalTelurYesterday / $totalAyamHidup) * 100, 1) : 0;
+        $avgEggWeightToday = $totalTelurToday > 0 ? round(($totalEggMassToday * 1000) / $totalTelurToday, 1) : 0;
+        $avgEggWeightYesterday = $totalTelurYesterday > 0 ? round(($totalEggMassYesterday * 1000) / $totalTelurYesterday, 1) : 0;
 
         $feedIntakeToday = $totalAyamHidup > 0 ? round(($pakanToday / $totalAyamHidup) * 1000, 0) : 0;
         $feedIntakeYesterday = $totalAyamHidup > 0 ? round(($pakanYesterday / $totalAyamHidup) * 1000, 0) : 0;
@@ -1409,47 +1910,75 @@ class PeternakanService
             ->whereDate('laporan.createdAt', '<=', $lastMonthEnd)
             ->count();
 
-        $populasiAwal = $totalAyamHidup + $mortalityThisMonth;
-        $mortalityPct = $populasiAwal > 0 ? round(($mortalityThisMonth / $populasiAwal) * 100, 2) : 0;
+        $totalDeathsAllTime = DB::table('kematian')
+            ->join('laporan', 'kematian.laporanId', '=', 'laporan.id')
+            ->whereIn('laporan.unitBudidayaId', $activeCoopIds)
+            ->where('laporan.isDeleted', 0)
+            ->where('kematian.isDeleted', 0)
+            ->count();
+
+        $populasiAwal = $totalAyamHidup + $totalDeathsAllTime;
+        $hhepToday = $populasiAwal > 0 ? round(($totalTelurToday / $populasiAwal) * 100, 1) : 0;
+        $hhepYesterday = $populasiAwal > 0 ? round(($totalTelurYesterday / $populasiAwal) * 100, 1) : 0;
+        $populasiAwalBulan = $totalAyamHidup + $mortalityThisMonth;
+        $mortalityPct = $populasiAwalBulan > 0 ? round(($mortalityThisMonth / $populasiAwalBulan) * 100, 2) : 0;
 
         $oldestCoop = DB::table('unitBudidaya')
             ->whereIn('id', $activeCoopIds)
             ->orderBy('createdAt', 'asc')
-            ->first();
+            ->first(array_merge(['createdAt'], $this->unitBudidayaAgeSelect('')));
         $umurBiologis = $oldestCoop ? $this->flockAgeWeeks($oldestCoop).' Mgg' : '0 Mgg';
 
-        return [
+        return $this->filterProductivityCardsByMaster([
             [
+                'code' => 'hdp',
                 'label' => 'HDP %',
                 'value' => $hdpToday.'%',
                 'trend' => $this->calcTrend($hdpToday, $hdpYesterday, 'higher_is_better'),
             ],
             [
+                'code' => 'hhep',
+                'label' => 'HHEP %',
+                'value' => $hhepToday.'%',
+                'trend' => $this->calcTrend($hhepToday, $hhepYesterday, 'higher_is_better'),
+            ],
+            [
+                'code' => 'fcr',
                 'label' => 'FCR',
                 'value' => $fcrToday > 0 ? (string) $fcrToday : '0',
                 'trend' => $this->calcTrend($fcrToday, $fcrYesterday, 'lower_is_better'),
             ],
             [
+                'code' => 'flock_age',
                 'label' => 'Umur Biologis',
                 'value' => $umurBiologis,
                 'trend' => ['direction' => 'stable', 'value' => 'Fase Produksi', 'status' => 'neutral'],
             ],
             [
+                'code' => 'feed_intake',
                 'label' => 'Feed Intake',
                 'value' => $feedIntakeToday.'g',
                 'trend' => $this->calcTrend($feedIntakeToday, $feedIntakeYesterday, 'neutral'),
             ],
             [
+                'code' => 'egg_mass',
                 'label' => 'Egg Mass',
                 'value' => round($totalEggMassToday, 1).'kg',
                 'trend' => $this->calcTrend($totalEggMassToday, $totalEggMassYesterday, 'higher_is_better'),
             ],
             [
+                'code' => 'avg_egg_weight',
+                'label' => 'Berat Rata-rata',
+                'value' => $avgEggWeightToday > 0 ? $avgEggWeightToday.'g' : '0g',
+                'trend' => $this->calcTrend($avgEggWeightToday, $avgEggWeightYesterday, 'neutral'),
+            ],
+            [
+                'code' => 'mortalitas',
                 'label' => 'Mortality',
                 'value' => $mortalityPct.'%',
                 'trend' => $this->calcMortalityTrend($mortalityThisMonth, $mortalityLastMonth),
             ],
-        ];
+        ]);
     }
 
     private function calcTrend(float $current, float $previous, string $mode): array
@@ -1588,6 +2117,11 @@ class PeternakanService
         }
 
         $thresholds = $this->getCommodityThresholds();
+        $environmentParams = $this->livestockMasterConfigService
+            ->configuredEnvironmentParametersForCommodity(
+                $this->activeKomoditasId,
+                false
+            );
 
         $activeCoops = $this->activeJenisBudidayaId
             ? DB::table('unitBudidaya')
@@ -1603,31 +2137,16 @@ class PeternakanService
                 ->where('unitBudidayaId', $coop->id)
                 ->pluck('id')->toArray();
 
-            $temp = 0.0;
-            $hum = 0.0;
-            $ammo = 0.0;
-            $lux = 0.0;
+            [$mapped, $sensorSources] = $this->environmentSensorContextForBarn(
+                (string) $coop->id,
+                $devices,
+                $environmentParams
+            );
 
-            if (! empty($devices)) {
-                $latestLogs = DB::table('iot_sensor_data')
-                    ->join('iot_parameter', 'iot_sensor_data.parameterId', '=', 'iot_parameter.id')
-                    ->whereIn('iot_sensor_data.deviceId', $devices)
-                    ->orderBy('iot_sensor_data.sensorTimestamp', 'desc')
-                    ->limit(50)
-                    ->get(['iot_sensor_data.value', 'iot_parameter.parameterCode']);
-
-                $mapped = [];
-                foreach ($latestLogs as $l) {
-                    if (! isset($mapped[$l->parameterCode])) {
-                        $mapped[$l->parameterCode] = (float) $l->value;
-                    }
-                }
-
-                $temp = $mapped['TEMP'] ?? 0;
-                $hum = $mapped['HUMID'] ?? 0;
-                $ammo = $mapped['AMMON'] ?? ($mapped['AMMA'] ?? ($mapped['AMMONIA'] ?? 0));
-                $lux = $mapped['LIGHT'] ?? ($mapped['LUX'] ?? 0);
-            }
+            $temp = $this->sensorValueFromMap($mapped, 'TEMP');
+            $hum = $this->sensorValueFromMap($mapped, 'HUMID');
+            $ammo = $this->sensorValueFromMap($mapped, 'AMMON');
+            $lux = $this->sensorValueFromMap($mapped, 'LIGHT');
 
             $tempThr = $this->thresholdFor($thresholds, 'TEMP');
             $humThr = $this->thresholdFor($thresholds, 'HUMID');
@@ -1642,11 +2161,18 @@ class PeternakanService
 
             $statusLabels = [
                 'normal' => 'Normal',
-                'warning' => 'Warning',
-                'danger' => 'Critical',
+                'warning' => 'Perhatian',
+                'danger' => 'Kritis',
             ];
 
             $ammoMax = $ammoThr['max'] ?? 15;
+            $configuredEnvironment = $this->configuredEnvironmentForBarn(
+                $environmentParams,
+                $thresholds,
+                $mapped,
+                $statusLabels,
+                $sensorSources
+            );
 
             $barns[] = [
                 'id' => $coop->id,
@@ -1671,6 +2197,16 @@ class PeternakanService
                     'lux_status' => $luxStatus,
                 ],
             ];
+
+            $lastBarnIndex = array_key_last($barns);
+            if ($lastBarnIndex !== null && ($configuredEnvironment['applies'] ?? false)) {
+                $barns[$lastBarnIndex]['temp'] = $configuredEnvironment['temp'];
+                $barns[$lastBarnIndex]['display_sensor_label'] = $configuredEnvironment['display_sensor_label'];
+                $barns[$lastBarnIndex]['display_sensor_value'] = $configuredEnvironment['display_sensor_value'];
+                $barns[$lastBarnIndex]['status'] = $configuredEnvironment['status'];
+                $barns[$lastBarnIndex]['sensors'] = $configuredEnvironment['sensors'];
+                $barns[$lastBarnIndex]['summary'] = $configuredEnvironment['summary'];
+            }
         }
 
         if (empty($barns)) {
@@ -1678,9 +2214,11 @@ class PeternakanService
                 'id' => 'no-data',
                 'name' => 'Belum ada Kandang',
                 'temp' => '-',
+                'display_sensor_label' => 'Sensor',
+                'display_sensor_value' => '-',
                 'status' => 'normal',
                 'sensors' => [],
-                'summary' => ['avg_temp' => '-', 'humidity' => '-', 'ammonia' => '-', 'ammonia_ok' => true, 'lux' => '-'],
+                'summary' => ['avg_temp' => '-', 'humidity' => '-', 'ammonia' => '-', 'ammonia_ok' => true, 'lux' => '-', 'parameters' => []],
             ];
         }
 
@@ -1691,25 +2229,26 @@ class PeternakanService
 
     public function getProduktivitasData(?string $coopId = null): array
     {
+        if (empty($this->activeProductivityFunctionCodes())) {
+            return $this->configuredProductivityPayload([], []);
+        }
+
         $activeCoops = $coopId ? [$coopId] : $this->getActiveCoopIds(false);
         $coopSum = empty($activeCoops)
             ? 0
             : (float) DB::table('unitBudidaya')->whereIn('id', $activeCoops)->sum('jumlah');
 
         if ($coopSum <= 0) {
-            return [
-                'spider' => [
-                    'labels' => ['HDP', 'Umur Biologis', 'Feed Consumption', 'Mortalitas'],
-                    'values' => [0, 0, 0, 0],
-                ],
-                'indicators' => [
-                    ['label' => 'HDP', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
-                    ['label' => 'Umur Biologis', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
-                    ['label' => 'Feed Consumption', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
-                    ['label' => 'Mortalitas', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
-                ],
-                'productivitySensors' => [],
-            ];
+            return $this->configuredProductivityPayload([
+                ['code' => 'hdp', 'label' => 'HDP', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
+                ['code' => 'hhep', 'label' => 'HHEP', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
+                ['code' => 'fcr', 'label' => 'FCR', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
+                ['code' => 'flock_age', 'label' => 'Umur Biologis', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
+                ['code' => 'feed_intake', 'label' => 'Feed Consumption', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
+                ['code' => 'egg_mass', 'label' => 'Egg Mass', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
+                ['code' => 'avg_egg_weight', 'label' => 'Berat Rata-rata', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
+                ['code' => 'mortalitas', 'label' => 'Mortalitas', 'value' => '-', 'color' => 'neutral', 'detail' => '-', 'score' => 0],
+            ], []);
         }
 
         $panenQuery = DB::table('panen')->join('laporan', 'panen.laporanId', '=', 'laporan.id')
@@ -1720,7 +2259,8 @@ class PeternakanService
 
         $panen = $panenQuery->selectRaw('SUM(panen.jumlah) as tTelur, SUM(COALESCE(panen.berat, 0)) as tMass')->first();
 
-        $hdp = $coopSum > 0 ? (float) ($panen->tTelur ?? 0) / $coopSum * 100 : 0;
+        $totalTelur = (float) ($panen->tTelur ?? 0);
+        $hdp = $coopSum > 0 ? $totalTelur / $coopSum * 100 : 0;
 
         $pakan = DB::table('harianTernak')->join('laporan', 'harianTernak.laporanId', '=', 'laporan.id')
             ->whereIn('laporan.unitBudidayaId', $activeCoops)
@@ -1730,6 +2270,9 @@ class PeternakanService
             ->sum('harianTernak.pakan');
 
         $fi = $coopSum > 0 ? ($pakan / $coopSum) * 1000 : 0;
+        $eggMass = (float) ($panen->tMass ?? 0);
+        $fcr = $eggMass > 0 ? $pakan / $eggMass : 0;
+        $avgEggWeight = $totalTelur > 0 ? ($eggMass * 1000) / $totalTelur : 0;
 
         $mati = DB::table('kematian')->join('laporan', 'kematian.laporanId', '=', 'laporan.id')
             ->whereIn('laporan.unitBudidayaId', $activeCoops)
@@ -1738,6 +2281,14 @@ class PeternakanService
             ->whereDate('laporan.createdAt', '>=', now()->startOfMonth()->toDateString())
             ->count();
         $mortality = $coopSum > 0 ? ($mati / $coopSum) * 100 : 0;
+
+        $totalMati = DB::table('kematian')->join('laporan', 'kematian.laporanId', '=', 'laporan.id')
+            ->whereIn('laporan.unitBudidayaId', $activeCoops)
+            ->where('laporan.isDeleted', 0)
+            ->where('kematian.isDeleted', 0)
+            ->count();
+        $initialPopulation = $coopSum + $totalMati;
+        $hhep = $initialPopulation > 0 ? ($totalTelur / $initialPopulation) * 100 : 0;
 
         $avgWeeks = 0;
         if (! empty($activeCoops)) {
@@ -1749,26 +2300,47 @@ class PeternakanService
         }
 
         $hdpScore = min(100, max(0, round($hdp)));
+        $hhepScore = min(100, max(0, round($hhep)));
         $ageScore = min(100, max(0, $avgWeeks * 2));
         $feedScore = min(100, max(0, round($fi > 120 ? 100 : ($fi / 1.2))));
+        $fcrScore = $fcr > 0 ? min(100, max(0, round(100 - max(0, $fcr - 2) * 30))) : 0;
+        $eggMassScore = min(100, max(0, round($eggMass)));
+        $avgWeightScore = $avgEggWeight > 0 ? min(100, max(0, round(100 - (abs($avgEggWeight - 60) * 5)))) : 0;
         $mortScore = min(100, max(0, round(100 - ($mortality * 10))));
+
+        return $this->configuredProductivityPayload([
+            ['code' => 'hdp', 'label' => 'HDP', 'value' => round($hdp, 1).'%', 'color' => $hdp > 85 ? 'emerald' : ($hdp > 70 ? 'amber' : 'red'), 'detail' => $hdp > 85 ? 'Optimal' : ($hdp > 70 ? 'Cukup' : 'Rendah'), 'score' => $hdpScore],
+            ['code' => 'hhep', 'label' => 'HHEP', 'value' => round($hhep, 1).'%', 'color' => $hhep > 85 ? 'emerald' : ($hhep > 70 ? 'amber' : 'red'), 'detail' => 'Telur / populasi awal', 'score' => $hhepScore],
+            ['code' => 'fcr', 'label' => 'FCR', 'value' => $fcr > 0 ? round($fcr, 2) : '-', 'color' => $fcr > 0 && $fcr <= 2.2 ? 'emerald' : ($fcr <= 2.6 ? 'amber' : 'red'), 'detail' => 'Pakan / egg mass', 'score' => $fcrScore],
+            ['code' => 'flock_age', 'label' => 'Umur Biologis', 'value' => $avgWeeks > 0 ? $avgWeeks.' minggu' : '-', 'color' => $avgWeeks >= 18 && $avgWeeks <= 90 ? 'emerald' : 'amber', 'detail' => 'Rata-rata kandang', 'score' => $ageScore],
+            ['code' => 'feed_intake', 'label' => 'Feed Consumption', 'value' => round($fi, 0).' g', 'color' => $fi >= 100 && $fi <= 130 ? 'emerald' : 'amber', 'detail' => 'Per ekor/hari', 'score' => $feedScore],
+            ['code' => 'egg_mass', 'label' => 'Egg Mass', 'value' => $eggMass > 0 ? round($eggMass, 1).' kg' : '-', 'color' => $eggMass > 0 ? 'emerald' : 'neutral', 'detail' => 'Berat panen hari ini', 'score' => $eggMassScore],
+            ['code' => 'avg_egg_weight', 'label' => 'Berat Rata-rata', 'value' => $avgEggWeight > 0 ? round($avgEggWeight, 1).' g' : '-', 'color' => $avgWeightScore >= 80 ? 'emerald' : ($avgWeightScore >= 55 ? 'amber' : 'red'), 'detail' => 'Berat / butir', 'score' => $avgWeightScore],
+            ['code' => 'mortalitas', 'label' => 'Mortalitas', 'value' => round($mortality, 2).'%', 'color' => $mortality < 1 ? 'emerald' : ($mortality < 3 ? 'amber' : 'red'), 'detail' => 'Bulan ini', 'score' => $mortScore],
+        ], [
+            ['code' => 'hdp', 'label' => 'HDP (Hen-Day)', 'percent' => $hdpScore, 'status' => $hdp >= 85 ? 'normal' : ($hdp >= 70 ? 'warning' : 'danger'), 'statusLabel' => round($hdp, 1).'%'],
+            ['code' => 'hhep', 'label' => 'HHEP (Hen-Housed)', 'percent' => $hhepScore, 'status' => $hhep >= 85 ? 'normal' : ($hhep >= 70 ? 'warning' : 'danger'), 'statusLabel' => round($hhep, 1).'%'],
+            ['code' => 'fcr', 'label' => 'FCR', 'percent' => $fcrScore, 'status' => $fcr > 0 && $fcr <= 2.2 ? 'normal' : ($fcr <= 2.6 ? 'warning' : 'danger'), 'statusLabel' => $fcr > 0 ? (string) round($fcr, 2) : '-'],
+            ['code' => 'flock_age', 'label' => 'Umur Biologis', 'percent' => $ageScore, 'status' => $avgWeeks >= 18 && $avgWeeks <= 90 ? 'normal' : 'warning', 'statusLabel' => $avgWeeks > 0 ? $avgWeeks.' minggu' : '-'],
+            ['code' => 'feed_intake', 'label' => 'Feed Consumption', 'percent' => $feedScore, 'status' => $fi >= 100 && $fi <= 130 ? 'normal' : 'warning', 'statusLabel' => round($fi, 0).' g/ekor'],
+            ['code' => 'egg_mass', 'label' => 'Egg Mass', 'percent' => $eggMassScore, 'status' => $eggMass > 0 ? 'normal' : 'warning', 'statusLabel' => $eggMass > 0 ? round($eggMass, 1).' kg' : '-'],
+            ['code' => 'avg_egg_weight', 'label' => 'Berat Rata-rata', 'percent' => $avgWeightScore, 'status' => $avgWeightScore >= 80 ? 'normal' : ($avgWeightScore >= 55 ? 'warning' : 'danger'), 'statusLabel' => $avgEggWeight > 0 ? round($avgEggWeight, 1).' g' : '-'],
+            ['code' => 'mortalitas', 'label' => 'Mortalitas', 'percent' => $mortScore, 'status' => $mortality < 1 ? 'normal' : ($mortality < 3 ? 'warning' : 'danger'), 'statusLabel' => round($mortality, 2).'%'],
+        ]);
+    }
+
+    private function configuredProductivityPayload(array $indicators, array $sensors): array
+    {
+        $indicators = $this->filterProductivityCardsByMaster($indicators);
+        $sensors = $this->filterProductivityCardsByMaster($sensors);
 
         return [
             'spider' => [
-                'labels' => ['HDP', 'Umur Biologis', 'Feed Consumption', 'Mortalitas'],
-                'values' => [$hdpScore, $ageScore, $feedScore, $mortScore],
+                'labels' => array_values(array_map(fn (array $item) => $item['label'] ?? '-', $indicators)),
+                'values' => array_values(array_map(fn (array $item) => (int) ($item['score'] ?? $item['percent'] ?? 0), $indicators)),
             ],
-            'indicators' => [
-                ['label' => 'HDP', 'value' => round($hdp, 1).'%', 'color' => $hdp > 85 ? 'emerald' : ($hdp > 70 ? 'amber' : 'red'), 'detail' => $hdp > 85 ? 'Optimal' : ($hdp > 70 ? 'Cukup' : 'Rendah'), 'score' => $hdpScore],
-                ['label' => 'Umur Biologis', 'value' => $avgWeeks > 0 ? $avgWeeks.' mg' : '-', 'color' => 'blue', 'detail' => 'Rata-rata flock', 'score' => $ageScore],
-                ['label' => 'Feed Consumption', 'value' => round($fi, 0).' g', 'color' => $fi >= 100 && $fi <= 130 ? 'emerald' : 'amber', 'detail' => 'Per ekor/hari', 'score' => $feedScore],
-                ['label' => 'Mortalitas', 'value' => round($mortality, 2).'%', 'color' => $mortality < 1 ? 'emerald' : ($mortality < 3 ? 'amber' : 'red'), 'detail' => 'Bulan ini', 'score' => $mortScore],
-            ],
-            'productivitySensors' => [
-                ['label' => 'HDP (Hen-Day)', 'percent' => $hdpScore, 'status' => $hdp >= 85 ? 'normal' : ($hdp >= 70 ? 'warning' : 'danger'), 'statusLabel' => round($hdp, 1).'%'],
-                ['label' => 'Feed Consumption', 'percent' => $feedScore, 'status' => $fi >= 100 && $fi <= 130 ? 'normal' : 'warning', 'statusLabel' => round($fi, 0).' g/ekor'],
-                ['label' => 'Mortalitas', 'percent' => $mortScore, 'status' => $mortality < 1 ? 'normal' : ($mortality < 3 ? 'warning' : 'danger'), 'statusLabel' => round($mortality, 2).'%'],
-            ],
+            'indicators' => $indicators,
+            'productivitySensors' => $sensors,
         ];
     }
 
@@ -1783,7 +2355,7 @@ class PeternakanService
             ->where('status', 1)
             ->where('isDeleted', 0)
             ->orderBy('nama')
-            ->get(['id', 'nama', 'kapasitas', 'jumlah', 'lokasi', 'createdAt']);
+            ->get(['id', 'nama', 'kapasitas', 'jumlah', 'lokasi', 'gambar', 'createdAt']);
 
         $envById = collect($this->getBarnEnvironment()['barns'])->keyBy('id');
         $today = now()->toDateString();
@@ -1811,6 +2383,8 @@ class PeternakanService
                 'kapasitas' => $coop->kapasitas,
                 'jumlah' => $coop->jumlah,
                 'lokasi' => $coop->lokasi,
+                'photo' => $this->barnPhotoUrl($coop->gambar ?? null),
+                'photoFallback' => asset('images/barn-placeholder.jpg'),
                 'status' => $status,
                 'temp' => $env['temp'] ?? '-',
                 'hdp' => $hdpToday,

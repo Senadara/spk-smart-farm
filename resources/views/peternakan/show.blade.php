@@ -1,7 +1,27 @@
 @extends('layouts.app')
 
-@section('title', $barn['name'] . ' — Detail Kandang')
-@section('breadcrumb', 'Peternakan › ' . $barn['name'])
+@section('title', $barn['name'] . ' - Detail Kandang')
+@section('breadcrumb', 'Peternakan / ' . $barn['name'])
+
+@push('styles')
+    <style>
+        @media (min-width: 1024px) {
+            .summary-balanced-grid {
+                grid-template-columns: repeat(var(--summary-cols, 1), minmax(0, 1fr));
+            }
+        }
+
+        .iot-sensor-grid {
+            grid-template-columns: 1fr;
+        }
+
+        @media (min-width: 640px) {
+            .iot-sensor-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+    </style>
+@endpush
 
 @section('content')
     @php
@@ -15,17 +35,25 @@
         ];
         $barnOverviewHints = [
             'Lokasi' => ['body' => 'Lokasi fisik kandang untuk membantu identifikasi unit budidaya.', 'source' => 'unitBudidaya'],
-            'Breed' => ['body' => 'Jenis/strain ayam yang dipelihara pada kandang.', 'source' => 'unitBudidaya / komoditas'],
+            'Breed' => ['body' => 'Jenis/strain ayam yang dipelihara pada kandang.', 'source' => 'unitBudidaya / jenisBudidaya'],
             'Tanggal Masuk' => ['body' => 'Tanggal data kandang dibuat di sistem. Umur flock utama mengikuti input umur dari mobile.', 'source' => 'unitBudidaya.createdAt'],
             'Populasi' => ['body' => 'Jumlah ayam aktif yang dipakai sebagai pembagi HDP dan feed intake.', 'source' => 'unitBudidaya.jumlah'],
             'Kapasitas' => ['body' => 'Batas kapasitas kandang agar populasi dapat dibandingkan dengan daya tampung.', 'source' => 'unitBudidaya.kapasitas'],
             'Umur Flock' => ['body' => 'Umur flock/ayam di kandang dalam satuan minggu dari input mobile. Data lama fallback ke tanggal kandang dibuat.', 'formula' => 'unitBudidaya.umurMinggu', 'source' => 'unitBudidaya.umurMinggu'],
         ];
         $sensorHints = [
-            'Suhu' => ['body' => 'Suhu kandang terbaru dari sensor. Nilai dibandingkan dengan rentang ideal komoditas.', 'source' => 'iot_sensor_data'],
+            'Suhu' => ['body' => 'Suhu kandang terbaru dari sensor. Nilai dibandingkan dengan rentang ideal jenis ternak.', 'source' => 'iot_sensor_data'],
             'Kelembapan' => ['body' => 'Kelembapan kandang terbaru dari sensor, berpengaruh pada kenyamanan ayam.', 'source' => 'iot_sensor_data'],
             'Amonia' => ['body' => 'Kadar amonia kandang. Nilai tinggi dapat menjadi sinyal ventilasi atau litter perlu dicek.', 'source' => 'iot_sensor_data'],
             'Cahaya' => ['body' => 'Intensitas cahaya kandang dari sensor lux.', 'source' => 'iot_sensor_data'],
+        ];
+        $sensorIconPaths = [
+            'sensor' => 'M4 17h2m3 0h2m3 0h6M5 7h14M7 7v10m10-10v10M9 11h6m-6 3h6',
+            'gauge' => 'M12 14l3-3m5 3a8 8 0 11-16 0 8 8 0 0116 0z',
+            'air' => 'M3 12h12a3 3 0 100-6H9m-6 10h14a2 2 0 110 4h-3',
+            'water' => 'M12 3l5 6a7 7 0 11-10 0l5-6z',
+            'light' => 'M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36l-1.41-1.41M7.05 7.05L5.64 5.64m12.72 0l-1.41 1.41M7.05 16.95l-1.41 1.41M16 12a4 4 0 11-8 0 4 4 0 018 0z',
+            'alert' => 'M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
         ];
         $eggMetricHints = [
             'Total Telur' => ['body' => 'Jumlah telur yang dipanen dari kandang ini pada laporan hari ini.', 'formula' => 'SUM(panen.jumlah)', 'source' => 'panen'],
@@ -34,6 +62,14 @@
             'Reject/Rusak' => ['body' => 'Persentase telur reject, rusak, retak, kotor, pecah, atau afkir dari total panen.', 'formula' => '(jumlah telur reject / total telur) x 100%', 'source' => 'panenRincianGrade, grade'],
         ];
         $canExportProductivity = in_array(session('user.role'), ['pjawab', 'owner', 'admin'], true);
+        $activeProductivityCodes = collect($activeProductivityCodes ?? [])->map(fn ($code) => (string) $code)->values()->all();
+        $productivityTrendSeries = collect($productivityTrend['series'] ?? [])->values();
+        $productivityTrendLabelText = $productivityTrendSeries->pluck('short_label')->filter()->implode(', ');
+        $summaryGridColumns = static function ($items): int {
+            $count = is_countable($items) ? count($items) : (int) $items;
+
+            return $count <= 5 ? max(1, $count) : min(5, (int) ceil($count / 2));
+        };
     @endphp
 
     <div x-data="{
@@ -54,8 +90,8 @@
             if (!ctx) return;
             if (this._trendChart) this._trendChart.destroy();
             const datasets = [];
-            const colors = ['#EF4444','#3B82F6','#F59E0B','#8B5CF6'];
-            const labels = ['Suhu (°C)','Kelembapan (%)','Amonia (ppm)','Cahaya (lux)'];
+            const colors = ['#EF4444','#0EA5E9','#F59E0B','#64748B'];
+            const labels = ['Suhu (C)','Kelembapan (%)','Amonia (ppm)','Cahaya (lux)'];
             const allData = @js([$sensorTrend['temperature'], $sensorTrend['humidity'], $sensorTrend['ammonia'] ?? [], $sensorTrend['light'] ?? []]);
             const allLabels = @js($sensorTrend['labels']);
             const range = this.sensorRange;
@@ -90,21 +126,21 @@
             if (!ctx) return;
             if (this._prodChart) this._prodChart.destroy();
             const datasets = [];
-            const colors = ['#10B981','#3B82F6','#F59E0B','#8B5CF6','#EF4444'];
-            const labels = ['HDP (%)','HHEP (%)','FCR','Feed Intake (g)','Mortalitas (%)'];
-            const allData = @js([$productivityTrend['hdp'], $productivityTrend['hhep'], $productivityTrend['fcr'], $productivityTrend['feedIntake'], $productivityTrend['mortality']]);
+            const trendSeries = @js($productivityTrendSeries->all());
             const allLabels = @js($productivityTrend['labels']);
             const range = this.prodRange;
             const sliceN = range === '7d' ? 7 : range === '14d' ? 14 : 30;
             const slicedLabels = allLabels.slice(-sliceN);
             const filter = this.prodFilter;
-            allData.forEach((d, i) => {
-                if (filter !== 'all' && parseInt(filter) !== i) return;
+            trendSeries.forEach((series) => {
+                if (filter !== 'all' && filter !== series.code) return;
                 datasets.push({
-                    label: labels[i], data: d.slice(-sliceN), borderColor: colors[i],
-                    backgroundColor: colors[i] + '10', borderWidth: 2, fill: false,
+                    label: series.label,
+                    data: (series.data || []).slice(-sliceN),
+                    borderColor: series.color,
+                    backgroundColor: `${series.color}10`, borderWidth: 2, fill: false,
                     tension: 0.4, pointRadius: 0, pointHoverRadius: 4,
-                    yAxisID: (i === 2 || i === 4) ? 'y1' : 'y',
+                    yAxisID: series.axis || 'y',
                 });
             });
             this._prodChart = new Chart(ctx, {
@@ -124,16 +160,16 @@
         },
     }" class="max-w-full space-y-5">
 
-        {{-- ═══ HEADER ═══ --}}
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-                <div class="flex items-center gap-3">
-                    <h1 class="text-xl font-bold text-gray-900">{{ $barn['name'] }}</h1>
+        {{-- HEADER --}}
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <h1 class="min-w-0 text-xl font-bold text-gray-900 sm:text-2xl">{{ $barn['name'] }}</h1>
                     @php
                         $sc = [
-                            'normal'  => ['label'=>'Optimal','cls'=>'text-emerald-600 bg-emerald-50'],
-                            'warning' => ['label'=>'Perhatian','cls'=>'text-amber-600 bg-amber-50'],
-                            'danger'  => ['label'=>'Kritis','cls'=>'text-red-600 bg-red-50'],
+                            'normal'  => ['label'=>'Optimal','cls'=>'text-slate-600 bg-slate-100'],
+                            'warning' => ['label'=>'Perhatian','cls'=>'text-amber-700 bg-amber-50'],
+                            'danger'  => ['label'=>'Kritis','cls'=>'text-red-700 bg-red-50'],
                         ][$barn['status']] ?? ['label'=>'Normal','cls'=>'text-gray-500 bg-gray-50'];
                     @endphp
                     <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full {{ $sc['cls'] }}">
@@ -141,28 +177,27 @@
                         {{ $sc['label'] }}
                     </span>
                 </div>
-                <p class="text-xs text-gray-400 mt-0.5">
-                    {{ $barn['breed'] }} · {{ $barn['location'] }} · Umur Flock: {{ $barn['flockAge'] }} · {{ $barn['totalBirds'] }} / {{ $barn['capacity'] }} ekor
+                <p class="mt-1 text-xs leading-relaxed text-gray-400">
+                    {{ $barn['breed'] }} - {{ $barn['location'] }} - Umur Flock: {{ $barn['flockAge'] }} - {{ $barn['totalBirds'] }} / {{ $barn['capacity'] }} ekor
                 </p>
             </div>
-            <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-                <x-dashboard-hint-toggle />
-                <a href="{{ route('peternakan', array_filter(['komoditas' => $activeKomoditasId])) }}" class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600 transition hover:bg-gray-50 no-underline sm:w-auto sm:px-4 sm:text-sm">
+            <div class="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end sm:gap-3">
+                <a href="{{ route('peternakan', array_filter(['jenis_ternak' => $activeJenisTernakId ?? null, 'komoditas' => $activeKomoditasId])) }}" class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600 transition hover:bg-gray-50 no-underline sm:w-auto sm:px-4 sm:text-sm">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
                     Kembali
                 </a>
                 @if($canExportProductivity)
                     <a
-                        href="{{ route('peternakan.settlement', array_filter(['id' => $barn['id'], 'komoditas' => $activeKomoditasId])) }}"
-                        class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-medium text-white shadow-sm transition hover:bg-emerald-600 no-underline sm:w-auto sm:px-4 sm:text-sm"
+                        href="{{ route('peternakan.settlement', array_filter(['id' => $barn['id'], 'jenis_ternak' => $activeJenisTernakId ?? null, 'komoditas' => $activeKomoditasId])) }}"
+                        class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white shadow-sm transition hover:bg-slate-700 no-underline sm:w-auto sm:px-4 sm:text-sm"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         Settlement / PDF
                     </a>
                 @endif
                 <a
-                    href="{{ route('peternakan.individual-productivity', array_filter(['id' => $barn['id'], 'komoditas' => $activeKomoditasId])) }}"
-                    class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 no-underline sm:w-auto sm:px-4 sm:text-sm"
+                    href="{{ route('peternakan.individual-productivity', array_filter(['id' => $barn['id'], 'jenis_ternak' => $activeJenisTernakId ?? null, 'komoditas' => $activeKomoditasId])) }}"
+                    class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 no-underline sm:w-auto sm:px-4 sm:text-sm"
                 >
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 15l3-3 3 2 5-6"/></svg>
                     HDP Individu
@@ -170,13 +205,18 @@
             </div>
         </div>
 
-        {{-- ═══ BARN OVERVIEW — COMPACT ═══ --}}
+        {{-- BARN OVERVIEW --}}
         <div class="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden flex flex-col lg:flex-row">
-            <div class="lg:w-1/8 h-36 lg:h-auto relative bg-gray-100">
-                <img src="{{ $barn['photo'] }}" alt="{{ $barn['name'] }}" class="w-full h-full object-cover">
+            <div class="relative h-44 bg-gray-100 lg:h-auto lg:w-64 lg:min-h-[150px]">
+                <img src="{{ $barn['photo'] }}"
+                    alt="{{ $barn['name'] }}"
+                    class="h-full w-full object-cover"
+                    loading="lazy"
+                    onerror="this.onerror=null;this.src='{{ $barn['photoFallback'] ?? asset('images/barn-placeholder.jpg') }}';">
             </div>
-            <div class="lg:w-3/4 p-4 lg:p-5 flex items-center">
-                <div class="grid grid-cols-3 md:grid-cols-6 gap-4 w-full">
+            <div class="flex min-w-0 flex-1 items-center p-4 lg:p-5">
+                <div class="summary-balanced-grid grid w-full grid-cols-2 gap-4"
+                    style="--summary-cols: {{ $summaryGridColumns(6) }};">
                     @foreach ([
                         ['l'=>'Lokasi','v'=>$barn['location']],
                         ['l'=>'Breed','v'=>$barn['breed']],
@@ -202,16 +242,19 @@
             </div>
         </div>
 
-        {{-- ═══ KPI ROW — SAME AS DASHBOARD ═══ --}}
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            @foreach ([
-                ['label'=>'HDP %','value'=>$kpi['hdp'] ? $kpi['hdp'].'%' : '-','trend'=>['direction'=>'up','value'=>'+1.2%','status'=>'positive']],
-                ['label'=>'HHEP %','value'=>$kpi['hhep'] ? $kpi['hhep'].'%' : '-','trend'=>['direction'=>'up','value'=>'+0.5%','status'=>'positive']],
-                ['label'=>'Feed Intake','value'=>$kpi['feedIntake'].'g','trend'=>['direction'=>'stable','value'=>'Stable','status'=>'neutral']],
-                ['label'=>'FCR','value'=>$kpi['fcr'] ?: '-','trend'=>['direction'=>'down','value'=>'-0.02','status'=>'positive']],
-                ['label'=>'Mortalitas','value'=>$kpi['mortalitas'].'%','trend'=>['direction'=>$kpi['mortalitas']>0.05?'up':'stable','value'=>$kpi['mortalitas']>0.05?'+0.01%':'Stable','status'=>$kpi['mortalitas']>0.05?'warning':'neutral']],
-                ['label'=>'Reject Telur','value'=>$kpi['afkir'].'%','trend'=>['direction'=>$kpi['afkir']>5?'up':'stable','value'=>$kpi['afkir']>5?'Perlu cek':'Stable','status'=>$kpi['afkir']>5?'warning':'neutral']],
-            ] as $m)
+        {{-- KPI ROW --}}
+        @php
+            $detailKpiCards = collect([
+                ['code'=>'hdp','label'=>'HDP %','value'=>$kpi['hdp'] ? $kpi['hdp'].'%' : '-','trend'=>['direction'=>'up','value'=>'+1.2%','status'=>'positive']],
+                ['code'=>'hhep','label'=>'HHEP %','value'=>$kpi['hhep'] ? $kpi['hhep'].'%' : '-','trend'=>['direction'=>'up','value'=>'+0.5%','status'=>'positive']],
+                ['code'=>'feed_intake','label'=>'Feed Intake','value'=>$kpi['feedIntake'].'g','trend'=>['direction'=>'stable','value'=>'Stable','status'=>'neutral']],
+                ['code'=>'fcr','label'=>'FCR','value'=>$kpi['fcr'] ?: '-','trend'=>['direction'=>'down','value'=>'-0.02','status'=>'positive']],
+                ['code'=>'mortalitas','label'=>'Mortalitas','value'=>$kpi['mortalitas'].'%','trend'=>['direction'=>$kpi['mortalitas']>0.05?'up':'stable','value'=>$kpi['mortalitas']>0.05?'+0.01%':'Stable','status'=>$kpi['mortalitas']>0.05?'warning':'neutral']],
+            ])->filter(fn ($metric) => in_array($metric['code'], $activeProductivityCodes, true))->values();
+        @endphp
+        <div class="summary-balanced-grid grid grid-cols-2 gap-3"
+            style="--summary-cols: {{ $summaryGridColumns($detailKpiCards) }};">
+            @forelse ($detailKpiCards as $m)
                 @php
                     $hint = $detailKpiHints[$m['label']] ?? null;
                 @endphp
@@ -223,28 +266,32 @@
                     :formula="$hint['formula'] ?? null"
                     :source="$hint['source'] ?? null"
                 />
-            @endforeach
+            @empty
+                <div class="col-span-full rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    Belum ada indikator produktivitas yang aktif sebagai Data Operasional. Aktifkan minimal satu indikator di Data Master ternak.
+                </div>
+            @endforelse
         </div>
 
-        {{-- ═══ SENSOR TREND CHART + LIVE SENSORS ═══ --}}
+        {{-- SENSOR TREND CHART + LIVE SENSORS --}}
         @php
             $healthStatus = $healthContext['status'] ?? 'normal';
             $healthTone = [
-                'normal' => ['badge' => 'bg-emerald-50 text-emerald-700', 'border' => 'border-emerald-100'],
+                'normal' => ['badge' => 'bg-slate-100 text-slate-700', 'border' => 'border-gray-100'],
                 'warning' => ['badge' => 'bg-amber-50 text-amber-700', 'border' => 'border-amber-100'],
                 'danger' => ['badge' => 'bg-red-50 text-red-700', 'border' => 'border-red-100'],
             ][$healthStatus] ?? ['badge' => 'bg-gray-50 text-gray-600', 'border' => 'border-gray-100'];
             $metricTone = [
-                'emerald' => 'bg-emerald-50 text-emerald-700 border-emerald-100',
+                'emerald' => 'bg-white text-slate-700 border-gray-100',
                 'amber' => 'bg-amber-50 text-amber-700 border-amber-100',
                 'red' => 'bg-red-50 text-red-700 border-red-100',
-                'sky' => 'bg-sky-50 text-sky-700 border-sky-100',
+                'sky' => 'bg-gray-50 text-gray-700 border-gray-100',
                 'gray' => 'bg-gray-50 text-gray-600 border-gray-100',
             ];
             $signalTone = [
                 'danger' => 'border-red-100 bg-red-50 text-red-700',
                 'warning' => 'border-amber-100 bg-amber-50 text-amber-700',
-                'info' => 'border-sky-100 bg-sky-50 text-sky-700',
+                'info' => 'border-gray-100 bg-white text-gray-700',
             ];
             $canCreateHealthTask = data_get(session('user'), 'role') === 'pjawab';
             $eggDrop = data_get($healthContext, 'egg_production_drop');
@@ -286,19 +333,19 @@
             @endif
 
             @if($eggDrop)
-                <div class="mt-4 rounded-xl border {{ data_get($eggDrop, 'isIndication') ? 'border-amber-100 bg-amber-50' : 'border-sky-100 bg-sky-50' }} p-3">
+                <div class="mt-4 rounded-xl border {{ data_get($eggDrop, 'isIndication') ? 'border-amber-100 bg-amber-50' : 'border-gray-100 bg-gray-50' }} p-3">
                     <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div class="min-w-0">
-                            <p class="text-[10px] font-bold uppercase tracking-wide {{ data_get($eggDrop, 'isIndication') ? 'text-amber-700' : 'text-sky-700' }}">
+                            <p class="text-[10px] font-bold uppercase tracking-wide {{ data_get($eggDrop, 'isIndication') ? 'text-amber-700' : 'text-gray-500' }}">
                                 HDP individu
                             </p>
-                            <h4 class="mt-1 text-sm font-black text-slate-900">Analisis per ayam tersedia di halaman khusus</h4>
+                            <h4 class="mt-1 text-sm font-black text-slate-900">Analisis per ayam tersedia</h4>
                             <p class="mt-1 text-xs leading-relaxed text-slate-600">
-                                Buka tabel HDP individu untuk membandingkan periode sekarang dan sebelumnya, mengurutkan ayam dengan penurunan terbesar, serta membuat laporan indikasi sakit otomatis bila diperlukan.
+                                Lihat penurunan terbesar dan buat indikasi pemeriksaan bila perlu.
                             </p>
                         </div>
                         <a
-                            href="{{ route('peternakan.individual-productivity', array_filter(['id' => $barn['id'], 'komoditas' => $activeKomoditasId])) }}"
+                            href="{{ route('peternakan.individual-productivity', array_filter(['id' => $barn['id'], 'jenis_ternak' => $activeJenisTernakId ?? null, 'komoditas' => $activeKomoditasId])) }}"
                             class="inline-flex w-full shrink-0 items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-700 no-underline sm:w-auto"
                         >
                             Buka Tabel HDP
@@ -307,7 +354,8 @@
                 </div>
             @endif
 
-            <div class="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div class="summary-balanced-grid mt-4 grid grid-cols-2 gap-3"
+                style="--summary-cols: {{ $summaryGridColumns($healthContext['metrics'] ?? []) }};">
                 @foreach (($healthContext['metrics'] ?? []) as $metric)
                     <div class="rounded-xl border px-3 py-3 {{ $metricTone[$metric['tone'] ?? 'gray'] ?? $metricTone['gray'] }}">
                         <p class="text-[10px] font-bold uppercase tracking-wide opacity-70">{{ $metric['label'] }}</p>
@@ -340,7 +388,7 @@
                     <div class="space-y-2">
                         @foreach (($healthContext['mobile_checklist'] ?? []) as $item)
                             <div class="flex gap-2 rounded-lg bg-slate-50 px-3 py-2">
-                                <span class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"></span>
+                                <span class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400"></span>
                                 <p class="text-xs leading-relaxed text-slate-600">{{ $item }}</p>
                             </div>
                         @endforeach
@@ -360,20 +408,20 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-5">
             <div class="lg:col-span-3 bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-sm">
-                <div class="flex flex-col gap-3 mb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                    <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex min-w-0 flex-wrap items-center gap-2">
                         <h3 class="text-base font-semibold text-gray-800">Tren Sensor</h3>
                         <x-metric-hint title="Tren Sensor" body="Grafik ini menampilkan histori sensor kandang berdasarkan rentang jam yang dipilih." formula="AVG(sensor value) per jam" source="iot_sensor_data, iot_parameter" />
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex min-w-[220px] flex-1 flex-wrap items-center justify-end gap-2 sm:flex-none">
                         <div class="flex bg-gray-100 rounded-lg p-0.5">
                             <template x-for="r in [{v:'6h',l:'6J'},{v:'12h',l:'12J'},{v:'24h',l:'24J'}]">
                                 <button @click="sensorRange=r.v; renderTrend()" :class="sensorRange===r.v ? 'bg-white shadow-sm text-gray-900':'text-gray-500 hover:text-gray-700'" class="px-2.5 py-1 text-[10px] font-semibold rounded-md transition-all" x-text="r.l"></button>
                             </template>
                         </div>
-                        <select x-model="sensorFilter" @change="renderTrend()" class="min-w-0 flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-300 sm:flex-none">
+                        <select x-model="sensorFilter" @change="renderTrend()" class="min-w-[120px] flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-300 sm:flex-none">
                             <option value="all">Semua</option>
                             <option value="0">Suhu</option>
                             <option value="1">Kelembapan</option>
@@ -395,39 +443,49 @@
                         <x-metric-hint title="Sensor & Perangkat" body="Card ini menampilkan nilai sensor terbaru dan status device. Device dapat dianggap offline jika tidak mengirim data melewati batas konfigurasi." source="iot_device, iot_sensor_data, iot_device_log" />
                     </div>
                     <span class="flex h-2 w-2 relative">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-300 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-slate-500"></span>
                     </span>
                 </div>
-                <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="iot-sensor-grid mb-4 grid gap-3">
                     @php
-                        $sIcons = [
-                            '<path stroke-linecap="round" stroke-linejoin="round" d="M12 9V3m0 0a2 2 0 10-4 0v9.764a4 4 0 106.764 1.528A3.99 3.99 0 0012 13V3z"/>',
-                            '<path stroke-linecap="round" stroke-linejoin="round" d="M12 21a8 8 0 004-14.947L12 2l-4 4.053A8 8 0 0012 21z"/>',
-                            '<path stroke-linecap="round" stroke-linejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>',
-                            '<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>',
-                        ];
-                        $statusMap = ['normal'=>'text-emerald-600 bg-emerald-50','warning'=>'text-amber-600 bg-amber-50','danger'=>'text-red-600 bg-red-50'];
-                        $statusLabel = ['normal'=>'OK','warning'=>'⚠','danger'=>'!'];
+                        $statusMap = ['normal'=>'text-slate-600 bg-slate-100','warning'=>'text-amber-700 bg-amber-50','danger'=>'text-red-700 bg-red-50'];
+                        $statusLabel = ['normal'=>'OK','warning'=>'Cek','danger'=>'!'];
                     @endphp
                     @foreach ($sensors as $i => $s)
-                        <div class="rounded-xl border border-gray-100 p-3 hover:shadow-sm transition-all">
-                            <div class="flex items-center justify-between mb-1">
-                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">{!! $sIcons[$i] !!}</svg>
+                        @php
+                            $iconPath = $sensorIconPaths[$s['iconKey'] ?? 'sensor'] ?? $sensorIconPaths['sensor'];
+                            $displayValue = $s['valueLabel'] ?? trim(($s['value'] ?? '-').($s['unit'] ?? ''));
+                        @endphp
+                        <div class="rounded-xl border border-gray-100 p-3 transition-all hover:shadow-sm">
+                            <div class="mb-2 flex items-center justify-between gap-2">
+                                <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-500">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="{{ $iconPath }}"></path>
+                                    </svg>
+                                </span>
                                 <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full {{ $statusMap[$s['status']] ?? $statusMap['normal'] }}">{{ $statusLabel[$s['status']] ?? 'OK' }}</span>
                             </div>
                             @php
                                 $hint = $sensorHints[$s['label']] ?? null;
                             @endphp
                             <div class="flex items-center gap-1">
-                                <p class="text-xs text-gray-400 uppercase tracking-wider">{{ $s['label'] }}</p>
+                                <p class="break-words text-xs font-semibold uppercase leading-snug tracking-wide text-gray-400">{{ $s['label'] }}</p>
                                 @if($hint)
                                     <x-metric-hint :title="$s['label']" :body="$hint['body']" :source="$hint['source']" />
                                 @endif
                             </div>
-                            <p class="text-lg font-bold text-gray-900">{{ $s['value'] }}<span class="text-xs font-normal text-gray-400">{{ $s['unit'] }}</span></p>
+                            <p class="text-lg font-bold text-gray-900">{{ $displayValue }}</p>
+                            @if(!empty($s['dataSourceLabel']))
+                                <p class="mt-0.5 text-[10px] font-semibold text-gray-400">{{ $s['dataSourceLabel'] }}</p>
+                            @endif
                         </div>
                     @endforeach
+                    @if(empty($sensors))
+                        <div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                            Parameter sensor belum aktif dari Data Master.
+                        </div>
+                    @endif
                 </div>
                 @if ($iotDevice)
                     <div class="rounded-xl border border-dashed border-gray-200 p-3 bg-gray-50/50">
@@ -435,9 +493,9 @@
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-xs font-bold text-gray-900 font-mono">{{ $iotDevice['code'] }}</p>
-                                <p class="text-[10px] text-gray-500">{{ $iotDevice['name'] }} · {{ $iotDevice['protocol'] }}</p>
+                                <p class="text-[10px] text-gray-500">{{ $iotDevice['name'] }} - {{ $iotDevice['protocol'] }}</p>
                             </div>
-                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold {{ $iotDevice['status'] === 'active' ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50' }}">
+                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold {{ $iotDevice['status'] === 'active' ? 'text-slate-600 bg-slate-100' : 'text-red-700 bg-red-50' }}">
                                 <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
                                 {{ ucfirst($iotDevice['status']) }}
                             </span>
@@ -447,29 +505,27 @@
             </div>
         </div>
 
-        {{-- ═══ PRODUCTIVITY TREND CHART ═══ --}}
+        {{-- PRODUCTIVITY TREND CHART --}}
         <div class="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-sm">
-            <div class="flex flex-col gap-3 mb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <div class="flex items-center gap-2">
                         <h3 class="text-base font-semibold text-gray-800">Tren Produktivitas</h3>
-                        <x-metric-hint title="Tren Produktivitas" body="Grafik ini memperlihatkan perkembangan HDP, HHEP, FCR, feed intake, dan mortalitas pada kandang ini." formula="agregasi laporan harian per tanggal" source="laporan, panen, harianTernak, kematian" />
+                        <x-metric-hint title="Tren Produktivitas" body="Grafik ini memperlihatkan perkembangan indikator produktivitas operasional yang aktif untuk jenis ternak ini." formula="agregasi laporan harian per tanggal" source="Data Master, laporan, panen, harianTernak, kematian" />
                     </div>
-                    <p class="text-xs text-gray-400 mt-0.5">HDP, HHEP, FCR, Feed Intake, Mortalitas</p>
+                    <p class="text-xs text-gray-400 mt-0.5">{{ $productivityTrendLabelText ?: 'Belum ada indikator operasional aktif' }}</p>
                 </div>
-                <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                <div class="flex min-w-[220px] flex-1 flex-wrap items-center justify-end gap-2 sm:flex-none">
                     <div class="flex bg-gray-100 rounded-lg p-0.5">
                         <template x-for="r in [{v:'7d',l:'7H'},{v:'14d',l:'14H'},{v:'30d',l:'30H'}]">
                             <button @click="prodRange=r.v; renderProd()" :class="prodRange===r.v ? 'bg-white shadow-sm text-gray-900':'text-gray-500 hover:text-gray-700'" class="px-2.5 py-1 text-[10px] font-semibold rounded-md transition-all" x-text="r.l"></button>
                         </template>
                     </div>
-                    <select x-model="prodFilter" @change="renderProd()" class="min-w-0 flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-300 sm:flex-none">
+                    <select x-model="prodFilter" @change="renderProd()" class="min-w-[120px] flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-300 sm:flex-none">
                         <option value="all">Semua</option>
-                        <option value="0">HDP</option>
-                        <option value="1">HHEP</option>
-                        <option value="2">FCR</option>
-                        <option value="3">Feed Intake</option>
-                        <option value="4">Mortalitas</option>
+                        @foreach($productivityTrendSeries as $series)
+                            <option value="{{ $series['code'] }}">{{ $series['short_label'] ?? $series['label'] }}</option>
+                        @endforeach
                     </select>
                 </div>
             </div>
@@ -478,7 +534,7 @@
             </div>
         </div>
 
-        {{-- ═══ EGG QUALITY CARD ═══ --}}
+        {{-- EGG QUALITY CARD --}}
         @php
             $hasEggReport = $eggQuality['hasReport'] ?? false;
             $gradeDistribution = $eggQuality['gradeDistribution'] ?? [];
@@ -495,7 +551,7 @@
                     </div>
                     <p class="text-xs text-gray-400 mt-0.5">Sumber hari ini: laporan panen, panen, dan rincian grade - {{ $eggQuality['sourceDate'] }}</p>
                 </div>
-                <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold {{ $hasEggReport ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">
+                <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold {{ $hasEggReport ? 'bg-slate-100 text-slate-700' : 'bg-amber-50 text-amber-700' }}">
                     {{ $hasEggReport ? 'Data hari ini tersedia' : 'Belum ada panen hari ini' }}
                 </span>
             </div>
@@ -504,7 +560,7 @@
                 <div class="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900 mb-5">
                     <p class="font-semibold">Belum ada laporan panen untuk kandang ini pada {{ $eggQuality['sourceDate'] }}.</p>
                     <p class="mt-1 text-xs leading-relaxed opacity-90">
-                        Distribusi grade, reject telur, egg mass, dan rata-rata berat telur akan tampil setelah laporan panen harian masuk.
+                        Ringkasan produksi akan tampil setelah laporan panen harian masuk.
                         @if(!empty($eggQuality['lastPanenAt']))
                             Laporan panen terakhir: {{ $eggQuality['lastPanenAt'] }}.
                         @endif
@@ -551,7 +607,8 @@
 
                 <div>
                     <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Ringkasan Panen</p>
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="summary-balanced-grid grid grid-cols-2 gap-3"
+                        style="--summary-cols: {{ $summaryGridColumns(4) }};">
                         @foreach([
                             ['label' => 'Total Telur', 'value' => number_format((float)($eggQuality['totalEggs'] ?? 0), 0, ',', '.'), 'class' => 'text-gray-900'],
                             ['label' => 'Egg Mass', 'value' => number_format((float)($eggQuality['totalWeightKg'] ?? 0), 2, ',', '.') . ' kg', 'class' => 'text-gray-900'],
@@ -607,7 +664,7 @@
                             $auditCls = [
                                 'ready' => 'bg-emerald-50 text-emerald-700 border-emerald-100',
                                 'empty' => 'bg-amber-50 text-amber-700 border-amber-100',
-                                'warning' => 'bg-orange-50 text-orange-700 border-orange-100',
+                                'warning' => 'bg-amber-50 text-amber-700 border-amber-100',
                             ][$item['status']] ?? 'bg-gray-50 text-gray-600 border-gray-100';
                             $statusText = [
                                 'ready' => 'tersedia',
@@ -686,7 +743,7 @@
                                 <td class="py-2.5 px-3 text-right text-gray-500">{{ $log['rejects'] }}</td>
                                 <td class="py-2.5 px-3 text-right text-gray-500">{{ is_numeric($log['feedKg']) ? number_format($log['feedKg']) : $log['feedKg'] }}</td>
                                 <td class="py-2.5 px-3 text-right">
-                                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ $mortalityCount > 2 ? 'text-red-600 bg-red-50' : 'text-emerald-600 bg-emerald-50' }}">{{ $log['mortality'] }}</span>
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ $mortalityCount > 2 ? 'text-red-700 bg-red-50' : 'text-slate-600 bg-slate-100' }}">{{ $log['mortality'] }}</span>
                                 </td>
                                 <td class="py-2.5 px-3 text-right font-bold text-gray-900">{{ $log['hdp'] }}</td>
                             </tr>
@@ -696,7 +753,7 @@
             </div>
         </div>
 
-        {{-- ═══ SPK MESSAGES + ACTIVITY LOG ═══ --}}
+        {{-- SPK MESSAGES + ACTIVITY LOG --}}
         @php
             $spkItems = collect($spkMessages);
             $spkIssue = $spkItems->first(fn ($item) => ($item['status'] ?? 'normal') !== 'normal') ?? $spkItems->first();
@@ -704,11 +761,11 @@
             $spkWarningCount = $spkItems->where('status', 'warning')->count();
             $spkStatus = $spkDangerCount > 0 ? 'danger' : ($spkWarningCount > 0 ? 'warning' : 'normal');
             $spkBadge = [
-                'normal' => ['label' => 'Aman', 'cls' => 'bg-emerald-50 text-emerald-700'],
+                'normal' => ['label' => 'Aman', 'cls' => 'bg-slate-100 text-slate-700'],
                 'warning' => ['label' => 'Perlu cek', 'cls' => 'bg-amber-50 text-amber-700'],
                 'danger' => ['label' => 'Kritis', 'cls' => 'bg-red-50 text-red-700'],
             ][$spkStatus];
-            $spkLink = route('spk.dashboard', ['komoditas' => 'petelur', 'coop_id' => $barn['id']]);
+            $spkLink = route('spk.dashboard', array_filter(['komoditas' => $activeKomoditasId, 'coop_id' => $barn['id']]));
             $taskLink = route('spk.tasks.index', ['coop_id' => $barn['id']]);
         @endphp
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -738,7 +795,7 @@
                         <span class="rounded-full border px-2.5 py-1 text-[11px] font-semibold {{ $chipCls }}">{{ $msg['mode'] }}</span>
                     @endforeach
                 </div>
-                <a href="{{ $spkLink }}" class="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition no-underline sm:w-auto sm:px-4 sm:text-sm">
+                <a href="{{ $spkLink }}" class="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 transition no-underline sm:w-auto sm:px-4 sm:text-sm">
                     Buka Analisa SPK Kandang Ini
                 </a>
             </div>
@@ -751,13 +808,13 @@
                     </div>
                     <div class="flex items-center gap-2">
                         <x-metric-hint title="Aktivitas Petugas" body="Aktivitas ini merangkum laporan atau tindakan terbaru yang berkaitan dengan kandang." source="laporan, spk_action_tasks, spk_action_reports" />
-                        <a href="{{ $taskLink }}" class="inline-flex items-center justify-center rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100 no-underline sm:px-3 sm:text-xs">Penugasan</a>
+                        <a href="{{ $taskLink }}" class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 transition hover:bg-gray-50 no-underline sm:px-3 sm:text-xs">Penugasan</a>
                     </div>
                 </div>
                 <div class="space-y-2">
                     @foreach (array_slice($activityLog, 0, 4) as $act)
                         @php
-                            $dotColor = ['success'=>'bg-emerald-500','info'=>'bg-sky-500','warning'=>'bg-amber-500'][$act['type']] ?? 'bg-gray-400';
+                            $dotColor = ['success'=>'bg-slate-500','info'=>'bg-slate-400','warning'=>'bg-amber-500'][$act['type']] ?? 'bg-gray-400';
                         @endphp
                         <div class="flex items-start gap-3 rounded-lg border border-gray-100 px-3 py-2.5">
                             <span class="mt-1.5 h-2 w-2 rounded-full {{ $dotColor }} shrink-0"></span>
@@ -805,7 +862,7 @@
                 <div class="relative pl-4 border-l-2 border-gray-200 space-y-5">
                     @foreach ($activityLog as $act)
                         @php
-                            $dotColor = ['success'=>'bg-emerald-500','info'=>'bg-blue-400','warning'=>'bg-amber-500'][$act['type']] ?? 'bg-gray-400';
+                            $dotColor = ['success'=>'bg-emerald-500','info'=>'bg-sky-500','warning'=>'bg-amber-500'][$act['type']] ?? 'bg-gray-400';
                         @endphp
                         <div class="relative">
                             <div class="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border-2 border-white {{ $dotColor }}"></div>

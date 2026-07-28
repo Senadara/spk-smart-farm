@@ -38,4 +38,13 @@ class CalculateFcr
 
         return round($pakan / $eggMass, 3);
     }
+
+    public function rasioFcr(float $pakan, float $eggMass): float
+{
+    if ($eggMass <= 0) {
+        return 0.0;
+    }
+
+    return round($pakan / $eggMass, 3);
+}
 }

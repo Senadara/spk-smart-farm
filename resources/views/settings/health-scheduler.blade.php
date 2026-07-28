@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Scheduler Indikasi Kesehatan')
-@section('breadcrumb', 'Pengaturan > Scheduler Indikasi Kesehatan')
+@section('breadcrumb', 'Pengaturan / Notifikasi / Indikasi Kesehatan')
 
 @section('content')
 @php
@@ -17,10 +17,10 @@
 <div class="mx-auto max-w-6xl space-y-5">
     <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-            <a href="{{ route('settings.index') }}" class="text-xs font-bold text-gray-400 hover:text-gray-600" style="text-decoration:none;">Pengaturan</a>
+            <a href="{{ route('settings.notifications.index', ['tab' => 'health']) }}" class="text-xs font-bold text-gray-400 hover:text-gray-600" style="text-decoration:none;">Notifikasi</a>
             <h1 class="mt-1 text-2xl font-black text-gray-950">Scheduler Indikasi Kesehatan</h1>
             <p class="mt-1 max-w-3xl text-sm leading-relaxed text-gray-500">
-                Scheduler ini mengecek HDP individu ayam pada jam yang ditentukan. Jika ada ayam turun minimal ambang yang dipilih, sistem membuat laporan indikasi sakit dan mengirim notifikasi awal ke mobile.
+                Cek HDP individu dua kali sehari dan kirim indikasi ke mobile setelah panen tersedia.
             </p>
         </div>
 
@@ -32,8 +32,8 @@
         </form>
     </div>
 
-    <x-page-hint title="Cara kerja singkat" tone="amber" :open="true">
-        Mobile tetap mengirim panen individu melalui detailPanen. Node mengecek kandang bertipe individu, membandingkan HDP periode sekarang dengan periode sebelumnya, lalu mengirim notifikasi awal jika ada indikasi. Owner tetap bisa membuat penugasan resmi setelah membaca laporan.
+    <x-page-hint title="Cara kerja singkat" tone="sky" :open="false">
+        Sistem hanya membuat indikasi jika data panen sesi pagi/sore sudah masuk. Unit tanpa panen dilewati agar data tetap valid.
     </x-page-hint>
 
     @if(session('success') || session('error'))
@@ -58,13 +58,23 @@
                 </label>
             </div>
 
-            <div>
-                <label for="schedule_times" class="text-xs font-bold uppercase tracking-wide text-gray-500">Jam pengecekan</label>
-                <textarea id="schedule_times" name="schedule_times" rows="3" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500" placeholder="07:00, 12:30, 18:00">{{ old('schedule_times', $setting['schedule_times_text']) }}</textarea>
-                <p class="mt-1 text-xs text-gray-400">Bisa isi lebih dari satu jam, pisahkan dengan koma atau enter. Contoh untuk uji cepat: isi jam beberapa menit setelah waktu sekarang.</p>
-                @error('schedule_times')
-                    <p class="mt-1 text-xs font-semibold text-red-600">{{ $message }}</p>
-                @enderror
+            <div class="grid gap-4 md:grid-cols-2">
+                <label class="block">
+                    <span class="text-xs font-bold uppercase tracking-wide text-gray-500">Jam pengecekan pagi</span>
+                    <input type="time" name="morning_time" value="{{ old('morning_time', $setting['morning_time']) }}" required class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500">
+                    @error('morning_time')
+                        <p class="mt-1 text-xs font-semibold text-red-600">{{ $message }}</p>
+                    @enderror
+                </label>
+
+                <label class="block">
+                    <span class="text-xs font-bold uppercase tracking-wide text-gray-500">Jam pengecekan sore</span>
+                    <input type="time" name="afternoon_time" value="{{ old('afternoon_time', $setting['afternoon_time']) }}" required class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500">
+                    @error('afternoon_time')
+                        <p class="mt-1 text-xs font-semibold text-red-600">{{ $message }}</p>
+                    @enderror
+                </label>
+                <p class="text-xs leading-relaxed text-gray-400 md:col-span-2">Dijalankan pagi dan sore. Jika panen sesi terkait belum masuk, data hari itu tidak diproses.</p>
             </div>
 
             <div class="grid gap-4 md:grid-cols-3">
@@ -96,7 +106,7 @@
             </div>
 
             <div class="flex flex-col gap-2 border-t border-gray-100 pt-4 sm:flex-row sm:justify-end">
-                <a href="{{ route('settings.index') }}" class="inline-flex items-center justify-center rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-50" style="text-decoration:none;">Kembali</a>
+                <a href="{{ route('settings.notifications.index', ['tab' => 'health']) }}" class="inline-flex items-center justify-center rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-50" style="text-decoration:none;">Kembali</a>
                 <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700">
                     Simpan Scheduler
                 </button>
@@ -126,8 +136,8 @@
                 <p class="mt-1 text-xs text-gray-500">Status: {{ $setting['last_status'] ?: '-' }}</p>
             </div>
 
-            <div class="rounded-xl border border-amber-100 bg-amber-50 p-5">
-                <p class="text-xs font-bold uppercase tracking-wide text-amber-700">Hasil terakhir</p>
+            <div class="rounded-xl border border-sky-100 bg-sky-50/60 p-5">
+                <p class="text-xs font-bold uppercase tracking-wide text-sky-700">Hasil terakhir</p>
                 <div class="mt-3 grid grid-cols-2 gap-2 text-xs">
                     <div class="rounded-lg bg-white/80 p-3">
                         <p class="font-bold text-gray-500">Kandang</p>
@@ -170,11 +180,21 @@
                     </thead>
                     <tbody class="divide-y divide-gray-50">
                         @foreach(array_slice(data_get($summary, 'units', []), 0, 8) as $unit)
+                            @php
+                                $reason = data_get($unit, 'reason');
+                                $statusText = data_get($unit, 'error') ?: (data_get($unit, 'created')
+                                    ? 'Laporan dibuat'
+                                    : match ($reason) {
+                                        'HARVEST_NOT_READY' => 'Menunggu panen pagi/sore lengkap',
+                                        'DUPLICATE_PERIOD' => 'Indikasi periode ini sudah ada',
+                                        default => ($reason ?: 'Tidak ada laporan baru'),
+                                    });
+                            @endphp
                             <tr>
                                 <td class="px-3 py-2 font-semibold text-gray-900">{{ data_get($unit, 'unitName') }}</td>
                                 <td class="px-3 py-2 text-right text-gray-600">{{ data_get($unit, 'indicationChickenCount', 0) }}</td>
                                 <td class="px-3 py-2 text-right text-gray-600">{{ data_get($unit, 'affectedObjectCount', 0) }}</td>
-                                <td class="px-3 py-2 text-xs text-gray-500">{{ data_get($unit, 'error') ?: (data_get($unit, 'created') ? 'Laporan dibuat' : (data_get($unit, 'reason') ?: 'Tidak ada laporan baru')) }}</td>
+                                <td class="px-3 py-2 text-xs text-gray-500">{{ $statusText }}</td>
                             </tr>
                         @endforeach
                     </tbody>

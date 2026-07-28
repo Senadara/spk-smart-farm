@@ -6,7 +6,7 @@ export default defineConfig({
     plugins: [
         laravel({
             input: ["resources/css/app.css", "resources/js/app.js"],
-            refresh: true,
+            refresh: false,
         }),
         tailwindcss(),
     ],
@@ -18,11 +18,21 @@ export default defineConfig({
         },
         allowedHosts: ['vite-dev', 'localhost'],
         watch: {
+            usePolling: true,
+            interval: 3000,
+            binaryInterval: 5000,
             ignored: [
                 '**/vendor/**',
                 '**/node_modules/**',
                 '**/storage/**',
-                '**/bootstrap/cache/**',
+                '**/bootstrap/**',
+                '**/tests/**',
+                '**/database/**',
+                '**/config/**',
+                '**/lang/**',
+                '**/public/build/**',
+                '**/*.map',
+                '**/*.log',
             ],
         },
     },

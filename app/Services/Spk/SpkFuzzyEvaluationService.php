@@ -9,6 +9,7 @@ use App\Services\Fuzzy\MamdaniEngine;
 use App\Services\Fuzzy\NarrativeGenerator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class SpkFuzzyEvaluationService
 {
@@ -22,13 +23,15 @@ class SpkFuzzyEvaluationService
     {
         $profile = SpkFuzzyProfile::resolveForContext($commodityId, $coopId, $profileId);
         $resolvedCommodityId = $commodityId ?: $profile?->commodity_id;
-        $inputs = $this->inputResolver->resolve($coopId, $resolvedCommodityId, $profile?->id);
+        $resolvedInput = $this->inputResolver->resolveWithMeta($coopId, $resolvedCommodityId, $profile?->id);
+        $inputs = $resolvedInput['inputs'];
         $result = $this->mamdaniEngine->processCascaded($inputs, $profile?->id, $resolvedCommodityId, $coopId);
         $barnName = $coopId ? DB::table('unitBudidaya')->where('id', $coopId)->value('nama') : null;
         $narrative = $this->narrativeGenerator->generate($result, $barnName);
 
         return array_merge($result, [
             'inputs' => $inputs,
+            'input_meta' => $resolvedInput['meta'] ?? [],
             'narrative' => $narrative,
             'profile' => $result['profile'] ?? ($profile ? $profile->toArray() : null),
         ]);
@@ -36,7 +39,7 @@ class SpkFuzzyEvaluationService
 
     public function persist(?string $coopId, array $result, ?string $commodityId = null): SpkFuzzyLog
     {
-        $log = SpkFuzzyLog::create([
+        $payload = [
             'unit_budidaya_id' => $coopId,
             'profile_id' => $result['profile']['id'] ?? null,
             'commodity_id' => $result['profile']['commodity_id'] ?? $commodityId,
@@ -46,8 +49,18 @@ class SpkFuzzyEvaluationService
                 'kesehatan' => $result['kesehatan']['fuzzified'] ?? [],
             ],
             'rule_result_json' => [
-                'lingkungan' => $result['lingkungan']['dominant_rule'] ?? null,
-                'kesehatan' => $result['kesehatan']['dominant_rule'] ?? null,
+                'lingkungan' => [
+                    'value' => $result['lingkungan']['value'] ?? null,
+                    'label' => $result['lingkungan']['label'] ?? null,
+                    'dominant_rule' => $result['lingkungan']['dominant_rule'] ?? null,
+                    'rule_results' => $result['lingkungan']['rule_results'] ?? [],
+                ],
+                'kesehatan' => [
+                    'value' => $result['kesehatan']['value'] ?? null,
+                    'label' => $result['kesehatan']['label'] ?? null,
+                    'dominant_rule' => $result['kesehatan']['dominant_rule'] ?? null,
+                    'rule_results' => $result['kesehatan']['rule_results'] ?? [],
+                ],
                 'kausalitas' => $result['kausalitas'] ?? null,
             ],
             'status_lingkungan' => $result['lingkungan']['label'] ?? null,
@@ -60,7 +73,13 @@ class SpkFuzzyEvaluationService
             'output_label' => $result['kausalitas']['label'] ?? null,
             'narrative' => $result['narrative'] ?? null,
             'recommendation' => $result['kausalitas']['recommendation'] ?? null,
-        ]);
+        ];
+
+        if (Schema::hasColumn('spk_fuzzy_logs', 'input_meta_json')) {
+            $payload['input_meta_json'] = $result['input_meta'] ?? [];
+        }
+
+        $log = SpkFuzzyLog::create($payload);
 
         $this->forgetPeternakanCache($log);
 

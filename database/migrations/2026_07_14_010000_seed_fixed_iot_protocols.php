@@ -33,6 +33,7 @@ return new class extends Migration
                 'protocolName' => $name,
                 'description' => $description,
                 'createdAt' => now(),
+                'updatedAt' => now(),
             ]);
         }
     }

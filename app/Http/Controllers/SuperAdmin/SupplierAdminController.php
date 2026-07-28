@@ -7,6 +7,7 @@ use App\Models\MasterSupplier;
 use App\Models\SpkRanking;
 use App\Models\SupplierProductCategory;
 use App\Models\SupplierStore;
+use App\Services\Notifications\SupplierNotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,10 @@ use Illuminate\View\View;
 
 class SupplierAdminController extends Controller
 {
+    public function __construct(
+        private readonly SupplierNotificationService $supplierNotificationService,
+    ) {}
+
     public function index(Request $request): View
     {
         $status = $request->input('status', 'request');
@@ -143,9 +148,12 @@ class SupplierAdminController extends Controller
             ->with('success', 'Data mitra supplier berhasil diperbarui.');
     }
 
-    public function approve(SupplierStore $store): RedirectResponse
+    public function approve(Request $request, SupplierStore $store): RedirectResponse
     {
         abort_if($store->isDeleted, 404);
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
 
         DB::transaction(function () use ($store) {
             $supplier = $this->supplierForStore($store) ?? MasterSupplier::query()->create([
@@ -172,19 +180,42 @@ class SupplierAdminController extends Controller
                 'logo_url' => $store->logoToko,
             ]);
 
-            $store->update(['tokoStatus' => 'active']);
+            $store->update([
+                'tokoStatus' => 'active',
+                'approvalReason' => null,
+                'approvalNotifiedAt' => now(),
+            ]);
             SpkRanking::query()->where('supplier_id', $supplier->id)->update(['is_valid' => false]);
         });
 
-        return back()->with('success', 'Supplier disetujui dan sudah tampil untuk owner.');
+        if (! empty($validated['reason'])) {
+            $store->forceFill(['approvalReason' => $validated['reason']])->save();
+        }
+
+        $this->supplierNotificationService->supplierApproved($store->fresh());
+
+        return back()->with('success', 'Supplier disetujui dan notifikasi email sudah diproses.');
     }
 
-    public function reject(SupplierStore $store): RedirectResponse
+    public function reject(Request $request, SupplierStore $store): RedirectResponse
     {
         abort_if($store->isDeleted, 404);
-        $store->update(['tokoStatus' => 'reject']);
+        $validated = $request->validate([
+            'reason' => 'required|string|min:5|max:500',
+        ], [
+            'reason.required' => 'Alasan penolakan supplier wajib diisi.',
+            'reason.min' => 'Alasan penolakan minimal 5 karakter.',
+        ]);
 
-        return back()->with('success', 'Pengajuan supplier ditolak. Toko tidak tampil untuk owner.');
+        $store->update([
+            'tokoStatus' => 'reject',
+            'approvalReason' => $validated['reason'],
+            'approvalNotifiedAt' => now(),
+        ]);
+
+        $this->supplierNotificationService->supplierRejected($store->fresh(), $validated['reason']);
+
+        return back()->with('success', 'Pengajuan supplier ditolak dan notifikasi email sudah diproses.');
     }
 
     private function validateManagedSupplier(Request $request): array

@@ -43,39 +43,62 @@
             </div>
         </div>
 
+        @if(($canWork && in_array($task->status, ['todo', 'in_progress'], true)) || ($canManage && !in_array($task->status, ['cancelled', 'done'], true)))
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-sky-100 bg-sky-50 text-sky-600">
+                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-bold text-slate-900">Aksi Tugas</p>
+                            <p class="text-xs text-slate-500">Status: {{ $status['label'] }}{{ $task->due_date ? ' | Tenggat '.$task->due_date->format('d M Y') : '' }}</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:justify-end">
+                        @if($canWork && $task->status === 'todo')
+                            <form method="POST" action="{{ route('spk.tasks.status', $task->id) }}" class="sm:col-span-2 lg:col-span-1">
+                                @csrf @method('PATCH')
+                                <input type="hidden" name="status" value="in_progress">
+                                <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 lg:w-auto">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
+                                    Mulai Kerjakan
+                                </button>
+                            </form>
+                        @endif
+
+                        @if($canWork && $task->status === 'in_progress')
+                            <button @click="showReportModal = true" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 lg:w-auto">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                Kirim Laporan
+                            </button>
+                        @endif
+
+                        @if($canManage && !in_array($task->status, ['cancelled', 'done'], true))
+                            <form method="POST" action="{{ route('spk.tasks.status', $task->id) }}">
+                                @csrf @method('PATCH')
+                                <input type="hidden" name="status" value="cancelled">
+                                <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 lg:w-auto" onclick="return confirm('Batalkan tugas ini?')">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    Batalkan
+                                </button>
+                            </form>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        @endif
+
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div class="space-y-4 lg:col-span-2">
                 <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="rounded-md border px-2 py-1 text-[9px] font-bold uppercase {{ $priority['class'] }}">{{ $priority['label'] }}</span>
-                            <span class="rounded-md border px-2 py-1 text-[9px] font-bold uppercase {{ $status['class'] }}">{{ $status['label'] }}</span>
-                            @if($isOverdue)
-                                <span class="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[9px] font-bold uppercase text-rose-700">Terlambat</span>
-                            @endif
-                        </div>
-
-                        <div class="flex flex-wrap items-center gap-1.5">
-                            @if($canWork && $task->status === 'todo')
-                                <form method="POST" action="{{ route('spk.tasks.status', $task->id) }}">
-                                    @csrf @method('PATCH')
-                                    <input type="hidden" name="status" value="in_progress">
-                                    <button type="submit" class="rounded-lg bg-sky-50 px-3 py-1.5 text-[10px] font-semibold text-sky-700 transition hover:bg-sky-100">Mulai Kerjakan</button>
-                                </form>
-                            @endif
-
-                            @if($canWork && $task->status === 'in_progress')
-                                <button @click="showReportModal = true" class="rounded-lg bg-emerald-50 px-3 py-1.5 text-[10px] font-semibold text-emerald-700 transition hover:bg-emerald-100">Kirim Laporan</button>
-                            @endif
-
-                            @if($canManage && !in_array($task->status, ['cancelled', 'done'], true))
-                                <form method="POST" action="{{ route('spk.tasks.status', $task->id) }}">
-                                    @csrf @method('PATCH')
-                                    <input type="hidden" name="status" value="cancelled">
-                                    <button type="submit" class="rounded-lg bg-rose-50 px-3 py-1.5 text-[10px] font-semibold text-rose-700 transition hover:bg-rose-100" onclick="return confirm('Batalkan tugas ini?')">Batalkan</button>
-                                </form>
-                            @endif
-                        </div>
+                    <div class="mb-4 flex flex-wrap items-center gap-2">
+                        <span class="rounded-md border px-2 py-1 text-[9px] font-bold uppercase {{ $priority['class'] }}">{{ $priority['label'] }}</span>
+                        <span class="rounded-md border px-2 py-1 text-[9px] font-bold uppercase {{ $status['class'] }}">{{ $status['label'] }}</span>
+                        @if($isOverdue)
+                            <span class="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[9px] font-bold uppercase text-rose-700">Terlambat</span>
+                        @endif
                     </div>
 
                     <div class="text-sm leading-relaxed text-slate-700">
@@ -228,7 +251,7 @@
                                 </div>
                                 <div>
                                     <label class="text-[10px] font-semibold text-slate-500">Tenggat</label>
-                                    <input type="date" name="due_date" value="{{ $task->due_date?->format('Y-m-d') }}" class="mt-0.5 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none">
+                                    <input type="date" name="due_date" value="{{ $task->due_date?->format('Y-m-d') }}" min="{{ now()->toDateString() }}" class="mt-0.5 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none">
                                 </div>
                             </div>
                             <div>
