@@ -694,7 +694,7 @@ class SpkDashboardController extends Controller
         if ($environmentKeys->isEmpty()) {
             $environmentKeys = collect($logs->first()?->input_json ?? [])
                 ->keys()
-                ->reject(fn ($key) => in_array($key, ['hdp', 'hhep', 'fcr', 'pakan', 'feed', 'mortalitas', 'umur_biologis'], true))
+                ->reject(fn ($key) => in_array($key, ['hdp', 'hhep', 'fcr', 'feed_intake', 'pakan', 'feed', 'mortalitas', 'umur_biologis'], true))
                 ->mapWithKeys(fn ($key) => [$key => Str::of($key)->replace('_', ' ')->title()->toString()])
                 ->take(4);
         }

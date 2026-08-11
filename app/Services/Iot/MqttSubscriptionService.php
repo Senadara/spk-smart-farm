@@ -33,6 +33,7 @@ class MqttSubscriptionService
             'messages' => 0,
             'inserted' => 0,
             'skipped' => 0,
+            'suppressed' => 0,
             'last_topic' => null,
             'last_device' => null,
         ];
@@ -79,6 +80,7 @@ class MqttSubscriptionService
                 $result = $this->ingestor->ingest($device, $message, "mqtt:{$topic}");
                 $stats['inserted'] += (int) $result['inserted'];
                 $stats['skipped'] += (int) $result['skipped'];
+                $stats['suppressed'] += (int) ($result['suppressed'] ?? 0);
                 $stats['last_device'] = $device->deviceCode;
 
                 if ($once) {

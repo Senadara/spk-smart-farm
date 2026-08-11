@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Peternakan;
 
 use App\Http\Controllers\Controller;
+use App\Models\SpkActionRecommendation;
 use App\Models\SpkActionTask;
 use App\Models\SpkFuzzyLog;
 use App\Models\SpkFuzzyProfile;
@@ -16,10 +17,12 @@ use App\Services\LivestockMasterConfigService;
 use App\Services\Notifications\LivestockCycleAlertService;
 use App\Services\Notifications\SpkEnvironmentAlertService;
 use App\Services\PeternakanService;
+use App\Services\Spk\SpkActionRecommendationService;
 use App\Services\Spk\SpkFuzzyEvaluationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -41,6 +44,7 @@ class PeternakanController extends Controller
         protected BarnHealthContextService $barnHealthContextService,
         protected NodeHealthIndicationClient $nodeHealthIndicationClient,
         protected LivestockMasterConfigService $livestockMasterConfigService,
+        protected SpkActionRecommendationService $actionRecommendationService,
     ) {}
 
     private function applyLivestockContext(Request $request, bool $fromInput = false): void
@@ -633,6 +637,20 @@ class PeternakanController extends Controller
 
     private function productionPhase(int $ageWeeks, string $afkirStatus, string $label): string
     {
+        $cycleConfig = $this->activeAfkirCycleConfig();
+        $productionStart = is_numeric($cycleConfig['production_start_weeks'] ?? null)
+            ? (int) $cycleConfig['production_start_weeks']
+            : 18;
+        $peakStart = is_numeric($cycleConfig['peak_start_weeks'] ?? null)
+            ? (int) $cycleConfig['peak_start_weeks']
+            : 25;
+        $peakEnd = is_numeric($cycleConfig['peak_end_weeks'] ?? null)
+            ? (int) $cycleConfig['peak_end_weeks']
+            : 45;
+        $declineStart = is_numeric($cycleConfig['production_decline_weeks'] ?? null)
+            ? (int) $cycleConfig['production_decline_weeks']
+            : max($peakEnd + 1, 46);
+
         if ($afkirStatus === 'overdue') {
             return 'Lewat target '.Str::lower($label);
         }
@@ -641,11 +659,19 @@ class PeternakanController extends Controller
             return 'Mendekati '.Str::lower($label);
         }
 
-        if ($ageWeeks < 18) {
+        if ($ageWeeks < $productionStart) {
             return 'Grower';
         }
 
-        return $ageWeeks <= 45 ? 'Produksi awal/puncak' : 'Produksi lanjut';
+        if ($ageWeeks >= $peakStart && $ageWeeks <= $peakEnd) {
+            return 'Puncak produksi';
+        }
+
+        if ($ageWeeks >= $declineStart) {
+            return 'Produksi lanjut';
+        }
+
+        return 'Awal produksi';
     }
 
     private function activeAfkirCycleConfig(): array
@@ -935,6 +961,12 @@ class PeternakanController extends Controller
 
     private function buildDailySpkSummary(?string $commodityId, array $barns, array $dailyReportStatus): array
     {
+        $barnIds = collect($barns)
+            ->pluck('id')
+            ->filter(fn ($id) => filled($id) && $id !== 'no-data')
+            ->map(fn ($id) => (string) $id)
+            ->values();
+
         $query = SpkFuzzyLog::query()
             ->with('unitBudidaya')
             ->when($commodityId, function ($q) use ($commodityId) {
@@ -958,15 +990,29 @@ class PeternakanController extends Controller
         if ($candidateSourceLogs->isEmpty()) {
             $candidateSourceLogs = $sourceLogs;
         }
+        if ($barnIds->isNotEmpty()) {
+            $candidateSourceLogs = $candidateSourceLogs
+                ->filter(fn (SpkFuzzyLog $log) => ! filled($log->unit_budidaya_id) || $barnIds->contains((string) $log->unit_budidaya_id))
+                ->values();
+        }
 
         $problemLogs = $candidateSourceLogs
             ->filter(fn (SpkFuzzyLog $log) => $this->spkLogNeedsAction($log))
             ->sortByDesc(fn (SpkFuzzyLog $log) => $log->createdAt?->timestamp ?? 0)
             ->unique(fn (SpkFuzzyLog $log) => $this->spkActionCandidateFingerprint($log))
             ->values();
+        $allProblemLogs = $problemLogs;
+
+        $openRecommendations = $this->actionRecommendationService
+            ->syncOpenRecommendationsFromLogs($candidateSourceLogs, $commodityId, $barnIds->all(), false)
+            ->when($commodityId, fn ($items) => $items->filter(function (SpkActionRecommendation $recommendation) use ($commodityId) {
+                return ! $recommendation->commodity_id || (string) $recommendation->commodity_id === (string) $commodityId;
+            }))
+            ->values();
 
         $activeTaskCount = SpkActionTask::withoutGlobalScopes()
             ->whereIn('status', ['todo', 'in_progress'])
+            ->when($barnIds->isNotEmpty(), fn ($query) => $query->whereIn('unit_budidaya_id', $barnIds->all()))
             ->count();
 
         $hints = [];
@@ -978,6 +1024,10 @@ class PeternakanController extends Controller
 
         if (! ($dailyReportStatus['isReady'] ?? false)) {
             $hints[] = 'Laporan harian belum lengkap, sehingga perhitungan HDP, FCR, mortalitas, dan rekomendasi tindakan bisa belum akurat.';
+        }
+
+        if ($this->hasCompletedTaskWithNewerAlert($allProblemLogs)) {
+            $hints[] = 'Ada hasil SPK terbaru yang masih bermasalah setelah tugas sebelumnya selesai. Lakukan evaluasi ulang jika kondisi lapangan belum membaik.';
         }
 
         $requiredInputs = $this->requiredFuzzyInputs($commodityId);
@@ -996,7 +1046,7 @@ class PeternakanController extends Controller
 
         $status = match (true) {
             ! $latestLog => 'Belum Jalan',
-            $problemLogs->isNotEmpty() || $activeTaskCount > 0 => 'Perlu Tindakan',
+            $openRecommendations->isNotEmpty() || $activeTaskCount > 0 => 'Perlu Tindakan',
             $todayLogs->isEmpty() => 'Perlu Update',
             default => 'Terkendali',
         };
@@ -1017,12 +1067,12 @@ class PeternakanController extends Controller
             'last_update_human' => $latestLog?->createdAt?->diffForHumans() ?? null,
             'hints' => array_values(array_unique($hints)),
             'active_tasks' => $activeTaskCount,
-            'needs_action_count' => $problemLogs->count(),
+            'needs_action_count' => $openRecommendations->count(),
             'barn_count' => collect($barns)->where('id', '!=', 'no-data')->count(),
-            'action_candidates' => $problemLogs
-                ->sortBy(fn (SpkFuzzyLog $log) => (float) $log->output_value)
+            'action_candidates' => $openRecommendations
+                ->sortBy(fn (SpkActionRecommendation $recommendation) => (float) ($recommendation->score ?? 0))
                 ->take(4)
-                ->map(fn (SpkFuzzyLog $log) => $this->formatSpkActionCandidate($log, $commodityId))
+                ->map(fn (SpkActionRecommendation $recommendation) => $this->formatSpkActionRecommendation($recommendation, $commodityId))
                 ->values()
                 ->all(),
             'spk_url' => route('spk.dashboard', array_filter([
@@ -1047,7 +1097,7 @@ class PeternakanController extends Controller
 
         return ! empty($inputs)
             ? $inputs
-            : ['suhu', 'kelembapan', 'amonia', 'hdp', 'mortalitas', 'pakan'];
+            : ['suhu', 'kelembapan', 'amonia', 'hdp', 'feed_intake', 'mortalitas'];
     }
 
     private function spkLogNeedsAction(SpkFuzzyLog $log): bool
@@ -1056,6 +1106,44 @@ class PeternakanController extends Controller
             || in_array($log->status_kesehatan, ['Waspada', 'Buruk'], true)
             || in_array($log->diagnosis_kausalitas, ['Waspada', 'Buruk', 'Kritis', 'Tidak Optimal'], true)
             || (float) ($log->output_value ?? 0) < 70;
+    }
+
+    private function hasCompletedTaskWithNewerAlert(Collection $problemLogs): bool
+    {
+        $unitIds = $problemLogs
+            ->pluck('unit_budidaya_id')
+            ->filter()
+            ->map(fn ($id) => (string) $id)
+            ->unique()
+            ->values();
+
+        if ($unitIds->isEmpty()) {
+            return false;
+        }
+
+        $completedTasks = SpkActionTask::withoutGlobalScopes()
+            ->where('status', 'done')
+            ->whereNotNull('completed_at')
+            ->whereIn('unit_budidaya_id', $unitIds->all())
+            ->orderByDesc('completed_at')
+            ->limit(50)
+            ->get(['unit_budidaya_id', 'completed_at']);
+
+        if ($completedTasks->isEmpty()) {
+            return false;
+        }
+
+        return $problemLogs->contains(function (SpkFuzzyLog $log) use ($completedTasks) {
+            if (! $log->createdAt || ! $log->unit_budidaya_id) {
+                return false;
+            }
+
+            return $completedTasks->contains(function (SpkActionTask $task) use ($log) {
+                return (string) $task->unit_budidaya_id === (string) $log->unit_budidaya_id
+                    && $task->completed_at
+                    && $log->createdAt->gt($task->completed_at);
+            });
+        });
     }
 
     private function spkActionCandidateFingerprint(SpkFuzzyLog $log): string
@@ -1125,6 +1213,59 @@ class PeternakanController extends Controller
                 'desc' => Str::limit($description, 160),
             ])),
         ];
+    }
+
+    private function formatSpkActionRecommendation(SpkActionRecommendation $recommendation, ?string $commodityId): array
+    {
+        $log = $recommendation->spkFuzzyLog;
+        $description = NarrativeGenerator::sanitizePlainText($recommendation->description)
+            ?: NarrativeGenerator::sanitizePlainText($log?->recommendation)
+            ?: NarrativeGenerator::sanitizePlainText($log?->narrative)
+            ?: 'Tinjau hasil SPK dan tentukan tindak lanjut petugas.';
+        $score = $recommendation->score !== null
+            ? round((float) $recommendation->score, 1)
+            : round((float) ($log?->output_value ?? 0), 1);
+
+        $params = array_filter([
+            'komoditas' => $commodityId ?: $recommendation->commodity_id,
+            'coop_id' => $recommendation->unit_budidaya_id,
+            'history_id' => $recommendation->spk_fuzzy_log_id,
+        ]);
+
+        return [
+            'id' => $recommendation->id,
+            'recommendation_id' => $recommendation->id,
+            'spk_id' => $recommendation->spk_fuzzy_log_id,
+            'barn' => $recommendation->unitBudidaya?->nama
+                ?? $log?->unitBudidaya?->nama
+                ?? 'Semua kandang',
+            'title' => $recommendation->title ?: 'Evaluasi SPK perlu dilengkapi',
+            'description' => Str::limit($description, 140),
+            'score' => $score,
+            'priority' => $this->priorityLabelForRecommendation($recommendation->priority),
+            'time' => $log?->createdAt?->format('H:i') ?? $recommendation->createdAt?->format('H:i') ?? '-',
+            'spk_url' => route('spk.dashboard', $params),
+            'task_url' => route('spk.tasks.index', array_filter([
+                'create_task' => 1,
+                'recommendation_id' => $recommendation->id,
+                'spk_id' => $recommendation->spk_fuzzy_log_id,
+                'coop_id' => $recommendation->unit_budidaya_id,
+                'title' => 'Tindak lanjut SPK - '.($recommendation->unitBudidaya?->nama ?? $log?->unitBudidaya?->nama ?? 'Kandang'),
+                'priority' => $recommendation->priority,
+                'desc' => Str::limit($description, 160),
+            ])),
+        ];
+    }
+
+    private function priorityLabelForRecommendation(?string $priority): string
+    {
+        return match ($priority) {
+            'urgent' => 'Urgent',
+            'high' => 'Tinggi',
+            'medium' => 'Sedang',
+            'low' => 'Rendah',
+            default => 'Tinggi',
+        };
     }
 
     private function runFuzzyEngine(?string $coopId): array

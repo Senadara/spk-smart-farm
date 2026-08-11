@@ -29,11 +29,20 @@ class SpkActionTask extends Model
         'status',
         'due_date',
         'completed_at',
+        'completion_requested_at',
+        'review_status',
+        'reviewed_by',
+        'reviewed_at',
+        'review_note',
+        'system_validation_status',
+        'system_validation_note',
     ];
 
     protected $casts = [
-        'due_date'     => 'date',
-        'completed_at' => 'datetime',
+        'due_date'                => 'date',
+        'completed_at'            => 'datetime',
+        'completion_requested_at' => 'datetime',
+        'reviewed_at'             => 'datetime',
     ];
 
     public function fuzzyLog()
@@ -56,6 +65,11 @@ class SpkActionTask extends Model
         return $this->belongsTo(User::class, 'assigned_by');
     }
 
+    public function reviewer()
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
     public function reports()
     {
         return $this->hasMany(SpkActionReport::class, 'task_id')->orderBy('createdAt', 'desc');
@@ -74,6 +88,10 @@ class SpkActionTask extends Model
 
     public function getStatusColorAttribute(): string
     {
+        if ($this->is_pending_review) {
+            return 'amber';
+        }
+
         return match ($this->status) {
             'todo'        => 'gray',
             'in_progress' => 'blue',
@@ -85,12 +103,31 @@ class SpkActionTask extends Model
 
     public function getStatusLabelAttribute(): string
     {
+        if ($this->is_pending_review) {
+            return 'Menunggu Validasi';
+        }
+
         return match ($this->status) {
             'todo'        => 'To Do',
             'in_progress' => 'Dikerjakan',
             'done'        => 'Selesai',
             'cancelled'   => 'Dibatalkan',
             default       => $this->status,
+        };
+    }
+
+    public function getIsPendingReviewAttribute(): bool
+    {
+        return $this->status === 'in_progress' && $this->review_status === 'pending';
+    }
+
+    public function getReviewStatusLabelAttribute(): string
+    {
+        return match ($this->review_status) {
+            'pending' => 'Menunggu Validasi',
+            'approved' => 'Disetujui',
+            'rejected' => 'Perlu Revisi',
+            default => 'Belum Direview',
         };
     }
 

@@ -878,13 +878,15 @@ class PeternakanService
     {
         $coopId = $barn['id'] ?? null;
         if (! $coopId || $coopId === 'no-data') {
-            return ['hdp' => 0, 'hhep' => 0, 'feedIntake' => 0, 'fcr' => 0, 'gradeTelur' => ['A' => 0, 'B' => 0, 'C' => 0], 'mortalitas' => 0, 'afkir' => 0, 'usiaAwalBertelur' => '-', 'puncakProduksi' => 'Belum Produksi'];
+            return ['hdp' => 0, 'hhep' => 0, 'feedIntake' => 0, 'fcr' => 0, 'eggMass' => 0, 'avgEggWeight' => 0, 'flockAgeWeeks' => 0, 'gradeTelur' => ['A' => 0, 'B' => 0, 'C' => 0], 'mortalitas' => 0, 'rejectRate' => 0, 'afkir' => 0, 'usiaAwalBertelur' => '-', 'puncakProduksi' => 'Belum Produksi'];
         }
 
         $today = now()->toDateString();
-        $coop = DB::table('unitBudidaya')->where('id', $coopId)->first(['jumlah', 'createdAt']);
+        $coop = DB::table('unitBudidaya')
+            ->where('id', $coopId)
+            ->first(array_merge(['jumlah', 'createdAt'], $this->unitBudidayaAgeSelect('')));
         if (! $coop) {
-            return ['hdp' => 0, 'hhep' => 0, 'feedIntake' => 0, 'fcr' => 0, 'gradeTelur' => ['A' => 0, 'B' => 0, 'C' => 0], 'mortalitas' => 0, 'afkir' => 0, 'usiaAwalBertelur' => '-', 'puncakProduksi' => 'Belum Produksi'];
+            return ['hdp' => 0, 'hhep' => 0, 'feedIntake' => 0, 'fcr' => 0, 'eggMass' => 0, 'avgEggWeight' => 0, 'flockAgeWeeks' => 0, 'gradeTelur' => ['A' => 0, 'B' => 0, 'C' => 0], 'mortalitas' => 0, 'rejectRate' => 0, 'afkir' => 0, 'usiaAwalBertelur' => '-', 'puncakProduksi' => 'Belum Produksi'];
         }
         $populasiAwal = $coop->jumlah ?? 0;
 
@@ -925,6 +927,9 @@ class PeternakanService
         $hhep = $populasiAwal > 0 ? ($totalTelur / $populasiAwal) * 100 : 0;
         $feedIntake = $populasiSaatIni > 0 ? ($pakanToday / $populasiSaatIni) * 1000 : 0;
         $fcr = $totalEggMass > 0 ? $pakanToday / $totalEggMass : 0;
+        $avgEggWeight = $totalTelur > 0 ? ($totalEggMass * 1000) / $totalTelur : 0;
+        $flockAgeWeeks = $this->flockAgeWeeks($coop);
+        $cycleConfig = $this->livestockMasterConfigService->afkirConfigForJenis($this->activeJenisBudidayaId);
 
         // Fetch valid grades for chart
         $hasGradeWeight = DB::getSchemaBuilder()->hasColumn('panenRincianGrade', 'berat');
@@ -983,12 +988,61 @@ class PeternakanService
             'hhep' => round($hhep, 1),
             'feedIntake' => round($feedIntake, 0),
             'fcr' => round($fcr, 2),
+            'eggMass' => round($totalEggMass, 2),
+            'avgEggWeight' => round($avgEggWeight, 1),
+            'flockAgeWeeks' => $flockAgeWeeks,
             'gradeTelur' => $gradeTelur,
             'mortalitas' => round($mortalitas, 2),
+            'rejectRate' => round($rejectRate, 2),
             'afkir' => round($rejectRate, 2),
-            'usiaAwalBertelur' => '18 Minggu',
-            'puncakProduksi' => 'Fase Produksi',
+            'usiaAwalBertelur' => ($cycleConfig['production_start_weeks'] ?? 18).' Minggu',
+            'puncakProduksi' => $this->productionPhaseLabel($flockAgeWeeks, $cycleConfig),
         ];
+    }
+
+    private function productionPhaseLabel(int $ageWeeks, array $cycleConfig): string
+    {
+        $productionStart = is_numeric($cycleConfig['production_start_weeks'] ?? null)
+            ? (int) $cycleConfig['production_start_weeks']
+            : 18;
+        $peakStart = is_numeric($cycleConfig['peak_start_weeks'] ?? null)
+            ? (int) $cycleConfig['peak_start_weeks']
+            : 25;
+        $peakEnd = is_numeric($cycleConfig['peak_end_weeks'] ?? null)
+            ? (int) $cycleConfig['peak_end_weeks']
+            : 45;
+        $declineStart = is_numeric($cycleConfig['production_decline_weeks'] ?? null)
+            ? (int) $cycleConfig['production_decline_weeks']
+            : max($peakEnd + 1, 46);
+        $targetWeeks = is_numeric($cycleConfig['target_weeks'] ?? null)
+            ? (int) $cycleConfig['target_weeks']
+            : null;
+        $warningWeeks = is_numeric($cycleConfig['warning_weeks'] ?? null)
+            ? (int) $cycleConfig['warning_weeks']
+            : 8;
+        $cycleLabel = strtolower((string) ($cycleConfig['label'] ?? 'afkir'));
+
+        if ($targetWeeks !== null && $ageWeeks > $targetWeeks) {
+            return 'Lewat target '.$cycleLabel;
+        }
+
+        if ($targetWeeks !== null && ($targetWeeks - $ageWeeks) <= $warningWeeks) {
+            return 'Mendekati '.$cycleLabel;
+        }
+
+        if ($ageWeeks < $productionStart) {
+            return 'Grower';
+        }
+
+        if ($ageWeeks >= $peakStart && $ageWeeks <= $peakEnd) {
+            return 'Puncak produksi';
+        }
+
+        if ($ageWeeks >= $declineStart) {
+            return 'Produksi lanjut';
+        }
+
+        return 'Awal produksi';
     }
 
     public function getBarnProductionLog(array $barn): array

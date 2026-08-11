@@ -9,6 +9,7 @@
     $isOverdue = $task->due_date && !in_array($task->status, ['done', 'cancelled'], true) && $task->due_date->lt(now()->startOfDay());
     $role = data_get(session('user'), 'role');
     $canWork = $role === 'pjawab' || ($role === 'petugas' && $task->assigned_to === data_get(session('user'), 'id'));
+    $isPendingReview = $task->is_pending_review;
 @endphp
 
 <div class="rounded-xl border {{ $meta['edge'] }} bg-white p-3.5 shadow-sm shadow-slate-100/80 transition-all hover:shadow-md">
@@ -16,6 +17,11 @@
         <span class="rounded border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider {{ $meta['badge'] }}">
             {{ $meta['label'] }}
         </span>
+        @if($isPendingReview)
+            <span class="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-amber-700">
+                Menunggu Validasi
+            </span>
+        @endif
 
         <div class="flex flex-wrap items-center justify-end gap-1.5">
             @if($canWork && $task->status === 'todo')
@@ -29,11 +35,16 @@
                 </form>
             @endif
 
-            @if($canWork && $task->status === 'in_progress')
+            @if($canWork && $task->status === 'in_progress' && ! $isPendingReview)
                 <button @click="openReport(@js($task->id), @js($task->title))" class="inline-flex h-7 items-center gap-1 rounded-md border border-emerald-100 bg-emerald-50 px-2 text-[10px] font-semibold text-emerald-700 transition hover:bg-emerald-100">
                     <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                     Laporan
                 </button>
+            @elseif($isPendingReview)
+                <span class="inline-flex h-7 items-center gap-1 rounded-md border border-amber-100 bg-amber-50 px-2 text-[10px] font-semibold text-amber-700">
+                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z"/></svg>
+                    Validasi
+                </span>
             @endif
 
             <a href="{{ route('spk.tasks.show', $task->id) }}" class="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50">

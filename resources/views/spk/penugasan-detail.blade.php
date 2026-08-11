@@ -23,6 +23,10 @@
         ];
         $priority = $priorityMeta[$task->priority] ?? $priorityMeta['medium'];
         $status = $statusMeta[$task->status] ?? $statusMeta['todo'];
+        $isPendingReview = $task->is_pending_review;
+        if ($isPendingReview) {
+            $status = ['label' => 'Menunggu Validasi', 'class' => 'bg-amber-50 text-amber-700 border-amber-200'];
+        }
         $isOverdue = $task->due_date && !in_array($task->status, ['done', 'cancelled'], true) && $task->due_date->lt(now()->startOfDay());
     @endphp
 
@@ -68,11 +72,16 @@
                             </form>
                         @endif
 
-                        @if($canWork && $task->status === 'in_progress')
+                        @if($canWork && $task->status === 'in_progress' && ! $isPendingReview)
                             <button @click="showReportModal = true" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 lg:w-auto">
                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                 Kirim Laporan
                             </button>
+                        @elseif($isPendingReview)
+                            <span class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-700 lg:w-auto">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z"/></svg>
+                                Menunggu Validasi
+                            </span>
                         @endif
 
                         @if($canManage && !in_array($task->status, ['cancelled', 'done'], true))
@@ -87,6 +96,35 @@
                         @endif
                     </div>
                 </div>
+
+                @if($isPendingReview)
+                    @if($canManage)
+                        <div class="mt-4 grid gap-3 border-t border-slate-100 pt-4 lg:grid-cols-2">
+                            <form method="POST" action="{{ route('spk.tasks.review', $task->id) }}" class="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
+                                @csrf @method('PATCH')
+                                <input type="hidden" name="action" value="approve">
+                                <label class="text-[10px] font-bold uppercase text-emerald-700">Setujui selesai</label>
+                                <textarea name="review_note" rows="2" placeholder="Catatan validasi. Wajib jika indikator sistem belum membaik." class="mt-2 w-full rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs focus:border-emerald-400 focus:outline-none">{{ old('review_note') }}</textarea>
+                                <button type="submit" class="mt-2 w-full rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700">
+                                    Validasi Selesai
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ route('spk.tasks.review', $task->id) }}" class="rounded-xl border border-amber-100 bg-amber-50/60 p-3">
+                                @csrf @method('PATCH')
+                                <input type="hidden" name="action" value="reject">
+                                <label class="text-[10px] font-bold uppercase text-amber-700">Minta revisi petugas</label>
+                                <textarea name="review_note" rows="2" required placeholder="Jelaskan bagian yang harus diperbaiki atau dicek ulang." class="mt-2 w-full rounded-lg border border-amber-100 bg-white px-3 py-2 text-xs focus:border-amber-400 focus:outline-none">{{ old('review_note') }}</textarea>
+                                <button type="submit" class="mt-2 w-full rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-amber-700">
+                                    Kembalikan ke Petugas
+                                </button>
+                            </form>
+                        </div>
+                    @else
+                        <div class="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+                            Laporan selesai sudah dikirim. Tugas akan dianggap selesai setelah penanggung jawab memvalidasi hasil pekerjaan.
+                        </div>
+                    @endif
+                @endif
             </div>
         @endif
 
@@ -96,6 +134,11 @@
                     <div class="mb-4 flex flex-wrap items-center gap-2">
                         <span class="rounded-md border px-2 py-1 text-[9px] font-bold uppercase {{ $priority['class'] }}">{{ $priority['label'] }}</span>
                         <span class="rounded-md border px-2 py-1 text-[9px] font-bold uppercase {{ $status['class'] }}">{{ $status['label'] }}</span>
+                        @if($task->review_status && $task->review_status !== 'none')
+                            <span class="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[9px] font-bold uppercase text-slate-600">
+                                Review: {{ $task->review_status_label }}
+                            </span>
+                        @endif
                         @if($isOverdue)
                             <span class="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[9px] font-bold uppercase text-rose-700">Terlambat</span>
                         @endif
@@ -148,15 +191,36 @@
                             <div class="absolute bottom-2 left-2 top-2 w-0.5 bg-slate-200"></div>
 
                             @foreach($task->reports as $report)
+                                @php
+                                    $isReviewRevision = \Illuminate\Support\Str::startsWith($report->description, 'Revisi pjawab:');
+                                    $isReviewApproval = \Illuminate\Support\Str::startsWith($report->description, 'Validasi pjawab:')
+                                        || $report->description === 'Pjawab memvalidasi tugas selesai.';
+                                    $timelineDotClass = match (true) {
+                                        $isReviewRevision => 'border-amber-200 bg-amber-500',
+                                        $report->status_update === 'done' || $isReviewApproval => 'border-emerald-200 bg-emerald-500',
+                                        default => 'border-sky-200 bg-sky-500',
+                                    };
+                                    $timelineBadgeClass = match (true) {
+                                        $isReviewRevision => 'bg-amber-100 text-amber-700',
+                                        $report->status_update === 'done' || $isReviewApproval => 'bg-emerald-100 text-emerald-700',
+                                        default => 'bg-sky-100 text-sky-700',
+                                    };
+                                    $timelineLabel = match (true) {
+                                        $isReviewRevision => 'Revisi',
+                                        $isReviewApproval => 'Validasi',
+                                        $report->status_update === 'done' => ($task->review_status === 'pending' ? 'Minta Validasi' : 'Selesai'),
+                                        default => 'Progress',
+                                    };
+                                @endphp
                                 <div class="relative">
-                                    <div class="absolute -left-6 top-1 h-4 w-4 rounded-full border-2 {{ $report->status_update === 'done' ? 'border-emerald-200 bg-emerald-500' : 'border-sky-200 bg-sky-500' }}"></div>
+                                    <div class="absolute -left-6 top-1 h-4 w-4 rounded-full border-2 {{ $timelineDotClass }}"></div>
 
                                     <div class="rounded-lg border border-slate-100 bg-slate-50 p-3">
                                         <div class="mb-1.5 flex items-center justify-between gap-2">
                                             <div class="flex items-center gap-2">
                                                 <span class="text-xs font-bold text-slate-800">{{ $report->reporter->name ?? 'Unknown' }}</span>
-                                                <span class="rounded px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $report->status_update === 'done' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700' }}">
-                                                    {{ $report->status_update === 'done' ? 'Selesai' : 'Progress' }}
+                                                <span class="rounded px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $timelineBadgeClass }}">
+                                                    {{ $timelineLabel }}
                                                 </span>
                                             </div>
                                             <span class="shrink-0 text-[9px] text-slate-400">{{ $report->createdAt?->diffForHumans() ?? '-' }}</span>
@@ -219,6 +283,33 @@
                             <p class="text-xs font-semibold text-emerald-600">{{ $task->completed_at->format('d M Y, H:i') }}</p>
                         </div>
                     @endif
+                    @if($task->completion_requested_at)
+                        <div>
+                            <p class="mb-0.5 text-[9px] font-bold uppercase text-slate-400">Minta Validasi</p>
+                            <p class="text-xs font-semibold text-amber-600">{{ $task->completion_requested_at->format('d M Y, H:i') }}</p>
+                        </div>
+                    @endif
+                    @if($task->review_status && $task->review_status !== 'none')
+                        <div>
+                            <p class="mb-0.5 text-[9px] font-bold uppercase text-slate-400">Review Pjawab</p>
+                            <p class="text-xs font-semibold text-slate-800">{{ $task->review_status_label }}</p>
+                            @if($task->reviewed_at)
+                                <p class="mt-0.5 text-[10px] text-slate-400">{{ $task->reviewed_at->format('d M Y, H:i') }}</p>
+                            @endif
+                            @if($task->review_note)
+                                <p class="mt-1 rounded-lg bg-slate-50 px-2 py-1.5 text-[10px] leading-relaxed text-slate-600">{{ $task->review_note }}</p>
+                            @endif
+                        </div>
+                    @endif
+                    @if($task->system_validation_status && $task->system_validation_status !== 'not_checked')
+                        <div>
+                            <p class="mb-0.5 text-[9px] font-bold uppercase text-slate-400">Validasi Sistem</p>
+                            <p class="text-xs font-semibold text-slate-800">{{ str_replace('_', ' ', $task->system_validation_status) }}</p>
+                            @if($task->system_validation_note)
+                                <p class="mt-1 rounded-lg bg-slate-50 px-2 py-1.5 text-[10px] leading-relaxed text-slate-600">{{ $task->system_validation_note }}</p>
+                            @endif
+                        </div>
+                    @endif
                     @if($task->fuzzyLog)
                         <div>
                             <p class="mb-0.5 text-[9px] font-bold uppercase text-slate-400">Sumber Analisa SPK</p>
@@ -227,7 +318,7 @@
                     @endif
                 </div>
 
-                @if($canManage && !in_array($task->status, ['done', 'cancelled'], true))
+                @if($canManage && !in_array($task->status, ['done', 'cancelled'], true) && ! $isPendingReview)
                     <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                         <h4 class="mb-3 border-b border-slate-100 pb-2 text-xs font-bold text-slate-800">Edit Tugas</h4>
                         <form method="POST" action="{{ route('spk.tasks.update', $task->id) }}" class="space-y-3">
@@ -308,7 +399,7 @@
                         <label class="mb-1 block text-xs font-semibold text-slate-600">Update Status</label>
                         <select name="status_update" class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-sky-400 focus:outline-none">
                             <option value="in_progress">Masih Dikerjakan</option>
-                            <option value="done">Selesai</option>
+                            <option value="done">Selesai, minta validasi pjawab</option>
                         </select>
                     </div>
                     <div class="flex justify-end gap-2 pt-2">

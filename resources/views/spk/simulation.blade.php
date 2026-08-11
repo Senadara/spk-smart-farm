@@ -456,11 +456,11 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const presets = {
-                optimal: { suhu: 27, kelembapan: 65, humidity: 65, amonia: 5, hdp: 85, fcr: 2.1, mortalitas: 0.1 },
-                environment_bad: { suhu: 34, kelembapan: 85, humidity: 85, amonia: 30, hdp: 82, fcr: 2.1, mortalitas: 0.2 },
-                productivity_bad: { suhu: 27, kelembapan: 65, humidity: 65, amonia: 5, hdp: 55, fcr: 2.6, mortalitas: 1.5 },
-                critical: { suhu: 35, kelembapan: 88, humidity: 88, amonia: 35, hdp: 50, fcr: 2.9, mortalitas: 2 },
-                fcr_bad: { suhu: 28, kelembapan: 68, humidity: 68, amonia: 8, hdp: 60, fcr: 2.85, mortalitas: 0.5 },
+                optimal: { suhu: 27, kelembapan: 65, humidity: 65, amonia: 5, hdp: 85, fcr: 2.2, feed_intake: 115, pakan: 115, mortalitas: 0.1 },
+                environment_bad: { suhu: 34, kelembapan: 85, humidity: 85, amonia: 30, hdp: 82, fcr: 2.2, feed_intake: 115, pakan: 115, mortalitas: 0.2 },
+                productivity_bad: { suhu: 27, kelembapan: 65, humidity: 65, amonia: 5, hdp: 55, fcr: 2.6, feed_intake: 135, pakan: 135, mortalitas: 1.5 },
+                critical: { suhu: 35, kelembapan: 88, humidity: 88, amonia: 35, hdp: 50, fcr: 2.9, feed_intake: 145, pakan: 145, mortalitas: 2 },
+                fcr_bad: { suhu: 28, kelembapan: 68, humidity: 68, amonia: 8, hdp: 60, fcr: 2.85, feed_intake: 145, pakan: 145, mortalitas: 0.5 },
             };
 
             const aliases = {
@@ -470,8 +470,9 @@
                 humidity: 'kelembapan',
                 kelembaban: 'kelembapan',
                 ammonia: 'amonia',
-                feed: 'pakan',
-                konsumsi_pakan: 'pakan',
+                feed: 'feed_intake',
+                pakan: 'feed_intake',
+                konsumsi_pakan: 'feed_intake',
                 feed_conversion_ratio: 'fcr',
                 mortality: 'mortalitas',
             };

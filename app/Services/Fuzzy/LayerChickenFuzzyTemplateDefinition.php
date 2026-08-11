@@ -74,7 +74,7 @@ class LayerChickenFuzzyTemplateDefinition
             ['group' => 'lingkungan', 'name' => 'amonia', 'type' => 'input', 'unit' => 'ppm', 'description' => 'Kadar amonia udara kandang ayam petelur.'],
             ['group' => 'lingkungan', 'name' => 'status_lingkungan', 'type' => 'output', 'unit' => 'score', 'description' => 'Status lingkungan berdasarkan rule validasi pakar.'],
             ['group' => 'kesehatan', 'name' => 'hdp', 'type' => 'input', 'unit' => '%', 'description' => 'Hen-Day Production harian.'],
-            ['group' => 'kesehatan', 'name' => 'fcr', 'type' => 'input', 'unit' => 'rasio', 'description' => 'Feed Conversion Ratio sebagai indikator efisiensi pakan terhadap berat panen telur.'],
+            ['group' => 'kesehatan', 'name' => 'fcr', 'type' => 'input', 'unit' => 'rasio', 'description' => 'Feed Conversion Ratio: total pakan dibagi egg mass dari laporan panen.'],
             ['group' => 'kesehatan', 'name' => 'mortalitas', 'type' => 'input', 'unit' => '% per minggu', 'description' => 'Mortalitas ayam petelur pada periode berjalan.'],
             ['group' => 'kesehatan', 'name' => 'indeks_kesehatan', 'type' => 'output', 'unit' => 'score', 'description' => 'Indeks produktivitas dan kesehatan berdasarkan rule validasi pakar.'],
             ['group' => 'kausalitas', 'name' => 'label_lingkungan', 'type' => 'input', 'unit' => 'label', 'description' => 'Kategori ringkas lingkungan untuk integrasi kausalitas.'],
@@ -91,6 +91,7 @@ class LayerChickenFuzzyTemplateDefinition
             'amonia' => self::ammoniaSets(),
             'status_lingkungan' => self::environmentOutputSets(),
             'hdp' => self::hdpSets(),
+            'feed_intake' => self::feedSets(),
             'fcr' => self::fcrSets(),
             'mortalitas' => self::mortalitySets(),
             'indeks_kesehatan' => self::healthOutputSets(),
@@ -162,7 +163,7 @@ class LayerChickenFuzzyTemplateDefinition
     {
         return match (strtolower($code)) {
             'hdp', 'hhep' => self::hdpSets(),
-            'feed_intake' => self::feedSets(),
+            'feed_intake', 'pakan' => self::feedSets(),
             'fcr' => self::fcrSets(),
             'mortalitas' => self::mortalitySets(),
             default => [],
@@ -183,17 +184,17 @@ class LayerChickenFuzzyTemplateDefinition
     public static function healthOutputSets(): array
     {
         return self::spreadLabelSets([
-            'Sakit Kritis',
-            'Sakit Berat',
-            'Sakit Sedang',
-            'Kurang Sehat',
-            'Sangat Boros',
-            'Inefisiensi',
-            'Waspada',
-            'FCR Boros',
-            'Efisien Positif',
-            'Sehat',
-            'Sangat Sehat',
+            'Kritis',
+            'Inefisiensi Berat',
+            'Buruk',
+            'Risiko Kesehatan',
+            'Performa Rendah',
+            'Cukup Baik',
+            'Stabil',
+            'Inefisien',
+            'Produksi Tinggi tetapi Inefisien',
+            'Optimal',
+            'Sangat Baik',
         ]);
     }
 
@@ -209,14 +210,14 @@ class LayerChickenFuzzyTemplateDefinition
     public static function causalityOutputSets(): array
     {
         return self::spreadLabelSets([
-            'Krisis Total',
-            'Stres Lingkungan',
-            'Daya Tahan Baik',
-            'Sakit Non-Cuaca',
-            'Performa Stagnan',
-            'Toleransi Baik',
-            'Wabah Internal',
-            'Inefisiensi FCR',
+            'Kondisi Kritis',
+            'Prioritas Evaluasi Lingkungan',
+            'Risiko Lingkungan',
+            'Prioritas Evaluasi Produktivitas',
+            'Perlu Evaluasi Menyeluruh',
+            'Kondisi Cukup Stabil',
+            'Indikasi Faktor Non-Lingkungan',
+            'Evaluasi Produktivitas',
             'Kondisi Optimal',
         ]);
     }
@@ -257,39 +258,39 @@ class LayerChickenFuzzyTemplateDefinition
     public static function healthRules(): array
     {
         return [
-            ['output_set' => 'Kurang Sehat', 'diagnosis' => 'Produksi rendah meskipun FCR efisien, perlu cek stres atau kualitas produksi', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Efisien'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Sakit Kritis', 'diagnosis' => 'Indikasi wabah penyakit dengan produksi rendah', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Efisien'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Inefisiensi', 'diagnosis' => 'Masalah kualitas pakan, genetik, atau manajemen produksi', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Normal'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Sakit Berat', 'diagnosis' => 'Produksi rendah dengan mortalitas tinggi', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Normal'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Sangat Boros', 'diagnosis' => 'FCR boros dan produksi rendah', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Boros'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Sakit Berat', 'diagnosis' => 'Gangguan metabolisme berat atau kualitas pakan buruk', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Boros'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Waspada', 'diagnosis' => 'Produksi sedang dengan FCR efisien, pantau konsistensi panen', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Efisien'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Sakit Sedang', 'diagnosis' => 'Gejala awal penyakit pada produksi sedang', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Efisien'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Sehat', 'diagnosis' => 'Performa standar rata-rata', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Normal'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Waspada', 'diagnosis' => 'Cek penyebab kematian fisik', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Normal'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'FCR Boros', 'diagnosis' => 'FCR boros, perlu audit pakan dan berat panen', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Boros'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Sakit Sedang', 'diagnosis' => 'Indikasi masalah pencernaan atau kualitas pakan', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Boros'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Efisien Positif', 'diagnosis' => 'FCR sangat baik', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Efisien'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Waspada', 'diagnosis' => 'Produksi tinggi tetapi mortalitas naik', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Efisien'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Sangat Sehat', 'diagnosis' => 'Kondisi target/ideal', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Normal'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Waspada', 'diagnosis' => 'Anomali, cek faktor non-medis', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Normal'], ['mortalitas', 'Tinggi']]],
-            ['output_set' => 'Sehat', 'diagnosis' => 'Produksi tinggi tetapi FCR mulai boros', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Boros'], ['mortalitas', 'Wajar']]],
-            ['output_set' => 'Waspada', 'diagnosis' => 'Mortalitas tinggi saat puncak produksi', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Boros'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Performa Rendah', 'diagnosis' => 'HDP rendah meskipun FCR efisien; evaluasi umur produksi, pencatatan telur, dan kecukupan pakan.', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Efisien'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Kritis', 'diagnosis' => 'HDP rendah dan mortalitas tinggi; prioritaskan pemeriksaan kesehatan flock dan validasi data.', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Efisien'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Performa Rendah', 'diagnosis' => 'HDP rendah dengan FCR normal; evaluasi umur produksi, kualitas pakan, dan pencatatan.', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Normal'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Kritis', 'diagnosis' => 'HDP rendah dan mortalitas tinggi meskipun FCR normal; telusuri penyebab kematian.', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Normal'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Inefisiensi Berat', 'diagnosis' => 'HDP rendah dan FCR boros; evaluasi pemberian pakan, kehilangan pakan, dan perhitungan massa telur.', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Boros'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Kritis', 'diagnosis' => 'HDP rendah, FCR boros, dan mortalitas tinggi; lakukan evaluasi kesehatan dan efisiensi pakan segera.', 'conditions' => [['hdp', 'Rendah'], ['fcr', 'Boros'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Cukup Baik', 'diagnosis' => 'HDP sedang dengan FCR efisien dan mortalitas wajar; pantau tren produksi.', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Efisien'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Risiko Kesehatan', 'diagnosis' => 'Mortalitas tinggi meskipun FCR efisien; lakukan pemeriksaan kesehatan dan validasi data.', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Efisien'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Stabil', 'diagnosis' => 'HDP sedang, FCR normal, dan mortalitas wajar; pertahankan pengelolaan dan pantau tren.', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Normal'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Risiko Kesehatan', 'diagnosis' => 'Mortalitas tinggi pada HDP dan FCR normal; telusuri penyebab kematian.', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Normal'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Inefisien', 'diagnosis' => 'HDP sedang dengan FCR boros; evaluasi takaran pakan, kualitas pakan, dan massa telur.', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Boros'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Buruk', 'diagnosis' => 'FCR boros disertai mortalitas tinggi; evaluasi kesehatan flock dan manajemen pakan.', 'conditions' => [['hdp', 'Sedang'], ['fcr', 'Boros'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Optimal', 'diagnosis' => 'HDP tinggi, FCR efisien, dan mortalitas wajar menunjukkan produktivitas sangat baik.', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Efisien'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Risiko Kesehatan', 'diagnosis' => 'Produktivitas tinggi tetapi mortalitas meningkat; lakukan pemeriksaan kesehatan dan validasi data.', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Efisien'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Sangat Baik', 'diagnosis' => 'HDP tinggi, FCR normal, dan mortalitas wajar merupakan kondisi target.', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Normal'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Risiko Kesehatan', 'diagnosis' => 'HDP tinggi dan FCR normal, tetapi mortalitas meningkat; telusuri penyebab kematian.', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Normal'], ['mortalitas', 'Tinggi']]],
+            ['output_set' => 'Produksi Tinggi tetapi Inefisien', 'diagnosis' => 'HDP tinggi tetapi FCR boros; evaluasi efisiensi pakan dan perhitungan massa telur.', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Boros'], ['mortalitas', 'Wajar']]],
+            ['output_set' => 'Buruk', 'diagnosis' => 'HDP tinggi tetapi FCR boros dan mortalitas tinggi; evaluasi kesehatan dan manajemen pakan.', 'conditions' => [['hdp', 'Tinggi'], ['fcr', 'Boros'], ['mortalitas', 'Tinggi']]],
         ];
     }
 
     public static function causalityRules(): array
     {
         return [
-            ['environment' => 'Buruk', 'productivity' => 'Buruk', 'output_set' => 'Krisis Total', 'recommendation' => 'Darurat: evakuasi atau perbaikan total sarana. Cek kesehatan massal dan sanitasi kandang.'],
-            ['environment' => 'Buruk', 'productivity' => 'Sedang', 'output_set' => 'Stres Lingkungan', 'recommendation' => 'Prioritas: perbaiki suhu atau sirkulasi segera. Beri vitamin anti-stres untuk mencegah penurunan produksi.'],
-            ['environment' => 'Buruk', 'productivity' => 'Baik', 'output_set' => 'Daya Tahan Baik', 'recommendation' => 'Peringatan: ayam masih kuat, tetapi lingkungan berbahaya. Segera nyalakan kipas sebelum produksi turun.'],
-            ['environment' => 'Sedang', 'productivity' => 'Buruk', 'output_set' => 'Sakit Non-Cuaca', 'recommendation' => 'Medis: lingkungan cukup aman. Fokus isolasi ayam sakit dan evaluasi kualitas pakan/air.'],
-            ['environment' => 'Sedang', 'productivity' => 'Sedang', 'output_set' => 'Performa Stagnan', 'recommendation' => 'Evaluasi: cek manajemen harian. Bersihkan kandang dan optimalkan program pencahayaan.'],
-            ['environment' => 'Sedang', 'productivity' => 'Baik', 'output_set' => 'Toleransi Baik', 'recommendation' => 'Monitoring: kondisi stabil. Jaga kebersihan kandang agar amonia tidak naik.'],
-            ['environment' => 'Baik', 'productivity' => 'Buruk', 'output_set' => 'Wabah Internal', 'recommendation' => 'Kritis medis: lingkungan ideal tetapi ayam mati/drop. Indikasi kuat virus/bakteri. Panggil dokter hewan.'],
-            ['environment' => 'Baik', 'productivity' => 'Sedang', 'output_set' => 'Inefisiensi FCR', 'recommendation' => 'Manajemen: cek FCR, egg mass, dan takaran pakan harian. Pastikan data panen dan pakan tercatat pada periode yang sama.'],
-            ['environment' => 'Baik', 'productivity' => 'Baik', 'output_set' => 'Kondisi Optimal', 'recommendation' => 'Pertahankan: lanjutkan SOP saat ini. Cek stok logistik untuk periode depan.'],
+            ['environment' => 'Buruk', 'productivity' => 'Buruk', 'output_set' => 'Kondisi Kritis', 'recommendation' => 'Lingkungan kandang dan produktivitas sama-sama berada pada kondisi buruk. Penurunan performa dapat berkaitan dengan kombinasi masalah lingkungan, kesehatan, pakan, dan manajemen operasional.'],
+            ['environment' => 'Buruk', 'productivity' => 'Sedang', 'output_set' => 'Prioritas Evaluasi Lingkungan', 'recommendation' => 'Produktivitas belum berada pada kondisi buruk, tetapi lingkungan kandang telah menyimpang. Kondisi lingkungan perlu diprioritaskan agar tidak menyebabkan penurunan produktivitas lebih lanjut.'],
+            ['environment' => 'Buruk', 'productivity' => 'Baik', 'output_set' => 'Risiko Lingkungan', 'recommendation' => 'Produktivitas masih baik meskipun lingkungan kandang buruk. Kondisi ini menunjukkan adanya risiko penurunan performa apabila masalah lingkungan tidak segera ditangani.'],
+            ['environment' => 'Sedang', 'productivity' => 'Buruk', 'output_set' => 'Prioritas Evaluasi Produktivitas', 'recommendation' => 'Lingkungan hanya mengalami penyimpangan ringan, tetapi produktivitas berada pada kondisi buruk. Masalah lebih mungkin berkaitan dengan kesehatan flock, pakan, umur produksi, atau pencatatan operasional.'],
+            ['environment' => 'Sedang', 'productivity' => 'Sedang', 'output_set' => 'Perlu Evaluasi Menyeluruh', 'recommendation' => 'Lingkungan dan produktivitas sama-sama berada pada tingkat sedang. Belum terdapat kondisi kritis, tetapi perlu dilakukan evaluasi terhadap lingkungan, pakan, kesehatan, dan manajemen harian.'],
+            ['environment' => 'Sedang', 'productivity' => 'Baik', 'output_set' => 'Kondisi Cukup Stabil', 'recommendation' => 'Produktivitas berada pada kondisi baik, sedangkan lingkungan mengalami penyimpangan ringan. Produktivitas perlu dipertahankan dan kondisi lingkungan yang menyimpang perlu segera diperbaiki.'],
+            ['environment' => 'Baik', 'productivity' => 'Buruk', 'output_set' => 'Indikasi Faktor Non-Lingkungan', 'recommendation' => 'Lingkungan kandang berada pada kondisi baik, tetapi produktivitas buruk. Kondisi tersebut menunjukkan bahwa masalah kemungkinan lebih berkaitan dengan kesehatan, pakan, umur ayam, kualitas bibit, atau pencatatan data.'],
+            ['environment' => 'Baik', 'productivity' => 'Sedang', 'output_set' => 'Evaluasi Produktivitas', 'recommendation' => 'Lingkungan berada pada kondisi baik, tetapi produktivitas belum optimal. Evaluasi perlu difokuskan pada HDP, FCR, mortalitas, kualitas pakan, dan ketepatan pencatatan produksi.'],
+            ['environment' => 'Baik', 'productivity' => 'Baik', 'output_set' => 'Kondisi Optimal', 'recommendation' => 'Lingkungan dan produktivitas berada pada kondisi baik. Pengelolaan kandang dapat dipertahankan dengan monitoring berkala untuk menjaga kestabilan performa.'],
         ];
     }
 
@@ -310,22 +311,19 @@ class LayerChickenFuzzyTemplateDefinition
         ];
 
         $productivity = [
-            'sakit kritis' => 'Buruk',
-            'sakit berat' => 'Buruk',
-            'sakit sedang' => 'Buruk',
+            'kritis' => 'Buruk',
+            'inefisiensi berat' => 'Buruk',
+            'risiko kesehatan' => 'Buruk',
             'buruk' => 'Buruk',
-            'kurang sehat' => 'Sedang',
-            'inefisiensi' => 'Sedang',
-            'sangat boros' => 'Sedang',
-            'waspada' => 'Sedang',
-            'fcr boros' => 'Sedang',
-            'boros pakan' => 'Sedang',
+            'performa rendah' => 'Sedang',
+            'cukup baik' => 'Sedang',
+            'stabil' => 'Sedang',
+            'inefisien' => 'Sedang',
+            'produksi tinggi tetapi inefisien' => 'Sedang',
             'sedang' => 'Sedang',
-            'efisien positif' => 'Baik',
-            'sehat' => 'Baik',
-            'sangat sehat' => 'Baik',
-            'baik' => 'Baik',
             'optimal' => 'Baik',
+            'sangat baik' => 'Baik',
+            'baik' => 'Baik',
         ];
 
         $map = $dimension === 'lingkungan' ? $environment : $productivity;

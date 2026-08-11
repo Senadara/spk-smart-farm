@@ -13,6 +13,7 @@
             ['label' => 'Total Tugas', 'value' => $stats['total'], 'icon' => 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2', 'class' => 'bg-slate-50 text-slate-600 border-slate-100'],
             ['label' => 'To Do', 'value' => $stats['todo'], 'icon' => 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', 'class' => 'bg-zinc-50 text-zinc-600 border-zinc-100'],
             ['label' => 'Dikerjakan', 'value' => $stats['in_progress'], 'icon' => 'M13 10V3L4 14h7v7l9-11h-7z', 'class' => 'bg-sky-50 text-sky-600 border-sky-100'],
+            ['label' => 'Validasi', 'value' => $stats['pending_review'] ?? 0, 'icon' => 'M12 3l7 4v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V7l7-4z', 'class' => 'bg-amber-50 text-amber-600 border-amber-100'],
             ['label' => 'Selesai', 'value' => $stats['done'], 'icon' => 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', 'class' => 'bg-emerald-50 text-emerald-600 border-emerald-100'],
             ['label' => 'Terlambat', 'value' => $stats['overdue'], 'icon' => 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z', 'class' => 'bg-rose-50 text-rose-600 border-rose-100'],
         ];
@@ -50,7 +51,7 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
             @foreach ($statItems as $stat)
                 <div class="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
                     <div class="mb-2 flex items-center gap-2">
@@ -216,6 +217,7 @@
                     <div class="flex gap-2 text-[11px] font-semibold">
                         <span class="rounded-full bg-white px-3 py-1.5 text-sky-700">{{ $stats['todo'] }} To Do</span>
                         <span class="rounded-full bg-white px-3 py-1.5 text-emerald-700">{{ $stats['in_progress'] }} Dikerjakan</span>
+                        <span class="rounded-full bg-white px-3 py-1.5 text-amber-700">{{ $stats['pending_review'] ?? 0 }} Validasi</span>
                     </div>
                 </div>
             </div>
@@ -243,6 +245,12 @@
                             @endforeach
                         </select>
                     @endif
+                    <select name="status" class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600 focus:border-emerald-400 focus:outline-none" onchange="this.form.submit()">
+                        <option value="all" {{ $statusFilter === 'all' ? 'selected' : '' }}>Semua Status</option>
+                        <option value="todo" {{ $statusFilter === 'todo' ? 'selected' : '' }}>To Do</option>
+                        <option value="in_progress" {{ $statusFilter === 'in_progress' ? 'selected' : '' }}>Dikerjakan</option>
+                        <option value="pending_review" {{ $statusFilter === 'pending_review' ? 'selected' : '' }}>Menunggu Validasi</option>
+                    </select>
                     <select name="priority" class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600 focus:border-emerald-400 focus:outline-none" onchange="this.form.submit()">
                         <option value="all" {{ $priorityFilter === 'all' ? 'selected' : '' }}>Semua Prioritas</option>
                         @foreach($priorityOptions as $value => $label)
@@ -256,7 +264,7 @@
                 </form>
             </div>
 
-            <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
                 <div class="min-h-[320px] rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <h4 class="mb-3 flex items-center justify-between border-b border-slate-200 px-1 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                         <span class="flex items-center gap-1.5">
@@ -285,6 +293,22 @@
                             @include('spk.partials.task-card', ['task' => $task])
                         @empty
                             <p class="py-8 text-center text-[11px] text-sky-400">Tidak ada tugas</p>
+                        @endforelse
+                    </div>
+                </div>
+
+                <div class="min-h-[320px] rounded-xl border border-amber-100 bg-amber-50/50 p-3">
+                    <h4 class="mb-3 flex items-center justify-between border-b border-amber-100 px-1 py-2 text-[10px] font-bold uppercase tracking-widest text-amber-600">
+                        <span class="flex items-center gap-1.5">
+                            <span class="h-2 w-2 rounded-full bg-amber-500"></span> Menunggu Validasi
+                        </span>
+                        <span class="rounded bg-white px-1.5 py-0.5 text-[10px] font-bold text-amber-700">{{ $kanban['pending_review']->count() }}</span>
+                    </h4>
+                    <div class="space-y-2">
+                        @forelse ($kanban['pending_review'] as $task)
+                            @include('spk.partials.task-card', ['task' => $task])
+                        @empty
+                            <p class="py-8 text-center text-[11px] text-amber-500">Tidak ada tugas menunggu validasi</p>
                         @endforelse
                     </div>
                 </div>
@@ -391,6 +415,7 @@
                 </div>
                 <form method="POST" action="{{ route('spk.tasks.store') }}" class="space-y-4 px-6 py-5">
                     @csrf
+                    <input type="hidden" name="recommendation_id" value="{{ old('recommendation_id', $prefill['recommendation_id'] ?? '') }}">
                     <div>
                         <label class="mb-1 block text-xs font-semibold text-slate-600">Judul Tugas <span class="text-rose-500">*</span></label>
                         <input type="text" name="title" required value="{{ old('title', $prefill['title']) }}" placeholder="Contoh: Perbaiki ventilasi kandang A2" class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-200">
@@ -491,7 +516,7 @@
                         <label class="mb-1 block text-xs font-semibold text-slate-600">Update Status <span class="text-rose-500">*</span></label>
                         <select name="status_update" required class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-sky-400 focus:outline-none">
                             <option value="in_progress">Masih Dikerjakan</option>
-                            <option value="done">Selesai</option>
+                            <option value="done">Selesai, minta validasi pjawab</option>
                         </select>
                     </div>
                     <div class="flex justify-end gap-2 pt-2">

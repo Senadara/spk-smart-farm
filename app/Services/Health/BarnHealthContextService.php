@@ -98,9 +98,13 @@ class BarnHealthContextService
             return collect();
         }
 
-        $activeCoopIds = DB::table('spk_action_tasks')
-            ->whereIn('status', ['todo', 'in_progress'])
+        $blockedCoopIds = DB::table('spk_action_tasks')
+            ->where('status', '<>', 'cancelled')
             ->whereNotNull('unit_budidaya_id')
+            ->where(function ($query) {
+                $query->whereIn('status', ['todo', 'in_progress'])
+                    ->orWhere('createdAt', '>=', now()->subDay());
+            })
             ->pluck('unit_budidaya_id')
             ->all();
 
@@ -112,7 +116,7 @@ class BarnHealthContextService
             ->pluck('total', 'assigned_to');
 
         return $barns
-            ->reject(fn ($barn) => in_array($barn->id, $activeCoopIds, true))
+            ->reject(fn ($barn) => in_array($barn->id, $blockedCoopIds, true))
             ->map(function ($barn) use ($users, $activeCounts) {
                 $context = $this->forBarn($barn->id, null, $barn->nama);
 
@@ -344,7 +348,7 @@ class BarnHealthContextService
             'hdp_today' => round($todayHdp, 1),
             'hdp_avg_7d' => round($avgHdp, 1),
             'hdp_drop_percent' => round($dropPercent, 1),
-            'reject_rate' => (float) ($kpi['afkir'] ?? 0),
+            'reject_rate' => (float) ($kpi['rejectRate'] ?? $kpi['reject_rate'] ?? 0),
             'mortalitas' => (float) ($kpi['mortalitas'] ?? 0),
         ];
     }

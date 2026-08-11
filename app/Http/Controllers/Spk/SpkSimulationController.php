@@ -295,7 +295,8 @@ class SpkSimulationController extends Controller
             'kelembapan' => 65,
             'amonia' => 5,
             'hdp' => 85,
-            'fcr' => 2.1,
+            'fcr' => 2.2,
+            'feed_intake' => 115,
             'mortalitas' => 0.1,
         ];
 
@@ -319,8 +320,9 @@ class SpkSimulationController extends Controller
             'humiditas' => 'kelembapan',
             'kelembaban' => 'kelembapan',
             'ammonia' => 'amonia',
-            'feed' => 'pakan',
-            'konsumsi_pakan' => 'pakan',
+            'feed' => 'feed_intake',
+            'pakan' => 'feed_intake',
+            'konsumsi_pakan' => 'feed_intake',
             'feed_conversion_ratio' => 'fcr',
             'mortality' => 'mortalitas',
         ];

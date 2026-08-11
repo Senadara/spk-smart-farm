@@ -118,6 +118,7 @@ Route::middleware(['auth.api', 'role:pjawab,petugas,owner,admin,inventor,penjual
         Route::put('/{id}', [\App\Http\Controllers\Spk\SpkTaskController::class, 'update'])->name('spk.tasks.update');
         Route::delete('/{id}', [\App\Http\Controllers\Spk\SpkTaskController::class, 'destroy'])->name('spk.tasks.destroy');
         Route::patch('/{id}/status', [\App\Http\Controllers\Spk\SpkTaskController::class, 'updateStatus'])->name('spk.tasks.status');
+        Route::patch('/{id}/review', [\App\Http\Controllers\Spk\SpkTaskController::class, 'review'])->name('spk.tasks.review');
         Route::post('/{id}/report', [\App\Http\Controllers\Spk\SpkTaskController::class, 'submitReport'])->name('spk.tasks.report');
     });
 

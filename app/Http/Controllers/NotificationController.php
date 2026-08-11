@@ -117,18 +117,25 @@ class NotificationController extends Controller
             return collect();
         }
 
-        $query = $this->notificationQuery()
-            ->with('unitBudidaya')
-            ->when($status === 'unread', fn (Builder $builder) => $builder->whereNull('read_at'))
-            ->when($status === 'read', fn (Builder $builder) => $builder->whereNotNull('read_at'));
+        try {
+            $hasReadAt = Schema::hasColumn('spk_alert_events', 'read_at');
 
-        $this->applyPeriodFilter($query, $period);
+            $query = $this->notificationQuery()
+                ->with('unitBudidaya')
+                ->when($hasReadAt && $status === 'unread', fn (Builder $builder) => $builder->whereNull('read_at'))
+                ->when($hasReadAt && $status === 'read', fn (Builder $builder) => $builder->whereNotNull('read_at'));
 
-        return $query
-            ->latest('createdAt')
-            ->take($limit)
-            ->get()
-            ->map(fn (SpkAlertEvent $event) => $this->formatSpkEvent($event));
+            $this->applyPeriodFilter($query, $period);
+
+            return $query
+                ->latest('createdAt')
+                ->take($limit)
+                ->get()
+                ->map(fn (SpkAlertEvent $event) => $this->formatSpkEvent($event));
+        } catch (\Throwable $e) {
+            report($e);
+            return collect();
+        }
     }
 
     private function iotNotificationItems(string $status, string $period, int $limit): Collection
@@ -143,16 +150,21 @@ class NotificationController extends Controller
             return collect();
         }
 
-        $query = IotDeviceLog::with('device')
-            ->whereIn('logType', ['WARNING', 'ERROR']);
+        try {
+            $query = IotDeviceLog::with('device')
+                ->whereIn('logType', ['WARNING', 'ERROR']);
 
-        $this->applyPeriodFilter($query, $period);
+            $this->applyPeriodFilter($query, $period);
 
-        return $query
-            ->latest('createdAt')
-            ->take($limit)
-            ->get()
-            ->map(fn (IotDeviceLog $log) => $this->formatIotLog($log));
+            return $query
+                ->latest('createdAt')
+                ->take($limit)
+                ->get()
+                ->map(fn (IotDeviceLog $log) => $this->formatIotLog($log));
+        } catch (\Throwable $e) {
+            report($e);
+            return collect();
+        }
     }
 
     private function applyPeriodFilter(Builder $query, string $period): void

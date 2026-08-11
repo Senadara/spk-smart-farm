@@ -249,6 +249,9 @@
                 ['code'=>'hhep','label'=>'HHEP %','value'=>$kpi['hhep'] ? $kpi['hhep'].'%' : '-','trend'=>['direction'=>'up','value'=>'+0.5%','status'=>'positive']],
                 ['code'=>'feed_intake','label'=>'Feed Intake','value'=>$kpi['feedIntake'].'g','trend'=>['direction'=>'stable','value'=>'Stable','status'=>'neutral']],
                 ['code'=>'fcr','label'=>'FCR','value'=>$kpi['fcr'] ?: '-','trend'=>['direction'=>'down','value'=>'-0.02','status'=>'positive']],
+                ['code'=>'egg_mass','label'=>'Egg Mass','value'=>($kpi['eggMass'] ?? 0) > 0 ? number_format((float)$kpi['eggMass'], 2, ',', '.').' kg' : '-','trend'=>['direction'=>'stable','value'=>'Berat panen','status'=>'neutral']],
+                ['code'=>'avg_egg_weight','label'=>'Berat Rata-rata','value'=>($kpi['avgEggWeight'] ?? 0) > 0 ? number_format((float)$kpi['avgEggWeight'], 1, ',', '.').' g' : '-','trend'=>['direction'=>'stable','value'=>'g/butir','status'=>'neutral']],
+                ['code'=>'flock_age','label'=>'Umur Flock','value'=>($kpi['flockAgeWeeks'] ?? 0) > 0 ? $kpi['flockAgeWeeks'].' minggu' : '-','trend'=>['direction'=>'stable','value'=>$kpi['puncakProduksi'] ?? 'Fase Produksi','status'=>'neutral']],
                 ['code'=>'mortalitas','label'=>'Mortalitas','value'=>$kpi['mortalitas'].'%','trend'=>['direction'=>$kpi['mortalitas']>0.05?'up':'stable','value'=>$kpi['mortalitas']>0.05?'+0.01%':'Stable','status'=>$kpi['mortalitas']>0.05?'warning':'neutral']],
             ])->filter(fn ($metric) => in_array($metric['code'], $activeProductivityCodes, true))->values();
         @endphp

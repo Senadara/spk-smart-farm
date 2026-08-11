@@ -6,7 +6,11 @@
 <div class="w-full max-w-4xl">
     <x-card class="!p-6 md:!p-8">
         <div class="text-center">
-            <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-primary)] text-xl font-black text-white">SF</div>
+            <x-brand-logo
+                :show-text="false"
+                class="mb-3 justify-center"
+                logo-class="h-20 w-20"
+            />
             <p class="text-xs font-bold uppercase tracking-wider text-emerald-700">Registrasi SmartFarm</p>
             <h1 class="mt-2 text-2xl font-black text-slate-900">Pilih jenis akun</h1>
             <p class="mx-auto mt-2 max-w-2xl text-sm text-slate-500">Owner memakai aplikasi untuk mengelola farm. Supplier memakai aplikasi untuk mengelola toko dan menerima pesanan.</p>

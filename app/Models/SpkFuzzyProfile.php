@@ -89,15 +89,6 @@ class SpkFuzzyProfile extends Model
                 return $profile;
             }
 
-            $profile = self::query()
-                ->where('jenis_budidaya_id', $jenisBudidayaId)
-                ->whereIn('status', ['review', 'draft', 'active'])
-                ->latest('updatedAt')
-                ->first();
-
-            if ($profile) {
-                return $profile;
-            }
         }
 
         if ($commodityId) {
@@ -112,23 +103,13 @@ class SpkFuzzyProfile extends Model
                 return $profile;
             }
 
-            $profile = self::query()
-                ->where('commodity_id', $commodityId)
-                ->whereIn('status', ['review', 'draft', 'active'])
-                ->latest('updatedAt')
-                ->first();
-
-            if ($profile) {
-                return $profile;
-            }
         }
 
         return self::query()
             ->where('is_active', true)
             ->where('status', 'active')
             ->latest('updatedAt')
-            ->first()
-            ?: self::query()->latest('updatedAt')->first();
+            ->first();
     }
 
     public static function resolveCommodityIdFromCoop(?string $coopId): ?string

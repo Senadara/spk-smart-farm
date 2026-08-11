@@ -97,10 +97,6 @@ class FuzzyProfileTemplateService
 
             foreach ($productivityRows as $row) {
                 $code = strtolower((string) $row->code);
-                if ($code === 'feed_intake') {
-                    // Expert revision: feed intake remains an operational metric, fuzzy rules use FCR.
-                    continue;
-                }
 
                 $name = $this->productivityVariableName($code);
                 $stats['master_variable_names'][] = $name;

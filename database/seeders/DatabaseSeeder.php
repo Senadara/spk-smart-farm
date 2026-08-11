@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             UserAccountSeeder::class,
             SupplierProductCategorySeeder::class,
+            SpkSupplierSeeder::class,
         ]);
     }
 }

@@ -105,9 +105,9 @@ class SpkFuzzyTest extends TestCase
 
         $this->assertNotNull($profile);
 
-        $result = app(MamdaniEngine::class)->lookupKausalitas('Sangat Nyaman', 'Sakit Berat', $profile->id);
+        $result = app(MamdaniEngine::class)->lookupKausalitas('Sangat Nyaman', 'Kritis', $profile->id);
 
-        $this->assertSame('Wabah Internal', $result['label']);
+        $this->assertSame('Indikasi Faktor Non-Lingkungan', $result['label']);
         $this->assertSame('Baik', $result['lookup_labels']['lingkungan']);
         $this->assertSame('Buruk', $result['lookup_labels']['kesehatan']);
     }
@@ -128,8 +128,20 @@ class SpkFuzzyTest extends TestCase
         $this->assertSame(45, SpkFuzzyRule::where('profile_id', $profile->id)->where('is_active', true)->count());
 
         $this->assertDatabaseHas('spk_fuzzy_sets', ['name' => 'Sangat Nyaman']);
-        $this->assertDatabaseHas('spk_fuzzy_sets', ['name' => 'Sakit Kritis']);
-        $this->assertDatabaseHas('spk_fuzzy_sets', ['name' => 'Inefisiensi FCR']);
+        $this->assertDatabaseHas('spk_fuzzy_sets', ['name' => 'Kritis']);
+        $this->assertDatabaseHas('spk_fuzzy_sets', ['name' => 'Evaluasi Produktivitas']);
+        $this->assertDatabaseHas('spk_fuzzy_variables', [
+            'profile_id' => $profile->id,
+            'name' => 'fcr',
+            'group' => 'kesehatan',
+            'type' => 'input',
+        ]);
+        $this->assertDatabaseMissing('spk_fuzzy_variables', [
+            'profile_id' => $profile->id,
+            'name' => 'feed_intake',
+            'group' => 'kesehatan',
+            'type' => 'input',
+        ]);
     }
 
     public function test_sync_repairs_missing_default_health_rules_with_fcr(): void
@@ -179,13 +191,41 @@ class SpkFuzzyTest extends TestCase
             'kelembapan' => 60,
             'amonia' => 5,
             'hdp' => 90,
-            'fcr' => 2.1,
+            'fcr' => 2.2,
             'mortalitas' => 0.1,
         ], $profile?->id, $profile?->commodity_id);
 
         $this->assertSame('Sangat Nyaman', $result['lingkungan']['label']);
-        $this->assertSame('Sangat Sehat', $result['kesehatan']['label']);
+        $this->assertSame('Sangat Baik', $result['kesehatan']['label']);
         $this->assertSame('Kondisi Optimal', $result['kausalitas']['label']);
+    }
+
+    public function test_unconfigured_template_cannot_be_activated_for_livestock_type(): void
+    {
+        $activeProfile = SpkFuzzyProfile::query()
+            ->where('name', 'Ayam Petelur - RFC v1')
+            ->first();
+
+        $this->assertNotNull($activeProfile);
+
+        $blankProfile = SpkFuzzyProfile::create([
+            'jenis_budidaya_id' => $activeProfile->jenis_budidaya_id,
+            'commodity_id' => $activeProfile->commodity_id,
+            'name' => 'Ayam Petelur - Template Kosong',
+            'version' => 'draft-test',
+            'status' => 'review',
+            'is_active' => false,
+            'notes' => 'Template tanpa variabel dan rule tidak boleh aktif.',
+        ]);
+
+        $response = $this->patch(route('settings.fuzzy.templates.activate'), [
+            'jenis_budidaya_id' => $activeProfile->jenis_budidaya_id,
+            'profile_id' => $blankProfile->id,
+        ]);
+
+        $response->assertSessionHasErrors('profile_id');
+        $this->assertFalse($blankProfile->fresh()->is_active);
+        $this->assertTrue($activeProfile->fresh()->is_active);
     }
 
     public function test_reset_default_preserves_other_profiles(): void

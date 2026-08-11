@@ -8,10 +8,11 @@
     <x-card class="!p-8 md:!p-10">
         {{-- Header --}}
         <div class="text-center mb-8">
-            <div class="flex items-center justify-center gap-3 mb-3">
-                <div class="w-12 h-12 bg-[var(--color-primary)] rounded-xl flex items-center justify-center text-2xl">🌾</div>
-                <div class="text-2xl font-extrabold text-[var(--color-gray-900)]">Smart<span class="text-[var(--color-primary)]">Farm</span></div>
-            </div>
+            <x-brand-logo
+                class="mb-3 justify-center"
+                logo-class="h-20 w-20"
+                text-class="text-2xl font-extrabold text-[var(--color-gray-900)]"
+            />
             <p class="text-sm text-[var(--color-gray-400)]">Sistem Pendukung Keputusan Pertanian</p>
         </div>
 
@@ -71,7 +72,7 @@
 
     {{-- Footer --}}
     <p class="text-center text-[var(--color-gray-400)] text-[13px] mt-6">
-        &copy; {{ date('Y') }} Smart Farm SPK — Sistem Pendukung Keputusan
+        &copy; {{ date('Y') }} Smart Farm SPK - Sistem Pendukung Keputusan
     </p>
 </div>
 @endsection

@@ -58,20 +58,60 @@ class DailyReportInventoryUsageSeeder extends Seeder
                 'id' => 'f00d0001-0000-4000-8000-000000000001',
                 'category_id' => $categories['Pakan'],
                 'satuan_id' => self::KG_ID,
-                'name' => 'Pakan Layer Complete - Kandang Layer A',
-                'initial_stock' => 5200.0,
+                'name' => 'Pakan Layer Complete - Kandang Layer A Optimal',
+                'initial_stock' => 4200.0,
                 'minimum_stock' => 1000.0,
-                'detail' => 'Pakan utama ayam petelur fase produksi untuk Kandang Layer A. Satuan pemakaian laporan harian: kilogram.',
+                'detail' => 'Pakan utama ayam petelur fase puncak produksi untuk Kandang Layer A - Optimal. Satuan pemakaian laporan harian: kilogram.',
                 'expires_at' => now()->addMonths(5),
             ],
             'feed_b' => [
                 'id' => 'f00d0002-0000-4000-8000-000000000002',
                 'category_id' => $categories['Pakan'],
                 'satuan_id' => self::KG_ID,
-                'name' => 'Pakan Layer Complete - Kandang Layer B',
-                'initial_stock' => 4300.0,
+                'name' => 'Pakan Layer Complete - Kandang Layer B Produksi Turun',
+                'initial_stock' => 2200.0,
                 'minimum_stock' => 850.0,
-                'detail' => 'Pakan utama ayam petelur fase produksi untuk Kandang Layer B. Satuan pemakaian laporan harian: kilogram.',
+                'detail' => 'Pakan utama ayam petelur untuk Kandang Layer B - Produksi Turun. Stok sengaja mendekati batas untuk demo rekomendasi restok.',
+                'expires_at' => now()->addMonths(5),
+            ],
+            'feed_c' => [
+                'id' => 'f00d0003-0000-4000-8000-000000000003',
+                'category_id' => $categories['Pakan'],
+                'satuan_id' => self::KG_ID,
+                'name' => 'Pakan Layer Complete - Kandang Layer C Lingkungan',
+                'initial_stock' => 2600.0,
+                'minimum_stock' => 750.0,
+                'detail' => 'Pakan utama ayam petelur untuk Kandang Layer C - Lingkungan Waspada.',
+                'expires_at' => now()->addMonths(5),
+            ],
+            'feed_d' => [
+                'id' => 'f00d0004-0000-4000-8000-000000000004',
+                'category_id' => $categories['Pakan'],
+                'satuan_id' => self::KG_ID,
+                'name' => 'Pakan Layer Complete - Kandang Layer D Afkir',
+                'initial_stock' => 1800.0,
+                'minimum_stock' => 650.0,
+                'detail' => 'Pakan utama ayam petelur tua untuk Kandang Layer D - Menjelang Afkir.',
+                'expires_at' => now()->addMonths(4),
+            ],
+            'feed_e' => [
+                'id' => 'f00d0005-0000-4000-8000-000000000005',
+                'category_id' => $categories['Pakan'],
+                'satuan_id' => self::KG_ID,
+                'name' => 'Pakan Grower Layer - Kandang Layer E',
+                'initial_stock' => 1600.0,
+                'minimum_stock' => 450.0,
+                'detail' => 'Pakan grower untuk Kandang Layer E - Pre Layer yang belum menghasilkan telur.',
+                'expires_at' => now()->addMonths(4),
+            ],
+            'feed_f' => [
+                'id' => 'f00d0006-0000-4000-8000-000000000006',
+                'category_id' => $categories['Pakan'],
+                'satuan_id' => self::KG_ID,
+                'name' => 'Pakan Layer Complete - Kandang Layer F',
+                'initial_stock' => 2000.0,
+                'minimum_stock' => 600.0,
+                'detail' => 'Pakan utama ayam petelur untuk Kandang Layer F - Belum Lapor Hari Ini.',
                 'expires_at' => now()->addMonths(5),
             ],
             'vitamin' => [
@@ -116,21 +156,53 @@ class DailyReportInventoryUsageSeeder extends Seeder
     private function syncLayerFeedUsage(string $userId, array $catalog): void
     {
         $plans = [
-            'Kandang Layer A' => [
+            'Kandang Layer A - Optimal' => [
                 'mobile_key' => 'feed_a',
                 'sku' => 'LAYER-A-FEED-KG',
-                'web_name' => 'Pakan Layer Complete - Kandang Layer A',
-                'initial_stock' => 5200.0,
+                'web_name' => 'Pakan Layer Complete - Kandang Layer A Optimal',
+                'initial_stock' => 4200.0,
                 'minimum_stock' => 1000.0,
                 'reorder_point' => 1500.0,
             ],
-            'Kandang Layer B' => [
+            'Kandang Layer B - Produksi Turun' => [
                 'mobile_key' => 'feed_b',
                 'sku' => 'LAYER-B-FEED-KG',
-                'web_name' => 'Pakan Layer Complete - Kandang Layer B',
-                'initial_stock' => 4300.0,
+                'web_name' => 'Pakan Layer Complete - Kandang Layer B Produksi Turun',
+                'initial_stock' => 2200.0,
                 'minimum_stock' => 850.0,
                 'reorder_point' => 1300.0,
+            ],
+            'Kandang Layer C - Lingkungan Waspada' => [
+                'mobile_key' => 'feed_c',
+                'sku' => 'LAYER-C-FEED-KG',
+                'web_name' => 'Pakan Layer Complete - Kandang Layer C Lingkungan',
+                'initial_stock' => 2600.0,
+                'minimum_stock' => 750.0,
+                'reorder_point' => 1100.0,
+            ],
+            'Kandang Layer D - Menjelang Afkir' => [
+                'mobile_key' => 'feed_d',
+                'sku' => 'LAYER-D-FEED-KG',
+                'web_name' => 'Pakan Layer Complete - Kandang Layer D Afkir',
+                'initial_stock' => 1800.0,
+                'minimum_stock' => 650.0,
+                'reorder_point' => 900.0,
+            ],
+            'Kandang Layer E - Pre Layer' => [
+                'mobile_key' => 'feed_e',
+                'sku' => 'LAYER-E-FEED-KG',
+                'web_name' => 'Pakan Grower Layer - Kandang Layer E',
+                'initial_stock' => 1600.0,
+                'minimum_stock' => 450.0,
+                'reorder_point' => 650.0,
+            ],
+            'Kandang Layer F - Belum Lapor Hari Ini' => [
+                'mobile_key' => 'feed_f',
+                'sku' => 'LAYER-F-FEED-KG',
+                'web_name' => 'Pakan Layer Complete - Kandang Layer F',
+                'initial_stock' => 2000.0,
+                'minimum_stock' => 600.0,
+                'reorder_point' => 850.0,
             ],
         ];
 
@@ -180,6 +252,7 @@ class DailyReportInventoryUsageSeeder extends Seeder
                 'reorder_point' => $plan['reorder_point'],
                 'lead_time_days' => 3,
                 'unit_budidaya_id' => $coopId,
+                'mobile_inventaris_id' => $mobileItem['id'] ?? null,
                 'notes' => 'Stok pakan demo yang disinkronkan dengan laporan harian kandang.',
             ]);
 
@@ -256,7 +329,14 @@ class DailyReportInventoryUsageSeeder extends Seeder
         }
 
         $coops = DB::table('unitBudidaya')
-            ->whereIn('nama', ['Kandang Layer A', 'Kandang Layer B'])
+            ->whereIn('nama', [
+                'Kandang Layer A - Optimal',
+                'Kandang Layer B - Produksi Turun',
+                'Kandang Layer C - Lingkungan Waspada',
+                'Kandang Layer D - Menjelang Afkir',
+                'Kandang Layer E - Pre Layer',
+                'Kandang Layer F - Belum Lapor Hari Ini',
+            ])
             ->pluck('id', 'nama');
 
         if ($coops->isEmpty()) {
@@ -329,6 +409,7 @@ class DailyReportInventoryUsageSeeder extends Seeder
                 'reorder_point' => $plan['reorder_point'],
                 'lead_time_days' => 2,
                 'unit_budidaya_id' => null,
+                'mobile_inventaris_id' => $catalog[$plan['mobile_key']]['id'] ?? null,
                 'notes' => 'Stok tindakan kesehatan demo untuk input laporan mobile.',
             ]);
             $runningStocks[$key] = $plan['initial_stock'];
@@ -496,6 +577,7 @@ class DailyReportInventoryUsageSeeder extends Seeder
             ['sku' => $item['sku']],
             [
                 'name' => $item['name'],
+                'mobile_inventaris_id' => $item['mobile_inventaris_id'] ?? null,
                 'category' => $item['category'],
                 'stock' => $item['stock'],
                 'unit' => $item['unit'],
@@ -506,6 +588,7 @@ class DailyReportInventoryUsageSeeder extends Seeder
                 'unit_budidaya_id' => $item['unit_budidaya_id'],
                 'notes' => $item['notes'],
                 'last_restock_at' => now()->subDays(32),
+                'synced_from_mobile_at' => now(),
                 'is_active' => true,
             ]
         );

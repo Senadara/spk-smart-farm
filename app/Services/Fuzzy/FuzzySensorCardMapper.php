@@ -14,6 +14,7 @@ class FuzzySensorCardMapper
         'kelembapan' => 'Kelembapan',
         'amonia' => 'Amonia',
         'hdp' => 'HDP',
+        'feed_intake' => 'Konsumsi Pakan',
         'pakan' => 'Konsumsi Pakan',
         'mortalitas' => 'Mortalitas',
         'fcr' => 'FCR',
@@ -26,6 +27,7 @@ class FuzzySensorCardMapper
         'hdp' => 10,
         'umur_biologis' => 20,
         'fcr' => 30,
+        'feed_intake' => 40,
         'pakan' => 40,
         'mortalitas' => 50,
     ];
@@ -202,6 +204,7 @@ class FuzzySensorCardMapper
             'kelembapan' => ['ideal'],
             'amonia' => ['aman'],
             'hdp' => ['sedang', 'tinggi'],
+            'feed_intake' => ['normal'],
             'pakan' => ['normal'],
             'fcr' => ['efisien', 'normal'],
             'mortalitas' => ['wajar'],
@@ -213,6 +216,7 @@ class FuzzySensorCardMapper
 
         $dangerByVariable = [
             'amonia' => ['tinggi'],
+            'feed_intake' => ['berlebih'],
             'fcr' => ['boros'],
             'mortalitas' => ['tinggi'],
         ];

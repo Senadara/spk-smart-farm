@@ -44,6 +44,8 @@
         'name' => $function->name,
         'unit' => $function->output_unit,
         'description' => $function->description,
+        'target_min_value' => $function->target_min_value ?? null,
+        'target_max_value' => $function->target_max_value ?? null,
     ])->values();
     $environmentIconOptions = [
         'sensor' => 'Sensor umum',
@@ -604,6 +606,34 @@
                                                 </label>
                                             </div>
 
+                                            <div class="grid grid-cols-2 gap-2 rounded-xl border border-gray-100 bg-gray-50 p-2">
+                                                <label class="block">
+                                                    <span class="mb-1 block text-[10px] font-bold uppercase tracking-wide text-gray-500">Target min</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        name="productivity_functions[{{ $loop->index }}][target_min_value]"
+                                                        value="{{ old("productivity_functions.{$loop->index}.target_min_value", $function->target_min_value ?? '') }}"
+                                                        placeholder="-"
+                                                        class="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:border-[var(--color-primary)] focus:outline-none"
+                                                    >
+                                                </label>
+                                                <label class="block">
+                                                    <span class="mb-1 block text-[10px] font-bold uppercase tracking-wide text-gray-500">Target max</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        name="productivity_functions[{{ $loop->index }}][target_max_value]"
+                                                        value="{{ old("productivity_functions.{$loop->index}.target_max_value", $function->target_max_value ?? '') }}"
+                                                        placeholder="-"
+                                                        class="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:border-[var(--color-primary)] focus:outline-none"
+                                                    >
+                                                </label>
+                                                <p class="col-span-2 text-[10px] leading-4 text-gray-500">
+                                                    Opsional. Dipakai sebagai acuan status operasional, bukan sebagai penentu variabel fuzzy.
+                                                </p>
+                                            </div>
+
                                             @if(! empty($requiredInputs))
                                                 <div class="flex flex-wrap gap-1.5">
                                                     @foreach($requiredInputs as $input)
@@ -621,8 +651,71 @@
                             <div class="mb-4">
                                 <h3 class="text-base font-bold text-gray-900">3. Konfigurasi Afkir / Akhir Siklus</h3>
                                 <p class="mt-1 max-w-3xl text-sm text-gray-500">
-                                    Gunakan konfigurasi ini untuk menandai kapan ternak mendekati afkir, berhenti produksi, atau akhir siklus panen sesuai jenis ternaknya.
+                                    Gunakan konfigurasi ini untuk menandai fase produksi, puncak produksi, dan kapan ternak mendekati afkir atau akhir siklus panen.
                                 </p>
+                            </div>
+
+                            <div class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                <label class="block">
+                                    <span class="mb-1 block text-xs font-bold text-gray-700">Mulai produksi</span>
+                                    <div class="flex rounded-xl border border-gray-200 bg-white focus-within:border-[var(--color-primary)]">
+                                        <input
+                                            type="number"
+                                            name="production_start_weeks"
+                                            value="{{ old('production_start_weeks', $afkirConfig['production_start_weeks'] ?? '') }}"
+                                            min="0"
+                                            max="520"
+                                            class="min-w-0 flex-1 rounded-l-xl border-0 px-3 py-2.5 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-0"
+                                            placeholder="18"
+                                        >
+                                        <span class="inline-flex items-center rounded-r-xl border-l border-gray-100 bg-gray-50 px-3 text-xs font-bold text-gray-500">minggu</span>
+                                    </div>
+                                </label>
+                                <label class="block">
+                                    <span class="mb-1 block text-xs font-bold text-gray-700">Awal puncak</span>
+                                    <div class="flex rounded-xl border border-gray-200 bg-white focus-within:border-[var(--color-primary)]">
+                                        <input
+                                            type="number"
+                                            name="peak_start_weeks"
+                                            value="{{ old('peak_start_weeks', $afkirConfig['peak_start_weeks'] ?? '') }}"
+                                            min="0"
+                                            max="520"
+                                            class="min-w-0 flex-1 rounded-l-xl border-0 px-3 py-2.5 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-0"
+                                            placeholder="25"
+                                        >
+                                        <span class="inline-flex items-center rounded-r-xl border-l border-gray-100 bg-gray-50 px-3 text-xs font-bold text-gray-500">minggu</span>
+                                    </div>
+                                </label>
+                                <label class="block">
+                                    <span class="mb-1 block text-xs font-bold text-gray-700">Akhir puncak</span>
+                                    <div class="flex rounded-xl border border-gray-200 bg-white focus-within:border-[var(--color-primary)]">
+                                        <input
+                                            type="number"
+                                            name="peak_end_weeks"
+                                            value="{{ old('peak_end_weeks', $afkirConfig['peak_end_weeks'] ?? '') }}"
+                                            min="0"
+                                            max="520"
+                                            class="min-w-0 flex-1 rounded-l-xl border-0 px-3 py-2.5 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-0"
+                                            placeholder="45"
+                                        >
+                                        <span class="inline-flex items-center rounded-r-xl border-l border-gray-100 bg-gray-50 px-3 text-xs font-bold text-gray-500">minggu</span>
+                                    </div>
+                                </label>
+                                <label class="block">
+                                    <span class="mb-1 block text-xs font-bold text-gray-700">Produksi lanjut</span>
+                                    <div class="flex rounded-xl border border-gray-200 bg-white focus-within:border-[var(--color-primary)]">
+                                        <input
+                                            type="number"
+                                            name="production_decline_weeks"
+                                            value="{{ old('production_decline_weeks', $afkirConfig['production_decline_weeks'] ?? '') }}"
+                                            min="0"
+                                            max="520"
+                                            class="min-w-0 flex-1 rounded-l-xl border-0 px-3 py-2.5 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-0"
+                                            placeholder="46"
+                                        >
+                                        <span class="inline-flex items-center rounded-r-xl border-l border-gray-100 bg-gray-50 px-3 text-xs font-bold text-gray-500">minggu</span>
+                                    </div>
+                                </label>
                             </div>
 
                             <div class="grid grid-cols-1 gap-3 lg:grid-cols-12">

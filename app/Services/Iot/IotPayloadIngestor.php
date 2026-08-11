@@ -14,6 +14,9 @@ use Illuminate\Support\Facades\Schema;
 
 class IotPayloadIngestor
 {
+    private const MQTT_HISTORY_INTERVAL_MINUTES = 10;
+    private const VALUE_EPSILON = 0.000001;
+
     private const DEVICE_CODE_KEYS = [
         'deviceCode',
         'device_code',
@@ -52,13 +55,20 @@ class IotPayloadIngestor
         $broadcastPayloads = [];
         $inserted = 0;
         $skipped = 0;
+        $suppressed = 0;
 
-        DB::transaction(function () use ($device, $data, $source, $sensorTimestamp, &$broadcastPayloads, &$inserted, &$skipped) {
+        DB::transaction(function () use ($device, $data, $source, $sensorTimestamp, &$broadcastPayloads, &$inserted, &$skipped, &$suppressed) {
             foreach ($device->parameterMappings as $mapping) {
                 $value = $this->valueForMapping($data, $mapping);
 
                 if ($value === null || ! is_numeric($value)) {
                     $skipped++;
+                    continue;
+                }
+
+                if (! $this->shouldPersistReading($device, $mapping, (float) $value, $sensorTimestamp, $source)) {
+                    $skipped++;
+                    $suppressed++;
                     continue;
                 }
 
@@ -76,6 +86,8 @@ class IotPayloadIngestor
             if ($inserted > 0) {
                 $this->markDeviceOnline($device);
                 $this->createLog($device->id, 'INFO', "[{$source}] {$inserted} parameter sensor tercatat.");
+            } elseif ($suppressed > 0) {
+                $this->markDeviceOnline($device);
             } else {
                 $this->markDeviceMiss($device, "[{$source}] Payload diterima tetapi tidak cocok dengan mapping parameter.");
             }
@@ -92,6 +104,7 @@ class IotPayloadIngestor
         return [
             'inserted' => $inserted,
             'skipped' => $skipped,
+            'suppressed' => $suppressed,
             'deviceCode' => $device->deviceCode,
         ];
     }
@@ -103,11 +116,19 @@ class IotPayloadIngestor
         $broadcastPayload = null;
         $inserted = 0;
         $skipped = 0;
+        $suppressed = 0;
 
-        DB::transaction(function () use ($device, $mapping, $value, $source, $sensorTimestamp, &$broadcastPayload, &$inserted, &$skipped) {
+        DB::transaction(function () use ($device, $mapping, $value, $source, $sensorTimestamp, &$broadcastPayload, &$inserted, &$skipped, &$suppressed) {
             if ($value === null || ! is_numeric($value)) {
                 $skipped++;
                 $this->markDeviceMiss($device, "[{$source}] Payload diterima tetapi nilai parameter tidak valid.");
+                return;
+            }
+
+            if (! $this->shouldPersistReading($device, $mapping, (float) $value, $sensorTimestamp, $source)) {
+                $skipped++;
+                $suppressed++;
+                $this->markDeviceOnline($device);
                 return;
             }
 
@@ -135,6 +156,7 @@ class IotPayloadIngestor
         return [
             'inserted' => $inserted,
             'skipped' => $skipped,
+            'suppressed' => $suppressed,
             'deviceCode' => $device->deviceCode,
         ];
     }
@@ -305,6 +327,47 @@ class IotPayloadIngestor
             'value' => (float) $sensor->value,
             'timestamp' => $sensor->sensorTimestamp?->format('d M Y H:i:s') ?? now()->format('d M Y H:i:s'),
         ];
+    }
+
+    private function shouldPersistReading(IotDevice $device, IotParameterMapping $mapping, float $value, Carbon $sensorTimestamp, string $source): bool
+    {
+        if (! $this->isMqttSource($source)) {
+            return true;
+        }
+
+        $latest = IotSensorData::query()
+            ->where('deviceId', $device->id)
+            ->where('parameterId', $mapping->parameterId)
+            ->where(function ($query) {
+                $query->whereNull('isDeleted')
+                    ->orWhere('isDeleted', false);
+            })
+            ->orderByDesc('sensorTimestamp')
+            ->orderByDesc('createdAt')
+            ->first();
+
+        if (! $latest) {
+            return true;
+        }
+
+        if (abs(((float) $latest->value) - $value) > self::VALUE_EPSILON) {
+            return true;
+        }
+
+        $lastTimestamp = $latest->sensorTimestamp instanceof \DateTimeInterface
+            ? Carbon::instance($latest->sensorTimestamp)
+            : ($latest->createdAt ? Carbon::parse($latest->createdAt) : null);
+
+        if (! $lastTimestamp) {
+            return true;
+        }
+
+        return $lastTimestamp->diffInMinutes($sensorTimestamp, false) >= self::MQTT_HISTORY_INTERVAL_MINUTES;
+    }
+
+    private function isMqttSource(string $source): bool
+    {
+        return str_starts_with(strtolower(trim($source)), 'mqtt');
     }
 
     private function markDeviceOnline(IotDevice $device): void

@@ -171,10 +171,13 @@
 
         <section class="print-report rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div class="print-break-inside-avoid flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
-                <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-600">SmartFarm SPK</p>
-                    <h2 class="mt-1 text-2xl font-black text-slate-950">Settlement Produktivitas Kandang</h2>
-                    <p class="mt-1 text-sm text-slate-500">{{ $dateLabel }}</p>
+                <div class="flex items-start gap-3">
+                    <x-brand-logo :show-text="false" class="shrink-0" logo-class="h-12 w-12" />
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-600">SPK Smart Farm</p>
+                        <h2 class="mt-1 text-2xl font-black text-slate-950">Settlement Produktivitas Kandang</h2>
+                        <p class="mt-1 text-sm text-slate-500">{{ $dateLabel }}</p>
+                    </div>
                 </div>
                 <div class="text-right text-sm text-slate-500">
                     <p class="font-bold text-slate-900">{{ $reportBarn['name'] ?? $barn['name'] }}</p>

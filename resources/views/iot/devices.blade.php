@@ -126,6 +126,24 @@
                         $target = str_contains($protocolName, 'MQTT')
                             ? ($connection->mqttBrokerUrl ?: 'Broker MQTT belum diisi')
                             : trim(($connection->baseUrl ?: 'Base URL API belum diisi') . ($connection->endpointPath ?? ''));
+                        $connectionDeviceCount = (int) ($connection->devices_count ?? 0);
+                        $connectionPayload = [
+                            'id' => $connection->id,
+                            'protocolId' => $connection->protocolId,
+                            'protocol' => ['protocolName' => $connection->protocol->protocolName ?? null],
+                            'baseUrl' => $connection->baseUrl,
+                            'endpointPath' => $connection->endpointPath,
+                            'authType' => $connection->authType,
+                            'headers' => $connection->headers,
+                            'mqttBrokerUrl' => $connection->mqttBrokerUrl,
+                            'mqttPort' => $connection->mqttPort,
+                            'mqttTopic' => $connection->mqttTopic,
+                            'mqttClientId' => $connection->mqttClientId,
+                            'mqttUsername' => $connection->mqttUsername,
+                            'mqttUseTls' => (bool) $connection->mqttUseTls,
+                            'mqttQos' => $connection->mqttQos,
+                            'mqttKeepAlive' => $connection->mqttKeepAlive,
+                        ];
                     @endphp
                     <div class="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
                         <div class="flex items-start justify-between gap-3">
@@ -144,12 +162,11 @@
                                         </button>
                                     </form>
                                 @endif
-                                <button type="button" @click="openEditConnection(@js($connection), '{{ $protocolName }}')" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-100 bg-white text-blue-600 transition hover:bg-blue-50" title="Edit koneksi">
+                                <button type="button" @click="openEditConnection({!! \Illuminate\Support\Js::from($connectionPayload) !!}, '{{ $protocolName }}')" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-100 bg-white text-blue-600 transition hover:bg-blue-50" title="Edit koneksi">
                                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                 </button>
-                                @php($connectionDeviceCount = (int) ($connection->devices_count ?? 0))
                                 @if($connectionDeviceCount > 0)
                                     <button type="button" disabled
                                         class="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-lg border border-gray-100 bg-gray-50 text-gray-300"
@@ -238,13 +255,9 @@
                                 <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ $device->unitBudidaya->nama ?? '-' }}</td>
                                 <td class="py-3.5 px-3 text-[var(--color-gray-700)] text-xs">{{ $device->connectionConfig->protocol->protocolName ?? '-' }}</td>
                                 <td class="py-3.5 px-3 text-xs">
-                                    @php
-                                        $deviceProtocol = strtoupper($device->connectionConfig?->protocol?->protocolName ?? '');
-                                        $resolvedTopic = $device->mqttTopic ?: ($device->connectionConfig?->mqttTopic ? str_replace('{deviceCode}', $device->deviceCode, $device->connectionConfig->mqttTopic) : null);
-                                    @endphp
                                     <div class="space-y-1">
-                                        @if (str_contains($deviceProtocol, 'MQTT'))
-                                            <div class="font-mono text-[11px] text-gray-700">{{ $resolvedTopic ?: 'Topic mengikuti koneksi' }}</div>
+                                        @if (str_contains(strtoupper($device->connectionConfig?->protocol?->protocolName ?? ''), 'MQTT'))
+                                            <div class="font-mono text-[11px] text-gray-700">{{ $device->mqttTopic ?: ($device->connectionConfig?->mqttTopic ? str_replace('{deviceCode}', $device->deviceCode, $device->connectionConfig->mqttTopic) : null) ?: 'Topic mengikuti koneksi' }}</div>
                                         @else
                                             <div class="font-mono text-[11px] text-gray-700">Polling API tiap {{ $device->pollingInterval ?: 300 }} detik</div>
                                         @endif
@@ -264,7 +277,7 @@
                                         {{ ucfirst($device->status) }}
                                 </span>
                             </td>
-                            <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ str_contains($deviceProtocol, 'API') && $device->pollingInterval ? $device->pollingInterval . 's' : '-' }}</td>
+                            <td class="py-3.5 px-3 text-[var(--color-gray-700)]">{{ str_contains(strtoupper($device->connectionConfig?->protocol?->protocolName ?? ''), 'API') && $device->pollingInterval ? $device->pollingInterval . 's' : '-' }}</td>
                             <td class="py-3.5 px-3 text-[var(--color-gray-500)] text-xs">{{ optional($device->installedAt)->format('d M Y') ?? '-' }}</td>
                                 <td class="py-3.5 px-3 text-right">
                                     <div class="flex items-center justify-end gap-1">

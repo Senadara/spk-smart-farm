@@ -163,7 +163,8 @@ class NarrativeGenerator
     private function buildHealthAnalysis(array $inputs, string $kesehatLabel, ?array $dominant, array $kesehatan): string
     {
         $hdp       = isset($inputs['hdp']) ? round($inputs['hdp'], 1) . '%' : null;
-        $pakan     = isset($inputs['pakan']) ? round($inputs['pakan'], 1) . ' g/ekor' : null;
+        $pakanValue = $inputs['feed_intake'] ?? $inputs['pakan'] ?? null;
+        $pakan     = isset($pakanValue) ? round((float) $pakanValue, 1) . ' g/ekor' : null;
         $mortalitas= isset($inputs['mortalitas']) ? round($inputs['mortalitas'], 2) . '%' : null;
         $fcr       = isset($inputs['fcr']) ? round($inputs['fcr'], 2) : null;
 
@@ -180,10 +181,10 @@ class NarrativeGenerator
 
         $diagnosis = $dominant['diagnosis'] ?? null;
         $kesehatLabel = match ($kesehatLabel) {
-            'Sangat Sehat' => 'Optimal',
-            'Sehat', 'Efisien Positif' => 'Baik',
-            'Kurang Sehat', 'Inefisiensi', 'Sangat Boros', 'FCR Boros', 'Boros Pakan' => 'Waspada',
-            'Sakit Kritis', 'Sakit Berat', 'Sakit Sedang' => 'Buruk',
+            'Sangat Baik', 'Optimal' => 'Optimal',
+            'Cukup Baik', 'Stabil' => 'Baik',
+            'Performa Rendah', 'Inefisien', 'Produksi Tinggi tetapi Inefisien' => 'Waspada',
+            'Kritis', 'Inefisiensi Berat', 'Risiko Kesehatan', 'Buruk' => 'Buruk',
             default => $kesehatLabel,
         };
 
@@ -213,9 +214,14 @@ class NarrativeGenerator
 
         // Bangun kalimat berdasarkan diagnosis label
         $diagnosisMap = [
-            'Krisis Total'            => "Sistem mendiagnosis kondisi ini sebagai Krisis Total. Gabungan lingkungan buruk dan kesehatan buruk memerlukan intervensi darurat segera.",
-            'Stres Lingkungan'        => "Diagnosis sistem: Stres Lingkungan. Tekanan lingkungan yang buruk mulai mempengaruhi keseimbangan kandang meski ayam masih bertahan.",
-            'Daya Tahan Baik'         => "Meski produktivitas masih baik, kondisi lingkungan buruk menjadi risiko laten. Diagnosis: Daya Tahan Baik.",
+            'Kondisi Kritis'          => "Sistem mendiagnosis kondisi kritis. Lingkungan dan produktivitas sama-sama buruk sehingga perlu intervensi segera.",
+            'Prioritas Evaluasi Lingkungan' => "Lingkungan kandang menyimpang dan perlu diprioritaskan agar tidak menurunkan produktivitas lebih jauh.",
+            'Risiko Lingkungan'       => "Produktivitas masih baik, tetapi lingkungan buruk menjadi risiko penurunan performa jika tidak segera ditangani.",
+            'Prioritas Evaluasi Produktivitas' => "Lingkungan hanya menyimpang ringan, tetapi produktivitas buruk. Fokus evaluasi pada kesehatan flock, pakan, umur produksi, dan pencatatan.",
+            'Perlu Evaluasi Menyeluruh' => "Lingkungan dan produktivitas sama-sama berada pada tingkat sedang. Perlu evaluasi menyeluruh terhadap lingkungan, pakan, kesehatan, dan manajemen harian.",
+            'Kondisi Cukup Stabil'    => "Produktivitas masih baik meskipun lingkungan mengalami penyimpangan ringan. Pertahankan produktivitas sambil memperbaiki kondisi lingkungan.",
+            'Indikasi Faktor Non-Lingkungan' => "Lingkungan baik tetapi produktivitas buruk. Masalah kemungkinan berkaitan dengan kesehatan, pakan, umur ayam, kualitas bibit, atau pencatatan data.",
+            'Evaluasi Produktivitas'  => "Lingkungan baik, tetapi produktivitas belum optimal. Evaluasi HDP, FCR, mortalitas, kualitas pakan, dan ketepatan pencatatan produksi.",
             'Lingkungan Berisiko'     => "Meski kesehatan ayam masih terjaga, kondisi lingkungan yang buruk merupakan risiko laten. Diagnosis: Lingkungan Berisiko.",
             'Sakit Non-Cuaca'         => "Lingkungan cukup aman, tetapi indikator kesehatan buruk. Diagnosis: Sakit Non-Cuaca, fokus pemeriksaan medis dan kualitas pakan.",
             'Gangguan Non-Lingkungan' => "Lingkungan dalam kondisi waspada, namun gangguan kesehatan yang buruk menunjukkan masalah non-lingkungan. Diagnosis: Gangguan Non-Lingkungan.",
@@ -224,7 +230,7 @@ class NarrativeGenerator
             'Toleransi Baik'          => "Lingkungan dalam kondisi waspada namun ayam menunjukkan toleransi yang baik. Diagnosis: Toleransi Baik. Lanjutkan monitoring.",
             'Wabah Internal'          => "Lingkungan baik namun kesehatan buruk. Sistem menduga adanya masalah internal. Diagnosis: Wabah Internal, indikasi penyakit perlu diperiksa.",
             'Inefisiensi FCR'         => "Lingkungan baik, namun produktivitas belum optimal. Diagnosis: Inefisiensi FCR. Periksa FCR, egg mass, dan data pakan harian.",
-            'Inefisiensi Pakan'       => "Lingkungan baik, namun produktivitas belum optimal. Diagnosis: Inefisiensi FCR. Periksa FCR, egg mass, dan data pakan harian.",
+            'Inefisiensi Pakan'       => "Lingkungan baik, namun produktivitas belum optimal. Diagnosis: Inefisiensi Pakan. Periksa takaran pakan, sisa pakan, egg mass, dan kualitas ransum.",
             'Inefisiensi Sistem'      => "Lingkungan baik, namun produktivitas belum optimal. Diagnosis: Inefisiensi Sistem. Periksa manajemen pakan dan operasional.",
             'Stabil'                  => "Kondisi keseluruhan stabil. Diagnosis: Stabil. Tidak ada tindakan darurat yang diperlukan.",
             'Anomali Medis'           => "Lingkungan optimal namun kesehatan memburuk. Hal ini mengindikasikan anomali medis. Diagnosis: Anomali Medis, segera cek kemungkinan penyakit.",

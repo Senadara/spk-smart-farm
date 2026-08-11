@@ -23,12 +23,16 @@ class LivestockProductivityFunctionConfig extends Model
         'function_id',
         'required_for_fuzzy',
         'aggregation_scope',
+        'target_min_value',
+        'target_max_value',
         'sort_order',
         'is_active',
     ];
 
     protected $casts = [
         'required_for_fuzzy' => 'boolean',
+        'target_min_value' => 'float',
+        'target_max_value' => 'float',
         'sort_order' => 'integer',
         'is_active' => 'boolean',
     ];

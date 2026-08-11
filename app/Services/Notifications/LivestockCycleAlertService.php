@@ -175,7 +175,7 @@ class LivestockCycleAlertService
             'warning_weeks' => $warningWeeks,
             'backoffice_url' => $unitId !== ''
                 ? route('peternakan.individual-productivity', $routeParams, true)
-                : route('peternakan.index', [], true),
+                : route('peternakan', [], true),
             'message' => 'Buka backoffice Smart Farm untuk melihat daftar individu ternak yang perlu tindakan.',
         ];
     }

@@ -199,6 +199,22 @@ class LayerChickenFuzzyDefaultTemplateService
             $configPayload['afkir_warning_weeks'] = 8;
         }
 
+        if (Schema::hasColumn('livestock_master_configs', 'production_start_weeks')) {
+            $configPayload['production_start_weeks'] = 18;
+        }
+
+        if (Schema::hasColumn('livestock_master_configs', 'peak_start_weeks')) {
+            $configPayload['peak_start_weeks'] = 25;
+        }
+
+        if (Schema::hasColumn('livestock_master_configs', 'peak_end_weeks')) {
+            $configPayload['peak_end_weeks'] = 45;
+        }
+
+        if (Schema::hasColumn('livestock_master_configs', 'production_decline_weeks')) {
+            $configPayload['production_decline_weeks'] = 46;
+        }
+
         DB::table('livestock_master_configs')->updateOrInsert(
             ['jenis_budidaya_id' => $jenisBudidayaId],
             $configPayload
@@ -262,20 +278,31 @@ class LayerChickenFuzzyDefaultTemplateService
             }
 
             $functionIds[] = $functionId;
+            $payload = [
+                'id' => DB::table('livestock_productivity_function_configs')
+                    ->where('config_id', $configId)
+                    ->where('function_id', $functionId)
+                    ->value('id') ?: (string) Str::uuid(),
+                'required_for_fuzzy' => true,
+                'aggregation_scope' => $code === 'mortalitas' ? 'week' : 'today',
+                'sort_order' => $index,
+                'is_active' => true,
+                'createdAt' => now(),
+                'updatedAt' => now(),
+            ];
+
+            [$targetMin, $targetMax] = $this->defaultProductivityTarget($code);
+            if (Schema::hasColumn('livestock_productivity_function_configs', 'target_min_value')) {
+                $payload['target_min_value'] = $targetMin;
+            }
+
+            if (Schema::hasColumn('livestock_productivity_function_configs', 'target_max_value')) {
+                $payload['target_max_value'] = $targetMax;
+            }
+
             DB::table('livestock_productivity_function_configs')->updateOrInsert(
                 ['config_id' => $configId, 'function_id' => $functionId],
-                [
-                    'id' => DB::table('livestock_productivity_function_configs')
-                        ->where('config_id', $configId)
-                        ->where('function_id', $functionId)
-                        ->value('id') ?: (string) Str::uuid(),
-                    'required_for_fuzzy' => true,
-                    'aggregation_scope' => $code === 'mortalitas' ? 'week' : 'today',
-                    'sort_order' => $index,
-                    'is_active' => true,
-                    'createdAt' => now(),
-                    'updatedAt' => now(),
-                ]
+                $payload
             );
         }
 
@@ -329,6 +356,18 @@ class LayerChickenFuzzyDefaultTemplateService
         DB::table('iot_parameter')->insert($payload);
 
         return $id;
+    }
+
+    private function defaultProductivityTarget(string $code): array
+    {
+        return match ($code) {
+            'hdp', 'hhep' => [85, 100],
+            'fcr' => [1.85, 2.55],
+            'feed_intake' => [100, 130],
+            'avg_egg_weight' => [53, 73],
+            'mortalitas' => [0, 1],
+            default => [null, null],
+        };
     }
 
     private function ensureProfile(?string $jenisBudidayaId, ?string $commodityId): SpkFuzzyProfile

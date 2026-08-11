@@ -66,11 +66,11 @@
     style="box-shadow: var(--shadow-sm);">
     {{-- Logo --}}
     <div class="sidebar-logo-wrap relative flex items-center gap-3 px-6 py-5 border-b border-[var(--color-gray-100)]">
-        <div class="w-10 h-10 bg-[var(--color-primary)] rounded-xl flex items-center justify-center text-sm font-black text-white">
-            SF
-        </div>
-        <div class="sidebar-copy text-lg font-bold text-[var(--color-gray-900)]">Smart<span
-                class="text-[var(--color-primary)]">Farm</span></div>
+        <x-brand-logo
+            class="min-w-0"
+            logo-class="h-12 w-12"
+            text-class="sidebar-copy text-lg font-bold text-[var(--color-gray-900)] leading-tight"
+        />
         <button
             type="button"
             class="hidden lg:inline-flex absolute -right-3 top-6 h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"

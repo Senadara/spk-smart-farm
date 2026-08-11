@@ -32,7 +32,8 @@ class ListenMqttDevices extends Command
                 'client_suffix' => $this->clientSuffix(),
             ]);
 
-            $this->info("Listener selesai. Pesan: {$stats['messages']}, tersimpan: {$stats['inserted']}, skip: {$stats['skipped']}.");
+            $suppressed = (int) ($stats['suppressed'] ?? 0);
+            $this->info("Listener selesai. Pesan: {$stats['messages']}, tersimpan: {$stats['inserted']}, ditahan: {$suppressed}, skip: {$stats['skipped']}.");
 
             if ($stats['last_topic']) {
                 $this->line("Terakhir: {$stats['last_topic']} -> ".($stats['last_device'] ?? 'device tidak dikenali'));

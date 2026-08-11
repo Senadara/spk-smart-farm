@@ -20,7 +20,7 @@ class DailyReportInventoryUsageSeederTest extends TestCase
         $report = DB::table('harianTernak as ht')
             ->join('laporan as l', 'l.id', '=', 'ht.laporanId')
             ->join('unitBudidaya as ub', 'ub.id', '=', 'l.unitBudidayaId')
-            ->where('ub.nama', 'Kandang Layer A')
+            ->where('ub.nama', 'Kandang Layer A - Optimal')
             ->where('l.isDeleted', 0)
             ->where('ht.isDeleted', 0)
             ->where('ht.pakan', '>', 0)
@@ -37,7 +37,7 @@ class DailyReportInventoryUsageSeederTest extends TestCase
         $mobileUsage = DB::table('penggunaanInventaris as pi')
             ->join('inventaris as i', 'i.id', '=', 'pi.inventarisId')
             ->where('pi.laporanId', $report->laporan_id)
-            ->where('i.nama', 'Pakan Layer Complete - Kandang Layer A')
+            ->where('i.nama', 'Pakan Layer Complete - Kandang Layer A Optimal')
             ->first(['pi.jumlah']);
 
         $this->assertNotNull($mobileUsage);
@@ -63,7 +63,7 @@ class DailyReportInventoryUsageSeederTest extends TestCase
             ->join('inventaris as i', 'i.id', '=', 'v.inventarisId')
             ->join('laporan as l', 'l.id', '=', 'v.laporanId')
             ->where('i.nama', 'Vaksin ND-IB 1000 Dosis')
-            ->where('l.judul', 'like', '%Kandang Layer A%')
+            ->where('l.judul', 'like', '%Kandang Layer A - Optimal%')
             ->where('v.tipe', 'vaksin')
             ->first(['v.jumlah', 'l.catatan']);
 

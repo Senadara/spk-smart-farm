@@ -17,6 +17,7 @@ class SpkFuzzyEvaluationService
         private readonly InputResolver $inputResolver,
         private readonly MamdaniEngine $mamdaniEngine,
         private readonly NarrativeGenerator $narrativeGenerator,
+        private readonly SpkActionRecommendationService $recommendationService,
     ) {}
 
     public function evaluate(?string $coopId = null, ?string $commodityId = null, ?string $profileId = null): array
@@ -82,6 +83,7 @@ class SpkFuzzyEvaluationService
         $log = SpkFuzzyLog::create($payload);
 
         $this->forgetPeternakanCache($log);
+        $this->recommendationService->syncForLog($log);
 
         return $log;
     }

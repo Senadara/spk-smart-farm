@@ -31,6 +31,8 @@ class FuzzyConfigController extends Controller
      */
     public function index(Request $request)
     {
+        $this->normalizeActiveTemplateAssignments();
+
         $livestockCommodityIds = $this->livestockMasterConfigService->livestockCommodityIds();
         $livestockJenisBudidayaIds = $this->livestockMasterConfigService->livestockJenisBudidayaIds();
         $profileHasJenisColumn = Schema::hasColumn('spk_fuzzy_profiles', 'jenis_budidaya_id');
@@ -58,6 +60,7 @@ class FuzzyConfigController extends Controller
             ->orderByDesc('is_active')
             ->orderBy('name')
             ->get();
+        $this->attachTemplateConfigurationMeta($profiles);
 
         $livestockTypes = $this->livestockMasterConfigService->livestockTypeOptions();
         $requestedJenisBudidayaId = $request->filled('jenis_budidaya_id')
@@ -67,12 +70,21 @@ class FuzzyConfigController extends Controller
         $activeProfile = null;
 
         if ($request->filled('profile_id')) {
-            $activeProfile = $profiles->firstWhere('id', $request->query('profile_id'));
-        } elseif ($requestedJenisBudidayaId) {
+            $requestedProfile = $profiles->firstWhere('id', $request->query('profile_id'));
+            if ($requestedProfile && $requestedProfile->is_active && $requestedProfile->status === 'active') {
+                $activeProfile = $requestedProfile;
+            }
+        }
+
+        if (! $activeProfile && $requestedJenisBudidayaId) {
             $profilesForJenis = $profiles->where('jenis_budidaya_id', $requestedJenisBudidayaId)->values();
-            $activeProfile = $profilesForJenis->firstWhere('is_active', true) ?: $profilesForJenis->first();
-        } else {
-            $activeProfile = $profiles->firstWhere('is_active', true) ?: $profiles->first();
+            $activeProfile = $profilesForJenis
+                ->first(fn ($profile) => $profile->is_active && $profile->status === 'active');
+        }
+
+        if (! $activeProfile) {
+            $activeProfile = $profiles
+                ->first(fn ($profile) => $profile->is_active && $profile->status === 'active');
         }
 
         $activeProfileId = $activeProfile?->id;
@@ -80,6 +92,8 @@ class FuzzyConfigController extends Controller
 
         if ($activeProfile) {
             $activeProfile->refresh()->load(['commodity', 'jenisBudidaya']);
+            $activeProfile->template_meta = (object) $this->templateConfigurationMeta($activeProfile);
+            $profiles = $profiles->map(fn ($profile) => $profile->id === $activeProfile->id ? $activeProfile : $profile);
         }
 
         $activeJenisBudidayaId = $requestedJenisBudidayaId
@@ -128,7 +142,11 @@ class FuzzyConfigController extends Controller
         $masterVariableNames = $syncSummary['master_variable_names'] ?? [];
         $templateAssignments = $livestockTypes->map(function ($type) use ($profiles) {
             $typeProfiles = $profiles->where('jenis_budidaya_id', $type->id)->values();
-            $activeTemplate = $typeProfiles->firstWhere('is_active', true);
+            $activeTemplate = $typeProfiles
+                ->first(fn ($profile) => $profile->is_active && $profile->status === 'active');
+            $activationProfiles = $typeProfiles
+                ->filter(fn ($profile) => $this->profileCanBeActivated($profile))
+                ->values();
 
             return (object) [
                 'jenis_budidaya_id' => $type->id,
@@ -137,6 +155,7 @@ class FuzzyConfigController extends Controller
                 'template_count' => $typeProfiles->count(),
                 'active_profile' => $activeTemplate,
                 'profiles' => $typeProfiles,
+                'activation_profiles' => $activationProfiles,
                 'draft_count' => $typeProfiles->where('status', 'draft')->count(),
                 'review_count' => $typeProfiles->where('status', 'review')->count(),
                 'archived_count' => $typeProfiles->where('status', 'archived')->count(),
@@ -199,26 +218,30 @@ class FuzzyConfigController extends Controller
         $validated['jenis_budidaya_id'] = $jenisBudidayaId;
         $validated['commodity_id'] = $this->livestockMasterConfigService
             ->resolveLivestockCommodityIdForJenis($jenisBudidayaId, $validated['commodity_id'] ?? null);
-        $validated['is_active'] = $validated['status'] === 'active';
-        if ($validated['status'] === 'active' && ! empty($validated['reviewed_by'])) {
-            $validated['reviewed_at'] = now();
+        $activateAfterCreate = $validated['status'] === 'active';
+        if ($activateAfterCreate) {
+            $validated['status'] = 'review';
         }
+        $validated['is_active'] = false;
 
-        $profile = DB::transaction(function () use ($validated) {
-            if ($validated['is_active']) {
-                $activeQuery = SpkFuzzyProfile::query();
-                if (Schema::hasColumn('spk_fuzzy_profiles', 'jenis_budidaya_id')) {
-                    $activeQuery->where('jenis_budidaya_id', $validated['jenis_budidaya_id']);
-                } else {
-                    $activeQuery->where('commodity_id', $validated['commodity_id']);
-                }
-                $activeQuery->update(['is_active' => false]);
+        $profile = DB::transaction(function () use ($validated, $activateAfterCreate, $jenisBudidayaId) {
+            $profile = SpkFuzzyProfile::create($validated);
+            $this->fuzzyProfileTemplateService->syncFromMaster($profile);
+            $profile->refresh();
+
+            if ($activateAfterCreate) {
+                $this->assertProfileReadyForActivation($profile);
+                $this->deactivateOtherProfilesForContext($profile, $jenisBudidayaId, $profile->commodity_id);
+                $profile->forceFill([
+                    'status' => 'active',
+                    'is_active' => true,
+                    'reviewed_at' => $profile->reviewed_at ?: now(),
+                ])->save();
             }
 
-            return SpkFuzzyProfile::create($validated);
+            return $profile->fresh();
         });
 
-        $this->fuzzyProfileTemplateService->syncFromMaster($profile);
         MamdaniEngine::clearCache($profile->id);
 
         return redirect()->route('settings.fuzzy.index', [
@@ -232,28 +255,28 @@ class FuzzyConfigController extends Controller
     public function activateProfile(string $id)
     {
         $profile = SpkFuzzyProfile::findOrFail($id);
+        $this->assertProfileReadyForActivation($profile);
+        $jenisBudidayaId = $this->livestockMasterConfigService
+            ->resolveLivestockJenisBudidayaId($profile->jenis_budidaya_id);
+        $commodityId = $this->livestockMasterConfigService
+            ->resolveLivestockCommodityIdForJenis($jenisBudidayaId, $profile->commodity_id);
 
-        DB::transaction(function () use ($profile) {
-            $activeQuery = SpkFuzzyProfile::query();
-            if (Schema::hasColumn('spk_fuzzy_profiles', 'jenis_budidaya_id') && $profile->jenis_budidaya_id) {
-                $activeQuery->where('jenis_budidaya_id', $profile->jenis_budidaya_id);
-            } else {
-                $activeQuery->where('commodity_id', $profile->commodity_id);
-            }
-            $activeQuery->update(['is_active' => false]);
+        DB::transaction(function () use ($profile, $jenisBudidayaId, $commodityId) {
+            $this->deactivateOtherProfilesForContext($profile, $jenisBudidayaId, $commodityId);
             $profile->update([
+                'jenis_budidaya_id' => $jenisBudidayaId ?: $profile->jenis_budidaya_id,
+                'commodity_id' => $commodityId ?: $profile->commodity_id,
                 'status' => 'active',
                 'is_active' => true,
                 'reviewed_at' => $profile->reviewed_at ?: now(),
             ]);
         });
 
-        $this->fuzzyProfileTemplateService->syncFromMaster($profile);
         MamdaniEngine::clearCache($profile->id);
 
         return redirect()->route('settings.fuzzy.index', [
             'profile_id' => $profile->id,
-            'jenis_budidaya_id' => $profile->jenis_budidaya_id,
+            'jenis_budidaya_id' => $jenisBudidayaId ?: $profile->jenis_budidaya_id,
             'tab' => 'variables',
         ])
             ->with('success', "Template '{$profile->name}' berhasil dijadikan aktif.");
@@ -294,17 +317,10 @@ class FuzzyConfigController extends Controller
         $commodityId = $this->livestockMasterConfigService
             ->resolveLivestockCommodityIdForJenis($jenisBudidayaId, $profile->commodity_id);
 
+        $this->assertProfileReadyForActivation($profile);
+
         DB::transaction(function () use ($profile, $jenisBudidayaId, $commodityId) {
-            $activeQuery = SpkFuzzyProfile::query()
-                ->where('id', '<>', $profile->id);
-
-            if (Schema::hasColumn('spk_fuzzy_profiles', 'jenis_budidaya_id')) {
-                $activeQuery->where('jenis_budidaya_id', $jenisBudidayaId);
-            } else {
-                $activeQuery->where('commodity_id', $commodityId);
-            }
-
-            $activeQuery->update(['is_active' => false]);
+            $this->deactivateOtherProfilesForContext($profile, $jenisBudidayaId, $commodityId);
 
             $profile->forceFill([
                 'jenis_budidaya_id' => $jenisBudidayaId,
@@ -315,7 +331,6 @@ class FuzzyConfigController extends Controller
             ])->save();
         });
 
-        $this->fuzzyProfileTemplateService->syncFromMaster($profile);
         MamdaniEngine::clearCache($profile->id);
 
         return redirect()->route('settings.fuzzy.index', [
@@ -867,6 +882,172 @@ class FuzzyConfigController extends Controller
             ->count();
 
         return $validSetCount === $setIds->count();
+    }
+
+    private function normalizeActiveTemplateAssignments(): void
+    {
+        if (! Schema::hasTable('spk_fuzzy_profiles')) {
+            return;
+        }
+
+        $activeProfiles = SpkFuzzyProfile::query()
+            ->where('is_active', true)
+            ->where('status', 'active')
+            ->latest('updatedAt')
+            ->get();
+
+        if ($activeProfiles->isEmpty()) {
+            return;
+        }
+
+        $this->attachTemplateConfigurationMeta($activeProfiles);
+
+        $activeProfiles
+            ->filter(fn (SpkFuzzyProfile $profile) => ! $this->profileCanBeActivated($profile))
+            ->each(fn (SpkFuzzyProfile $profile) => $profile->forceFill(['is_active' => false])->save());
+
+        $activeProfiles
+            ->filter(fn (SpkFuzzyProfile $profile) => $this->profileCanBeActivated($profile))
+            ->groupBy(fn (SpkFuzzyProfile $profile) => $this->templateContextKey($profile))
+            ->each(function ($profiles) {
+                $profiles->values()->slice(1)->each(
+                    fn (SpkFuzzyProfile $profile) => $profile->forceFill(['is_active' => false])->save()
+                );
+            });
+    }
+
+    private function attachTemplateConfigurationMeta($profiles): void
+    {
+        foreach ($profiles as $profile) {
+            $profile->template_meta = (object) $this->templateConfigurationMeta($profile);
+        }
+    }
+
+    private function templateConfigurationMeta(SpkFuzzyProfile $profile): array
+    {
+        if (! $profile->exists || ! Schema::hasTable('spk_fuzzy_variables')) {
+            return $this->emptyTemplateMeta();
+        }
+
+        $inputVariables = SpkFuzzyVariable::query()
+            ->where('profile_id', $profile->id)
+            ->where('type', 'input')
+            ->where('group', '!=', 'kausalitas')
+            ->get(['id', 'group', 'name']);
+
+        $inputIds = $inputVariables->pluck('id')->values();
+        $sourceCount = Schema::hasTable('spk_fuzzy_input_sources') && $inputIds->isNotEmpty()
+            ? SpkFuzzyInputSource::query()
+                ->whereIn('variable_id', $inputIds)
+                ->distinct()
+                ->count('variable_id')
+            : 0;
+
+        $outputCount = SpkFuzzyVariable::query()
+            ->where('profile_id', $profile->id)
+            ->where('type', 'output')
+            ->count();
+
+        $ruleCounts = Schema::hasTable('spk_fuzzy_rules')
+            ? SpkFuzzyRule::query()
+                ->where('profile_id', $profile->id)
+                ->when(Schema::hasColumn('spk_fuzzy_rules', 'is_active'), fn ($query) => $query->where('is_active', true))
+                ->select('group', DB::raw('COUNT(*) as total'))
+                ->groupBy('group')
+                ->pluck('total', 'group')
+            : collect();
+
+        $environmentInputCount = $inputVariables->where('group', 'lingkungan')->count();
+        $productivityInputCount = $inputVariables->where('group', 'kesehatan')->count();
+        $rulesReady = collect(['lingkungan', 'kesehatan', 'kausalitas'])
+            ->every(fn (string $group) => (int) ($ruleCounts[$group] ?? 0) > 0);
+        $sourcesReady = $inputVariables->isNotEmpty() && $sourceCount >= $inputVariables->count();
+        $configured = $environmentInputCount > 0
+            && $productivityInputCount > 0
+            && $outputCount > 0
+            && $sourcesReady
+            && $rulesReady;
+
+        return [
+            'configured' => $configured,
+            'input_count' => $inputVariables->count(),
+            'environment_input_count' => $environmentInputCount,
+            'productivity_input_count' => $productivityInputCount,
+            'source_count' => $sourceCount,
+            'output_count' => $outputCount,
+            'rule_counts' => [
+                'lingkungan' => (int) ($ruleCounts['lingkungan'] ?? 0),
+                'kesehatan' => (int) ($ruleCounts['kesehatan'] ?? 0),
+                'kausalitas' => (int) ($ruleCounts['kausalitas'] ?? 0),
+            ],
+        ];
+    }
+
+    private function emptyTemplateMeta(): array
+    {
+        return [
+            'configured' => false,
+            'input_count' => 0,
+            'environment_input_count' => 0,
+            'productivity_input_count' => 0,
+            'source_count' => 0,
+            'output_count' => 0,
+            'rule_counts' => ['lingkungan' => 0, 'kesehatan' => 0, 'kausalitas' => 0],
+        ];
+    }
+
+    private function profileCanBeActivated(SpkFuzzyProfile $profile): bool
+    {
+        $meta = $profile->template_meta ?? (object) $this->templateConfigurationMeta($profile);
+
+        return $profile->status !== 'archived' && (bool) ($meta->configured ?? false);
+    }
+
+    private function assertProfileReadyForActivation(SpkFuzzyProfile $profile): void
+    {
+        $profile->template_meta = (object) $this->templateConfigurationMeta($profile);
+
+        if ($this->profileCanBeActivated($profile)) {
+            return;
+        }
+
+        $meta = $profile->template_meta;
+        throw \Illuminate\Validation\ValidationException::withMessages([
+            'profile_id' => 'Template belum lengkap sehingga belum bisa diaktifkan. Minimal harus punya input lingkungan, input produktivitas, sumber data setiap input, dan rule lingkungan/produktivitas/kausalitas. Saat ini: '.
+                "{$meta->input_count} input, {$meta->source_count} sumber, ".
+                "{$meta->rule_counts['lingkungan']} rule lingkungan, ".
+                "{$meta->rule_counts['kesehatan']} rule produktivitas, ".
+                "{$meta->rule_counts['kausalitas']} rule kausalitas.",
+        ]);
+    }
+
+    private function deactivateOtherProfilesForContext(SpkFuzzyProfile $profile, ?string $jenisBudidayaId, ?string $commodityId): void
+    {
+        $query = SpkFuzzyProfile::query()
+            ->where('id', '<>', $profile->id);
+
+        if ($jenisBudidayaId && Schema::hasColumn('spk_fuzzy_profiles', 'jenis_budidaya_id')) {
+            $query->where('jenis_budidaya_id', $jenisBudidayaId);
+        } elseif ($commodityId) {
+            $query->where('commodity_id', $commodityId);
+        } else {
+            return;
+        }
+
+        $query->update(['is_active' => false]);
+    }
+
+    private function templateContextKey(SpkFuzzyProfile $profile): string
+    {
+        if ($profile->jenis_budidaya_id) {
+            return 'jenis:'.$profile->jenis_budidaya_id;
+        }
+
+        if ($profile->commodity_id) {
+            return 'commodity:'.$profile->commodity_id;
+        }
+
+        return 'global';
     }
 
     /**

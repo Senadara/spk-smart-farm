@@ -83,6 +83,7 @@
 
             return $count <= 5 ? max(1, $count) : min(5, (int) ceil($count / 2));
         };
+        $isPjawab = data_get(session('user'), 'role') === 'pjawab';
         $inactiveDashboardPlaceholders = ['HDP', 'HHEP', 'FCR', 'Feed Intake', 'Egg Mass', 'Berat Avg', 'Lingkungan', 'SPK'];
     @endphp
 
@@ -785,7 +786,11 @@
                                 </div>
                                 <div class="mt-4 flex flex-wrap gap-2">
                                     <a href="{{ $candidate['spk_url'] }}" class="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50" style="text-decoration:none;">Detail SPK</a>
-                                    <a href="{{ $candidate['task_url'] }}" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800" style="text-decoration:none;">Buat Penugasan</a>
+                                    @if($isPjawab)
+                                        <a href="{{ $candidate['task_url'] }}" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800" style="text-decoration:none;">Buat Penugasan</a>
+                                    @else
+                                        <span class="rounded-lg bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-500">Menunggu pjawab</span>
+                                    @endif
                                 </div>
                             </article>
                         @endforeach

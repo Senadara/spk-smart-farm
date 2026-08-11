@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * Arsitektur:
  *   Engine 1 (group=lingkungan): Suhu+Kelembapan+Amonia → Status Lingkungan
- *   Engine 2 (group=kesehatan) : HDP+FCR+Mortalitas  → Indeks Kesehatan
+ *   Engine 2 (group=kesehatan) : HDP+FCR+Mortalitas → Indeks Kesehatan
  *   Engine 3 (group=kausalitas): Label E1 + Label E2   → Diagnosis Kausalitas (lookup)
  */
 class MamdaniEngine

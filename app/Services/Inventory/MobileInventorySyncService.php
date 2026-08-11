@@ -140,29 +140,52 @@ class MobileInventorySyncService
     private function dailyUsage(string $inventarisId): float
     {
         $since = now()->subDays(30)->startOfDay();
-        $total = 0.0;
+        $dailyTotals = collect();
 
-        if (Schema::hasTable('penggunaanInventaris')) {
-            $total += (float) DB::table('penggunaanInventaris')
-                ->where('inventarisId', $inventarisId)
-                ->where(function ($query) {
-                    $query->where('isDeleted', false)->orWhereNull('isDeleted');
-                })
-                ->where('createdAt', '>=', $since)
-                ->sum('jumlah');
+        foreach (['penggunaanInventaris', 'vitamin'] as $table) {
+            foreach ($this->dailyUsageRows($table, $inventarisId, $since) as $row) {
+                $date = (string) $row->usage_date;
+                $dailyTotals[$date] = (float) ($dailyTotals[$date] ?? 0) + abs((float) $row->total);
+            }
         }
 
-        if (Schema::hasTable('vitamin')) {
-            $total += (float) DB::table('vitamin')
-                ->where('inventarisId', $inventarisId)
-                ->where(function ($query) {
-                    $query->where('isDeleted', false)->orWhereNull('isDeleted');
-                })
-                ->where('createdAt', '>=', $since)
-                ->sum('jumlah');
+        return $this->usageRateFromDailyTotals($dailyTotals);
+    }
+
+    private function dailyUsageRows(string $table, string $inventarisId, Carbon $since)
+    {
+        if (! Schema::hasTable($table)) {
+            return collect();
         }
 
-        return round($total / 30, 2);
+        $dateExpression = 'DATE(usage.createdAt)';
+
+        return DB::table($table.' as usage')
+            ->where('usage.inventarisId', $inventarisId)
+            ->where(function ($query) {
+                $query->where('usage.isDeleted', false)->orWhereNull('usage.isDeleted');
+            })
+            ->where('usage.createdAt', '>=', $since)
+            ->selectRaw($dateExpression.' as usage_date, SUM(ABS(usage.jumlah)) as total')
+            ->groupBy(DB::raw($dateExpression))
+            ->get();
+    }
+
+    private function usageRateFromDailyTotals($dailyTotals): float
+    {
+        $dailyTotals = collect($dailyTotals)
+            ->map(fn ($total) => abs((float) $total))
+            ->filter(fn (float $total) => $total > 0)
+            ->sortKeys();
+
+        if ($dailyTotals->isEmpty()) {
+            return 0.0;
+        }
+
+        $activeDayAverage = (float) $dailyTotals->avg();
+        $latestDayTotal = (float) $dailyTotals->last();
+
+        return round(max($activeDayAverage, $latestDayTotal), 2);
     }
 
     private function latestUnitBudidayaId(string $inventarisId): ?string

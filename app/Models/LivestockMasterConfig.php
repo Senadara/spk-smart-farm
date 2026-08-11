@@ -26,6 +26,10 @@ class LivestockMasterConfig extends Model
         'afkir_label',
         'afkir_target_weeks',
         'afkir_warning_weeks',
+        'production_start_weeks',
+        'peak_start_weeks',
+        'peak_end_weeks',
+        'production_decline_weeks',
         'configured_by',
         'configured_at',
     ];
@@ -34,6 +38,10 @@ class LivestockMasterConfig extends Model
         'configured_at' => 'datetime',
         'afkir_target_weeks' => 'integer',
         'afkir_warning_weeks' => 'integer',
+        'production_start_weeks' => 'integer',
+        'peak_start_weeks' => 'integer',
+        'peak_end_weeks' => 'integer',
+        'production_decline_weeks' => 'integer',
     ];
 
     public function environmentParameters()

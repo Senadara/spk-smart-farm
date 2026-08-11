@@ -28,8 +28,10 @@
         @forelse($assignments as $assignment)
             @php
                 $activeTemplate = $assignment->active_profile;
-                $availableProfiles = $assignment->profiles
+                $allProfiles = $assignment->profiles
                     ->reject(fn ($profile) => $profile->status === 'archived')
+                    ->values();
+                $availableProfiles = ($assignment->activation_profiles ?? collect())
                     ->values();
             @endphp
             <article class="min-w-0 rounded-2xl border border-gray-100 bg-white p-4" style="box-shadow: var(--shadow-sm);">
@@ -70,6 +72,16 @@
                                     <span class="text-emerald-700">{{ $activeTemplate->version ?: 'tanpa versi' }}</span>
                                     <span class="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-bold uppercase text-emerald-700">{{ $activeTemplate->status }}</span>
                                 </div>
+                                @php
+                                    $activeMeta = $activeTemplate->template_meta ?? null;
+                                @endphp
+                                @if($activeMeta)
+                                    <div class="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold text-emerald-700">
+                                        <span class="rounded-lg bg-white/80 px-2 py-1">{{ $activeMeta->input_count ?? 0 }} input</span>
+                                        <span class="rounded-lg bg-white/80 px-2 py-1">{{ $activeMeta->source_count ?? 0 }} sumber</span>
+                                        <span class="rounded-lg bg-white/80 px-2 py-1">{{ array_sum($activeMeta->rule_counts ?? []) }} rule</span>
+                                    </div>
+                                @endif
                             </div>
                         @else
                             <div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800">
@@ -93,9 +105,14 @@
                                             {{ $profile->name }} {{ $profile->version ? '(' . $profile->version . ')' : '' }} - {{ ucfirst($profile->status) }}
                                         </option>
                                     @empty
-                                        <option value="">Belum ada template</option>
+                                        <option value="">Belum ada template lengkap</option>
                                     @endforelse
                                 </select>
+                                @if($allProfiles->isNotEmpty() && $availableProfiles->count() < $allProfiles->count())
+                                    <p class="mt-1.5 text-xs leading-5 text-amber-700">
+                                        {{ $allProfiles->count() - $availableProfiles->count() }} template belum muncul di pilihan karena belum lengkap atau masih arsip.
+                                    </p>
+                                @endif
                             </div>
                             <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                                 <button type="submit"
@@ -112,6 +129,27 @@
                                 @endif
                             </div>
                         </form>
+                        @if($allProfiles->isNotEmpty())
+                            <div class="mt-3 space-y-1.5 border-t border-gray-100 pt-3">
+                                @foreach($allProfiles as $profile)
+                                    @php
+                                        $meta = $profile->template_meta ?? null;
+                                        $isReady = (bool) ($meta->configured ?? false);
+                                    @endphp
+                                    <div class="flex items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-2 text-xs">
+                                        <div class="min-w-0">
+                                            <div class="truncate font-semibold text-gray-700">{{ $profile->name }} {{ $profile->version ? '(' . $profile->version . ')' : '' }}</div>
+                                            <div class="text-[11px] text-gray-400">
+                                                {{ $meta->input_count ?? 0 }} input / {{ array_sum($meta->rule_counts ?? []) }} rule
+                                            </div>
+                                        </div>
+                                        <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase {{ $isReady ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">
+                                            {{ $isReady ? 'Lengkap' : 'Belum lengkap' }}
+                                        </span>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
                     </div>
                 </div>
             </article>

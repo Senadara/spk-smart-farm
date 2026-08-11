@@ -97,6 +97,10 @@ class DataMasterController extends Controller
             'afkir_label' => 'nullable|string|max:80',
             'afkir_target_weeks' => 'nullable|integer|min:1|max:520',
             'afkir_warning_weeks' => 'nullable|integer|min:0|max:52',
+            'production_start_weeks' => 'nullable|integer|min:0|max:520',
+            'peak_start_weeks' => 'nullable|integer|min:0|max:520',
+            'peak_end_weeks' => 'nullable|integer|min:0|max:520',
+            'production_decline_weeks' => 'nullable|integer|min:0|max:520',
             'environment_parameters' => 'required|array|min:1',
             'environment_parameters.*.parameter_code' => ['nullable', 'string', 'max:50', 'exists:iot_parameter,parameterCode'],
             'environment_parameters.*.parameter_name' => 'nullable|string|max:150',
@@ -115,12 +119,22 @@ class DataMasterController extends Controller
             'productivity_functions.*.is_active' => 'nullable|boolean',
             'productivity_functions.*.required_for_fuzzy' => 'nullable|boolean',
             'productivity_functions.*.aggregation_scope' => 'nullable|string|in:today,week,month',
+            'productivity_functions.*.target_min_value' => 'nullable|numeric',
+            'productivity_functions.*.target_max_value' => 'nullable|numeric',
         ], [
             'environment_parameters.required' => 'Minimal satu parameter lingkungan wajib diisi.',
             'environment_parameters.min' => 'Minimal satu parameter lingkungan wajib diisi.',
             'environment_parameters.*.parameter_code.exists' => 'Kode sensor harus dipilih dari Data Master Parameter Sensor.',
             'productivity_functions.*.function_id.exists' => 'Fungsi produktivitas tidak ditemukan di katalog.',
         ]);
+
+        foreach (['peak_start_weeks', 'peak_end_weeks', 'production_decline_weeks'] as $field) {
+            if (($validated[$field] ?? null) !== null && ($validated['production_start_weeks'] ?? null) !== null && (int) $validated[$field] < (int) $validated['production_start_weeks']) {
+                throw ValidationException::withMessages([
+                    $field => 'Fase produksi lanjutan tidak boleh lebih kecil dari umur mulai produksi.',
+                ]);
+            }
+        }
 
         $filledEnvironmentRows = collect($validated['environment_parameters'])
             ->filter(fn ($row) => trim((string) ($row['parameter_code'] ?? '')) !== '' || trim((string) ($row['parameter_name'] ?? '')) !== '');
@@ -152,10 +166,20 @@ class DataMasterController extends Controller
                 'is_active' => (bool) ($row['is_active'] ?? false),
                 'required_for_fuzzy' => (bool) ($row['required_for_fuzzy'] ?? false),
                 'aggregation_scope' => $row['aggregation_scope'] ?? 'today',
+                'target_min_value' => $row['target_min_value'] ?? null,
+                'target_max_value' => $row['target_max_value'] ?? null,
             ])
             ->filter(fn ($row) => ! empty($row['function_id']))
             ->values()
             ->all();
+
+        foreach ($validated['productivity_functions'] as $index => $row) {
+            if (($row['target_min_value'] ?? null) !== null && ($row['target_max_value'] ?? null) !== null && (float) $row['target_min_value'] > (float) $row['target_max_value']) {
+                throw ValidationException::withMessages([
+                    "productivity_functions.{$index}.target_min_value" => 'Target minimum tidak boleh lebih besar dari target maksimum.',
+                ]);
+            }
+        }
         $validated['configured_by'] = data_get(session('user'), 'id');
 
         $this->livestockMasterConfigService->saveConfiguration($validated);

@@ -304,7 +304,7 @@ class LivestockMasterConfigService
                 ? $this->selectedOperationalFunctionIdsForConfig((string) $selectedConfig->id)
                 : [],
             'afkirConfig' => $this->afkirConfigForJenis($selectedJenisBudidayaId),
-            'productivityFunctions' => $this->productivityCatalog(),
+            'productivityFunctions' => $this->productivityCatalog($selectedConfig?->id ? (string) $selectedConfig->id : null),
         ];
     }
 
@@ -355,11 +355,28 @@ class LivestockMasterConfigService
             ? trim((string) ($config->afkir_label ?? ''))
             : '';
 
+        $productionStart = Schema::hasColumn('livestock_master_configs', 'production_start_weeks')
+            ? $this->nullableInteger($config->production_start_weeks ?? null)
+            : null;
+        $peakStart = Schema::hasColumn('livestock_master_configs', 'peak_start_weeks')
+            ? $this->nullableInteger($config->peak_start_weeks ?? null)
+            : null;
+        $peakEnd = Schema::hasColumn('livestock_master_configs', 'peak_end_weeks')
+            ? $this->nullableInteger($config->peak_end_weeks ?? null)
+            : null;
+        $declineStart = Schema::hasColumn('livestock_master_configs', 'production_decline_weeks')
+            ? $this->nullableInteger($config->production_decline_weeks ?? null)
+            : null;
+
         return [
             'label' => $label !== '' ? $label : $defaults['label'],
             'target_weeks' => $targetWeeks ?? $defaults['target_weeks'],
             'warning_weeks' => $warningWeeks ?? $defaults['warning_weeks'],
             'is_configured' => $targetWeeks !== null,
+            'production_start_weeks' => $productionStart ?? $defaults['production_start_weeks'],
+            'peak_start_weeks' => $peakStart ?? $defaults['peak_start_weeks'],
+            'peak_end_weeks' => $peakEnd ?? $defaults['peak_end_weeks'],
+            'production_decline_weeks' => $declineStart ?? $defaults['production_decline_weeks'],
         ];
     }
 
@@ -610,6 +627,27 @@ class LivestockMasterConfigService
             return collect();
         }
 
+        $columns = [
+            'livestock_productivity_functions.id',
+            'livestock_productivity_functions.code',
+            'livestock_productivity_functions.name',
+            'livestock_productivity_functions.service_class',
+            'livestock_productivity_functions.output_unit',
+            'livestock_productivity_functions.description',
+            'livestock_productivity_functions.required_inputs',
+            'livestock_productivity_function_configs.aggregation_scope',
+            'livestock_productivity_function_configs.required_for_fuzzy',
+            'livestock_productivity_function_configs.sort_order',
+        ];
+
+        if (Schema::hasColumn('livestock_productivity_function_configs', 'target_min_value')) {
+            $columns[] = 'livestock_productivity_function_configs.target_min_value';
+        }
+
+        if (Schema::hasColumn('livestock_productivity_function_configs', 'target_max_value')) {
+            $columns[] = 'livestock_productivity_function_configs.target_max_value';
+        }
+
         return DB::table('livestock_productivity_function_configs')
             ->join('livestock_productivity_functions', 'livestock_productivity_functions.id', '=', 'livestock_productivity_function_configs.function_id')
             ->where('livestock_productivity_function_configs.config_id', $config->id)
@@ -618,18 +656,7 @@ class LivestockMasterConfigService
             ->where('livestock_productivity_functions.is_active', true)
             ->orderBy('livestock_productivity_function_configs.sort_order')
             ->orderBy('livestock_productivity_functions.name')
-            ->get([
-                'livestock_productivity_functions.id',
-                'livestock_productivity_functions.code',
-                'livestock_productivity_functions.name',
-                'livestock_productivity_functions.service_class',
-                'livestock_productivity_functions.output_unit',
-                'livestock_productivity_functions.description',
-                'livestock_productivity_functions.required_inputs',
-                'livestock_productivity_function_configs.aggregation_scope',
-                'livestock_productivity_function_configs.required_for_fuzzy',
-                'livestock_productivity_function_configs.sort_order',
-            ]);
+            ->get($columns);
     }
 
     public function configuredProductivityFunctionCodesForCommodity(?string $commodityId): array
@@ -841,6 +868,22 @@ class LivestockMasterConfigService
                     'required_for_fuzzy' => (bool) $row->required_for_fuzzy,
                 ]);
 
+            $functionColumns = [
+                'livestock_productivity_functions.code',
+                'livestock_productivity_functions.name',
+                'livestock_productivity_functions.output_unit',
+                'livestock_productivity_functions.description',
+                'livestock_productivity_functions.required_inputs',
+            ];
+
+            if (Schema::hasColumn('livestock_productivity_function_configs', 'target_min_value')) {
+                $functionColumns[] = 'livestock_productivity_function_configs.target_min_value';
+            }
+
+            if (Schema::hasColumn('livestock_productivity_function_configs', 'target_max_value')) {
+                $functionColumns[] = 'livestock_productivity_function_configs.target_max_value';
+            }
+
             $productivityFunctions = DB::table('livestock_productivity_function_configs')
                 ->join('livestock_productivity_functions', 'livestock_productivity_functions.id', '=', 'livestock_productivity_function_configs.function_id')
                 ->where('livestock_productivity_function_configs.config_id', $configId)
@@ -848,19 +891,15 @@ class LivestockMasterConfigService
                 ->where('livestock_productivity_functions.is_active', true)
                 ->orderBy('livestock_productivity_function_configs.sort_order')
                 ->orderBy('livestock_productivity_functions.name')
-                ->get([
-                    'livestock_productivity_functions.code',
-                    'livestock_productivity_functions.name',
-                    'livestock_productivity_functions.output_unit',
-                    'livestock_productivity_functions.description',
-                    'livestock_productivity_functions.required_inputs',
-                ])
+                ->get($functionColumns)
                 ->map(fn ($row) => [
                     'code' => (string) $row->code,
                     'name' => (string) $row->name,
                     'unit' => (string) ($row->output_unit ?? ''),
                     'description' => (string) ($row->description ?? ''),
                     'required_inputs' => json_decode((string) $row->required_inputs, true) ?: [],
+                    'target_min_value' => $row->target_min_value ?? null,
+                    'target_max_value' => $row->target_max_value ?? null,
                 ]);
         }
 
@@ -909,7 +948,7 @@ class LivestockMasterConfigService
         return $rows ?: $this->defaultFunctionMap();
     }
 
-    public function productivityCatalog(): Collection
+    public function productivityCatalog(?string $configId = null): Collection
     {
         $this->ensureDefaultFunctionCatalog();
 
@@ -921,10 +960,37 @@ class LivestockMasterConfigService
                 ->values();
         }
 
-        return DB::table('livestock_productivity_functions')
+        $rows = DB::table('livestock_productivity_functions')
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
+
+        if (! $configId || ! Schema::hasTable('livestock_productivity_function_configs')) {
+            return $rows;
+        }
+
+        $configColumns = ['function_id'];
+
+        if (Schema::hasColumn('livestock_productivity_function_configs', 'target_min_value')) {
+            $configColumns[] = 'target_min_value';
+        }
+
+        if (Schema::hasColumn('livestock_productivity_function_configs', 'target_max_value')) {
+            $configColumns[] = 'target_max_value';
+        }
+
+        $configs = DB::table('livestock_productivity_function_configs')
+            ->where('config_id', $configId)
+            ->get($configColumns)
+            ->keyBy('function_id');
+
+        return $rows->map(function ($row) use ($configs) {
+            $config = $configs->get($row->id);
+            $row->target_min_value = $config->target_min_value ?? null;
+            $row->target_max_value = $config->target_max_value ?? null;
+
+            return $row;
+        });
     }
 
     public function saveConfiguration(array $data): string
@@ -989,6 +1055,17 @@ class LivestockMasterConfigService
 
             if (Schema::hasColumn('livestock_master_configs', 'afkir_warning_weeks')) {
                 $configPayload['afkir_warning_weeks'] = $this->nullableInteger($data['afkir_warning_weeks'] ?? null) ?? 4;
+            }
+
+            foreach ([
+                'production_start_weeks',
+                'peak_start_weeks',
+                'peak_end_weeks',
+                'production_decline_weeks',
+            ] as $cycleColumn) {
+                if (Schema::hasColumn('livestock_master_configs', $cycleColumn)) {
+                    $configPayload[$cycleColumn] = $this->nullableInteger($data[$cycleColumn] ?? null);
+                }
             }
 
             DB::table('livestock_master_configs')->updateOrInsert(
@@ -1060,17 +1137,27 @@ class LivestockMasterConfigService
                     ->where('function_id', $row['function_id'])
                     ->value('id') ?: (string) Str::uuid();
 
+                $functionConfigPayload = [
+                    'id' => $functionConfigId,
+                    'required_for_fuzzy' => $row['required_for_fuzzy'],
+                    'aggregation_scope' => $row['aggregation_scope'],
+                    'sort_order' => $index,
+                    'is_active' => $row['is_active'],
+                    'createdAt' => $now,
+                    'updatedAt' => $now,
+                ];
+
+                if (Schema::hasColumn('livestock_productivity_function_configs', 'target_min_value')) {
+                    $functionConfigPayload['target_min_value'] = $row['target_min_value'];
+                }
+
+                if (Schema::hasColumn('livestock_productivity_function_configs', 'target_max_value')) {
+                    $functionConfigPayload['target_max_value'] = $row['target_max_value'];
+                }
+
                 DB::table('livestock_productivity_function_configs')->updateOrInsert(
                     ['config_id' => $configId, 'function_id' => $row['function_id']],
-                    [
-                        'id' => $functionConfigId,
-                        'required_for_fuzzy' => $row['required_for_fuzzy'],
-                        'aggregation_scope' => $row['aggregation_scope'],
-                        'sort_order' => $index,
-                        'is_active' => $row['is_active'],
-                        'createdAt' => $now,
-                        'updatedAt' => $now,
-                    ]
+                    $functionConfigPayload
                 );
             }
 
@@ -1341,6 +1428,8 @@ class LivestockMasterConfigService
             'aggregation_scope' => in_array(($row['aggregation_scope'] ?? 'today'), ['today', 'week', 'month'], true)
                 ? $row['aggregation_scope']
                 : 'today',
+            'target_min_value' => $this->nullableFloat($row['target_min_value'] ?? null),
+            'target_max_value' => $this->nullableFloat($row['target_max_value'] ?? null),
         ];
     }
 
@@ -1491,6 +1580,10 @@ class LivestockMasterConfigService
                 'target_weeks' => 80,
                 'warning_weeks' => 8,
                 'is_configured' => false,
+                'production_start_weeks' => 18,
+                'peak_start_weeks' => 25,
+                'peak_end_weeks' => 45,
+                'production_decline_weeks' => 46,
             ];
         }
 
@@ -1500,6 +1593,10 @@ class LivestockMasterConfigService
                 'target_weeks' => 6,
                 'warning_weeks' => 1,
                 'is_configured' => false,
+                'production_start_weeks' => null,
+                'peak_start_weeks' => null,
+                'peak_end_weeks' => null,
+                'production_decline_weeks' => null,
             ];
         }
 
@@ -1509,6 +1606,10 @@ class LivestockMasterConfigService
                 'target_weeks' => 12,
                 'warning_weeks' => 2,
                 'is_configured' => false,
+                'production_start_weeks' => null,
+                'peak_start_weeks' => null,
+                'peak_end_weeks' => null,
+                'production_decline_weeks' => null,
             ];
         }
 
@@ -1517,6 +1618,10 @@ class LivestockMasterConfigService
             'target_weeks' => null,
             'warning_weeks' => 4,
             'is_configured' => false,
+            'production_start_weeks' => null,
+            'peak_start_weeks' => null,
+            'peak_end_weeks' => null,
+            'production_decline_weeks' => null,
         ];
     }
 
